@@ -25,7 +25,7 @@ A multi-agent LangGraph pipeline that takes a user-provided topic and produces a
 | Dev resolution | 720p / 30fps (`-qm`) | Fast iteration |
 | Prod resolution | 1080p / 60fps (`-qh`) | 3Blue1Brown standard |
 | LangGraph checkpointing | `AsyncSqliteSaver` (MVP), upgrade path to `AsyncPostgresSaver` | Zero infrastructure, crash recovery, one-import upgrade |
-| Structured outputs | Anthropic SDK `output_config` with `json_schema` + Pydantic | Native typed responses, no tool-forcing workarounds |
+| Structured outputs | Anthropic SDK `client.messages.parse(..., output_format=MyModel)` with Pydantic | Native typed responses, no tool-forcing workarounds |
 | Graph architecture | Flat graph with conditional edges (Approach 1) | Simplest to implement, trace, and debug |
 
 ---
@@ -59,9 +59,11 @@ Both require `AsyncSqliteSaver` as the checkpointer (same `thread_id` for resume
 ```python
 class PipelineState(TypedDict):
     topic: str
+    run_id: str                       # populated from thread_id at graph entry; used for output dir
     script: str
     script_segments: list[dict]       # [{text: str, estimated_duration_sec: float}]
     manim_code: str
+    scene_class_name: str             # always "ChalkboardScene"; used by Docker render script
     script_attempts: int              # 0–3; independent budget for script loop
     code_attempts: int                # 0–3; independent budget for code loop
     fact_feedback: str | None
@@ -80,7 +82,7 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 
 ### `script_agent`
 - **Inputs:** `topic`, `effort_level`, `fact_feedback` (None on first run), `user_approved_search`
-- Generates a full educational narration, segmented into chunks with estimated duration (`word_count / 2.5` seconds per segment)
+- Generates a full educational narration, segmented into chunks with estimated duration (`word_count / 2.5` seconds, ~150 wpm — used only as a placeholder for `self.wait()` calls in the Manim scene)
 - On revision: full rewrite incorporating `fact_feedback` — never patches
 - On `effort=high` or `user_approved_search=True`: uses Claude `web_search` tool
 - On `effort=low`: skips web search, lighter prose
@@ -91,7 +93,7 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 - `effort=low`: flags obvious errors only
 - `effort=medium`: spot-checks key claims
 - `effort=high`: thorough review, flags anything uncertain
-- Returns structured JSON: `{verdict: "approved"|"needs_revision", feedback: str}`
+- Uses `client.messages.parse(..., output_format=ValidationResult)` where `ValidationResult` is a Pydantic model: `{verdict: Literal["approved","needs_revision"], feedback: str}`
 - **Outputs:** `fact_feedback`, increments `script_attempts` on fail
 
 ### `manim_agent`
@@ -104,29 +106,37 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 - **Inputs:** `manim_code`, `script`
 - Step 1 (local, fast): `ast.parse(manim_code)` syntax check — if this fails, return immediately without a Claude call
 - Step 2 (Claude): semantic review — does the animation visualize the script? Are Manim CE APIs used correctly?
-- Returns structured JSON: `{verdict: "approved"|"needs_revision", feedback: str}`
+- Uses `client.messages.parse(..., output_format=ValidationResult)` — same Pydantic model as `fact_validator`
 - **Outputs:** `code_feedback`, increments `code_attempts` on fail
 
 ### `render_trigger`
-- **Inputs:** approved `script`, `script_segments`, `manim_code`
+- **Inputs:** approved `script`, `script_segments`, `manim_code`, `run_id`
+- `run_id` is read from `state["run_id"]` (set at graph entry from `config["configurable"]["thread_id"]`)
 - Calls TTS provider (Kokoro default, sync wrapped in `asyncio.to_thread`; OpenAI/ElevenLabs cloud alternatives)
+- Kokoro: collects all yielded numpy chunks, concatenates, writes with `soundfile.write(..., samplerate=24000)`; **updates** `estimated_duration_sec` in each segment with the actual audio duration derived from `len(audio) / 24000`
 - Writes to `output/{run_id}/`:
   - `scene.py` — Manim Python code
   - `voiceover.wav` — generated audio (24kHz, float32 via `soundfile`)
-  - `segments.json` — `[{text, estimated_duration_sec}]`
+  - `segments.json` — `[{text, actual_duration_sec}]` — uses real TTS durations, not estimates
   - `script.txt` — human-readable narration
+  - `manifest.json` — `{run_id, scene_class_name, quality, topic}` — read by Docker render script
 - **Outputs:** `status=approved`
 
 ### `escalate_to_user`
 - Surfaces last feedback + attempt history in readable CLI format
-- Uses `interrupt()` to pause; user can provide guidance, change topic, or abort
-- On resume: routes back to `script_agent` or `manim_agent` with reset attempt counter, or exits
+- Uses `interrupt()` to pause; expected resume payload via `Command(resume=...)`:
+  ```python
+  {"action": "retry_script" | "retry_code" | "abort", "guidance": str}
+  ```
+- `retry_script`: resets `script_attempts=0`, sets `fact_feedback=guidance`, routes to `script_agent`
+- `retry_code`: resets `code_attempts=0`, sets `code_feedback=guidance`, routes to `manim_agent`
+- `abort`: sets `status=failed`, routes to END
 
 ---
 
 ## TTS Integration
 
-Kokoro `KPipeline` is synchronous. In the async pipeline, it is called via `asyncio.to_thread`. Output is numpy float32 arrays at 24kHz, written to `.wav` using `soundfile`.
+Kokoro `KPipeline` is synchronous. In the async pipeline, it is called via `asyncio.to_thread`. The generator yields `(grapheme_str, phoneme_str, audio_array)` tuples; all chunks are concatenated into a single numpy array before writing. Output is numpy float32 at 24kHz, written to `.wav` using `soundfile.write(path, audio, samplerate=24000)`. Actual segment durations are derived from `len(audio_chunk) / 24000` and written to `segments.json`, overriding the pre-computed estimates from `script_agent`.
 
 Swapping providers is a single `TTS_BACKEND` env-var change:
 - `"kokoro"` → `KPipeline` (local)
@@ -147,19 +157,25 @@ FROM manimcommunity/manim:v0.20.1
 # RUN tlmgr install <pkg>
 ```
 
+The render script reads `manifest.json` to get `run_id`, `scene_class_name` (`ChalkboardScene`), and `quality` flag. Manim output is redirected via `--media_dir` to keep all files under the run directory.
+
 Two-step render script:
 ```bash
 # Step 1: render Manim scene
-manim -qm /output/{run_id}/scene.py MyScene
+# --media_dir redirects output from default media/ to the run directory
+manim -qm --media_dir /output/{run_id}/media \
+  /output/{run_id}/scene.py ChalkboardScene
+
+# Manim writes to: /output/{run_id}/media/videos/scene/720p30/ChalkboardScene.mp4
 
 # Step 2: merge with voiceover
-ffmpeg -i /output/{run_id}/MyScene.mp4 \
+ffmpeg -i /output/{run_id}/media/videos/scene/720p30/ChalkboardScene.mp4 \
        -i /output/{run_id}/voiceover.wav \
        -c:v copy -c:a aac \
        /output/{run_id}/final.mp4
 ```
 
-Dev quality: `-qm` (720p/30fps). Production: `-qh` (1080p/60fps), configurable.
+`scene_class_name` is always `ChalkboardScene` (mandated for `manim_agent`; the Docker script can rely on this constant). Dev quality: `-qm` (720p/30fps, path segment `720p30`). Production: `-qh` (1080p/60fps, path segment `1080p60`), configurable via `manifest.json`.
 
 ---
 
@@ -230,13 +246,18 @@ manim_agent_pipeline/
 **Pipeline environment (host):**
 ```
 langgraph>=1.1.3
-langgraph-checkpoint-sqlite>=3.0.3
+langgraph-checkpoint-sqlite>=3.0.3   # pip install langgraph-checkpoint-sqlite
+aiosqlite>=0.20                      # required by AsyncSqliteSaver
 anthropic>=0.49.0
 kokoro>=0.9.4
 soundfile
+numpy
 openai                   # optional, for OpenAI TTS backend
 elevenlabs               # optional, for ElevenLabs backend
 ```
+
+`AsyncSqliteSaver` import path: `from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver`
+Must be used as an async context manager: `async with AsyncSqliteSaver.from_conn_string("pipeline_state.db") as checkpointer:`
 
 **System (host, for Kokoro):**
 ```
