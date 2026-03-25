@@ -25,7 +25,7 @@ A multi-agent LangGraph pipeline that takes a user-provided topic and produces a
 | Dev resolution | 720p / 30fps (`-qm`) | Fast iteration |
 | Prod resolution | 1080p / 60fps (`-qh`) | 3Blue1Brown standard |
 | LangGraph checkpointing | `AsyncSqliteSaver` (MVP), upgrade path to `AsyncPostgresSaver` | Zero infrastructure, crash recovery, one-import upgrade |
-| Structured outputs | Anthropic SDK `client.messages.parse(..., output_format=MyModel)` with Pydantic | Native typed responses, no tool-forcing workarounds |
+| Structured outputs | `client.messages.create(..., output_config={"format": {"type": "json_schema", ...}})` + `ValidationResult.model_validate_json(response.content[0].text)` | Native typed responses, no tool-forcing workarounds |
 | Graph architecture | Flat graph with conditional edges (Approach 1) | Simplest to implement, trace, and debug |
 
 ---
@@ -63,7 +63,6 @@ class PipelineState(TypedDict):
     script: str
     script_segments: list[dict]       # [{text: str, estimated_duration_sec: float}]
     manim_code: str
-    scene_class_name: str             # always "ChalkboardScene"; used by Docker render script
     script_attempts: int              # 0–3; independent budget for script loop
     code_attempts: int                # 0–3; independent budget for code loop
     fact_feedback: str | None
@@ -93,12 +92,13 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 - `effort=low`: flags obvious errors only
 - `effort=medium`: spot-checks key claims
 - `effort=high`: thorough review, flags anything uncertain
-- Uses `client.messages.parse(..., output_format=ValidationResult)` where `ValidationResult` is a Pydantic model: `{verdict: Literal["approved","needs_revision"], feedback: str}`
+- Uses `client.messages.create(..., output_config={"format": {"type": "json_schema", "schema": ValidationResult.model_json_schema()}})` where `ValidationResult` is a Pydantic model: `{verdict: Literal["approved","needs_revision"], feedback: str}`; result parsed with `ValidationResult.model_validate_json(response.content[0].text)`
 - **Outputs:** `fact_feedback`, increments `script_attempts` on fail
 
 ### `manim_agent`
 - **Inputs:** `script`, `script_segments` (with durations), `code_feedback` (None on first run)
-- Generates a single Manim CE `Scene` subclass; animation blocks separated by `self.wait(estimated_duration_sec)` aligned to narration segments; animations use `self.play(..., run_time=X)`
+- Generates a single Manim CE `Scene` subclass; **class must always be named `ChalkboardScene`** (Docker render script relies on this constant)
+- Animation blocks separated by `self.wait(estimated_duration_sec)` aligned to narration segments; animations use `self.play(..., run_time=X)`
 - On revision: full rewrite incorporating `code_feedback` — never patches
 - **Outputs:** `manim_code`, `status=validating`
 
@@ -106,20 +106,21 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 - **Inputs:** `manim_code`, `script`
 - Step 1 (local, fast): `ast.parse(manim_code)` syntax check — if this fails, return immediately without a Claude call
 - Step 2 (Claude): semantic review — does the animation visualize the script? Are Manim CE APIs used correctly?
-- Uses `client.messages.parse(..., output_format=ValidationResult)` — same Pydantic model as `fact_validator`
+- Same `output_config` + `model_validate_json` pattern as `fact_validator`, using the shared `ValidationResult` Pydantic model
 - **Outputs:** `code_feedback`, increments `code_attempts` on fail
 
 ### `render_trigger`
 - **Inputs:** approved `script`, `script_segments`, `manim_code`, `run_id`
 - `run_id` is read from `state["run_id"]` (set at graph entry from `config["configurable"]["thread_id"]`)
 - Calls TTS provider (Kokoro default, sync wrapped in `asyncio.to_thread`; OpenAI/ElevenLabs cloud alternatives)
-- Kokoro: collects all yielded numpy chunks, concatenates, writes with `soundfile.write(..., samplerate=24000)`; **updates** `estimated_duration_sec` in each segment with the actual audio duration derived from `len(audio) / 24000`
+- TTS is called **once per segment** (not the full script at once), so each segment's actual audio duration can be measured independently as `len(audio_array) / 24000`
+- All per-segment audio arrays are then concatenated into a single `voiceover.wav` for the Docker merge step
 - Writes to `output/{run_id}/`:
   - `scene.py` — Manim Python code
-  - `voiceover.wav` — generated audio (24kHz, float32 via `soundfile`)
-  - `segments.json` — `[{text, actual_duration_sec}]` — uses real TTS durations, not estimates
+  - `voiceover.wav` — concatenated audio for all segments (24kHz, float32 via `soundfile`)
+  - `segments.json` — `[{text, actual_duration_sec}]` — real per-segment TTS durations, not pre-computed estimates
   - `script.txt` — human-readable narration
-  - `manifest.json` — `{run_id, scene_class_name, quality, topic}` — read by Docker render script
+  - `manifest.json` — `{run_id, scene_class_name: "ChalkboardScene", quality, topic}` — read by Docker render script
 - **Outputs:** `status=approved`
 
 ### `escalate_to_user`
@@ -136,14 +137,14 @@ Note: `script_attempts` and `code_attempts` are independent — a script that ta
 
 ## TTS Integration
 
-Kokoro `KPipeline` is synchronous. In the async pipeline, it is called via `asyncio.to_thread`. The generator yields `(grapheme_str, phoneme_str, audio_array)` tuples; all chunks are concatenated into a single numpy array before writing. Output is numpy float32 at 24kHz, written to `.wav` using `soundfile.write(path, audio, samplerate=24000)`. Actual segment durations are derived from `len(audio_chunk) / 24000` and written to `segments.json`, overriding the pre-computed estimates from `script_agent`.
+Kokoro `KPipeline` is synchronous. In the async pipeline, it is called via `asyncio.to_thread`. TTS is invoked **once per segment** (passing each segment's text individually). The generator yields `(grapheme_str, phoneme_str, audio_array)` tuples; chunks for a single segment are concatenated into one array. Actual duration for that segment is `len(segment_audio) / 24000`. After all segments are processed, the per-segment arrays are concatenated into a single final array and written with `soundfile.write(path, full_audio, samplerate=24000)`. This approach gives accurate per-segment durations for `segments.json` without any estimation.
 
 Swapping providers is a single `TTS_BACKEND` env-var change:
 - `"kokoro"` → `KPipeline` (local)
 - `"openai"` → `openai.audio.speech.create()` (cloud)
 - `"elevenlabs"` → `elevenlabs.generate()` (cloud)
 
-The TTS abstraction is a simple function `generate_audio(text, segments) -> Path` that all three backends implement.
+The TTS abstraction is a function `generate_audio(segments: list[dict]) -> tuple[Path, list[float]]` that all three backends implement — returns the path to the concatenated `voiceover.wav` and a list of actual per-segment durations in seconds.
 
 ---
 
@@ -248,7 +249,7 @@ manim_agent_pipeline/
 langgraph>=1.1.3
 langgraph-checkpoint-sqlite>=3.0.3   # pip install langgraph-checkpoint-sqlite
 aiosqlite>=0.20                      # required by AsyncSqliteSaver
-anthropic>=0.49.0
+anthropic>=0.77.1
 kokoro>=0.9.4
 soundfile
 numpy
