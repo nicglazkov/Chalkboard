@@ -29,8 +29,18 @@ def escalate_to_user(state: PipelineState) -> dict:
     guidance = resume.get("guidance", "")
 
     if action == "retry_script":
-        return {"script_attempts": 0, "fact_feedback": guidance, "status": "drafting"}
+        return {
+            "script_attempts": 0,
+            "fact_feedback": guidance,
+            "code_feedback": None,  # clear stale code feedback
+            "status": "drafting",
+        }
     elif action == "retry_code":
-        return {"code_attempts": 0, "code_feedback": guidance, "status": "validating"}
+        return {
+            "code_attempts": 0,
+            "code_feedback": guidance,
+            "fact_feedback": None,  # clear stale script feedback
+            "status": "validating",
+        }
     else:
         return {"status": "failed"}

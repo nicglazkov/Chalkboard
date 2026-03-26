@@ -48,9 +48,14 @@ def code_validator(state: PipelineState, client=None) -> dict:
     )
 
     result = ValidationResult.model_validate_json(response.content[0].text)
-    updates: dict = {"code_feedback": result.feedback}
     if result.verdict == "needs_revision":
-        updates["code_attempts"] = attempts + 1
+        return {
+            "code_feedback": result.feedback,
+            "code_attempts": attempts + 1,
+        }
     else:
-        updates["code_attempts"] = attempts  # explicitly return on pass too
-    return updates
+        # Clear code_feedback on approval so _after_code_validator routes to render_trigger
+        return {
+            "code_feedback": None,
+            "code_attempts": attempts,
+        }

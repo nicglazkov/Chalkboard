@@ -41,8 +41,14 @@ def fact_validator(state: PipelineState, client=None) -> dict:
 
     result = ValidationResult.model_validate_json(response.content[0].text)
 
-    updates: dict = {
-        "fact_feedback": result.feedback,
-        "script_attempts": state["script_attempts"] + (1 if result.verdict == "needs_revision" else 0),
-    }
-    return updates
+    if result.verdict == "needs_revision":
+        return {
+            "fact_feedback": result.feedback,
+            "script_attempts": state["script_attempts"] + 1,
+        }
+    else:
+        # Clear fact_feedback on approval so _after_fact_validator routes to manim_agent
+        return {
+            "fact_feedback": None,
+            "script_attempts": state["script_attempts"],
+        }

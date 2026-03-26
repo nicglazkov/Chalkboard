@@ -31,7 +31,7 @@ def test_code_validator_passes_valid_code(base_state):
         MockClient.return_value.messages.create.return_value = mock_resp
         result = code_validator(base_state)
 
-    assert result["code_feedback"] == "Looks correct."
+    assert result["code_feedback"] is None  # cleared on approval
     assert result["code_attempts"] == 0  # not incremented on pass
 
 

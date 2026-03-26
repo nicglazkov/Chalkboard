@@ -87,3 +87,38 @@ def test_graph_retries_script_on_fact_failure(tmp_path):
 
     assert result["status"] == "approved"
     assert call_counts["fact"] == 2
+
+
+def test_graph_escalates_after_max_retries(tmp_path):
+    """After 3 script failures, escalation is triggered and abort sets status=failed."""
+    call_counts = {"fact": 0, "script": 0}
+
+    def script_side_effect(state, **kw):
+        call_counts["script"] += 1
+        return _make_script_state()
+
+    def fact_side_effect(state, **kw):
+        call_counts["fact"] += 1
+        attempts = state.get("script_attempts", 0) + 1
+        return {
+            "fact_feedback": "Wrong claim.",
+            "script_attempts": attempts,
+        }
+
+    abort_payload = {"action": "abort", "guidance": ""}
+
+    with patch("pipeline.graph.script_agent", side_effect=script_side_effect), \
+         patch("pipeline.graph.fact_validator", side_effect=fact_side_effect), \
+         patch("pipeline.agents.orchestrator.interrupt", return_value=abort_payload), \
+         patch("pipeline.render_trigger.get_backend"), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-escalate-abort"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "explain B-trees", "effort_level": "low"},
+            config=config,
+        ))
+
+    assert result["status"] == "failed"
+    assert call_counts["fact"] == 3  # ran exactly 3 times before escalation

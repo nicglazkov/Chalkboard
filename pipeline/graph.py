@@ -1,7 +1,7 @@
 # pipeline/graph.py
+import uuid
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from config import CHECKPOINT_DB
 from pipeline.state import PipelineState
 from pipeline.agents.script_agent import script_agent
@@ -42,7 +42,6 @@ def _after_escalate(state: PipelineState) -> str:
 
 def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> dict:
     """Populate default fields at graph entry."""
-    import uuid
     run_id = (config or {}).get("configurable", {}).get("thread_id", str(uuid.uuid4()))
     return {
         "run_id": run_id,

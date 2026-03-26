@@ -20,7 +20,7 @@ def test_fact_validator_approved(base_state):
         MockClient.return_value.messages.create.return_value = mock_resp
         result = fact_validator(base_state)
 
-    assert result["fact_feedback"] == "Accurate."
+    assert result["fact_feedback"] is None  # cleared on approval
     assert result["script_attempts"] == 0  # not incremented on pass
 
 
