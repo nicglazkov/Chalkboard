@@ -9,6 +9,6 @@ pydantic>=2.0
 python-dotenv
 pytest
 pytest-asyncio
-# Optional TTS backends:
-# openai
+# Optional TTS backends (uncomment as needed):
+openai
 # elevenlabs
