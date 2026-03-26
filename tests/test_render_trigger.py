@@ -32,6 +32,10 @@ def test_render_trigger_writes_all_output_files(base_state, tmp_path):
     assert (run_dir / "script.txt").exists()
     assert (run_dir / "manifest.json").exists()
     assert result["status"] == "approved"
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["scene_class_name"] == "ChalkboardScene"
+    assert manifest["run_id"] == "test-run-001"
+    assert manifest["topic"] == base_state["topic"]
 
 
 def test_render_trigger_segments_json_uses_actual_durations(base_state, tmp_path):

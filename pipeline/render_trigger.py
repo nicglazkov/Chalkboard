@@ -19,7 +19,7 @@ async def render_trigger(state: PipelineState) -> dict:
     # Build segments.json with actual durations
     segments_out = [
         {"text": seg["text"], "actual_duration_sec": dur}
-        for seg, dur in zip(state["script_segments"], actual_durations)
+        for seg, dur in zip(state["script_segments"], actual_durations, strict=True)
     ]
 
     # Write all output files
