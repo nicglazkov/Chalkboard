@@ -17,6 +17,7 @@ def test_escalate_surfaces_script_feedback(base_state):
 
     assert result["script_attempts"] == 0
     assert result["fact_feedback"] == "Focus on CS accuracy."
+    assert result["status"] == "drafting"
 
 
 def test_escalate_routes_abort(base_state):
@@ -42,3 +43,4 @@ def test_escalate_retry_code_resets_code_attempts(base_state):
 
     assert result["code_attempts"] == 0
     assert result["code_feedback"] == "Use MathTex for equations."
+    assert result["status"] == "validating"
