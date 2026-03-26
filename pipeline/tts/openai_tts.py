@@ -35,6 +35,8 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
         durations.append(duration)
         all_bytes.append(chunk_bytes)
 
+    # MVP caveat: concatenates raw WAV bytes across segments — valid for single-segment
+    # scripts, multi-segment produces multiple WAV headers. Fix by decode+re-encode before production.
     with open(output_path, "wb") as f:
         f.write(b"".join(all_bytes))
 

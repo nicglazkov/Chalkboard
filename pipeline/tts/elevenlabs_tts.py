@@ -10,7 +10,6 @@ except ImportError:
     ElevenLabs = None  # type: ignore[assignment,misc]
 
 ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # "George" — swap via ELEVENLABS_VOICE_ID env var
-SAMPLE_RATE = 44100  # ElevenLabs default
 
 
 def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
@@ -36,6 +35,8 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
         durations.append(duration)
         all_bytes.append(chunk_bytes)
 
+    # MVP caveat: concatenates raw MP3 chunks — suitable for single-segment scripts only.
+    # A proper implementation would decode and re-encode into a single audio container.
     with open(output_path, "wb") as f:
         f.write(b"".join(all_bytes))
 
