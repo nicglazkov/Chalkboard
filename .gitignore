@@ -1,1 +1,7 @@
 .worktrees/
+output/*/
+!output/.gitkeep
+pipeline_state.db
+__pycache__/
+*.pyc
+.env
