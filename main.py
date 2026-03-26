@@ -26,13 +26,6 @@ def _print_progress(event: dict) -> None:
 
 def _handle_interrupt(interrupt_value: str) -> Command:
     print("\n" + interrupt_value)
-
-    # Web search gate
-    if "web search" in interrupt_value.lower() or "needs_web_search" in interrupt_value.lower():
-        answer = input("\nApprove web search? [y/N] ").strip().lower()
-        return Command(resume={"approved": answer == "y"})
-
-    # Escalation
     print("\nEnter action (retry_script / retry_code / abort):")
     action = input("  action: ").strip()
     guidance = ""

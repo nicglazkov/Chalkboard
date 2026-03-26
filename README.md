@@ -5,7 +5,7 @@ Multi-agent pipeline: topic → validated Manim animation + voiceover.
 ## Quick start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.10+
 - `espeak-ng` (for Kokoro TTS): `brew install espeak-ng` / `apt install espeak-ng`
 - Docker (for rendering)
 - `ANTHROPIC_API_KEY` env var
