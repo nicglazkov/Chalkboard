@@ -1,0 +1,73 @@
+# tests/test_manim_agent.py
+import json
+import pytest
+from unittest.mock import MagicMock, patch
+
+
+def _mock_response(code: str) -> MagicMock:
+    msg = MagicMock()
+    msg.content = [MagicMock(text=json.dumps({"manim_code": code}))]
+    return msg
+
+
+VALID_SCENE = '''
+from manim import *
+
+class ChalkboardScene(Scene):
+    def construct(self):
+        title = Text("B-Trees")
+        self.play(Write(title))
+        self.wait(2.0)
+'''
+
+
+def test_manim_agent_generates_chalkboard_scene(base_state):
+    base_state["script"] = "B-trees are balanced search trees."
+    base_state["script_segments"] = [{"text": "B-trees are balanced.", "estimated_duration_sec": 2.0}]
+    mock_resp = _mock_response(VALID_SCENE)
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.create.return_value = mock_resp
+        from pipeline.agents.manim_agent import manim_agent
+        result = manim_agent(base_state)
+
+    assert "ChalkboardScene" in result["manim_code"]
+    assert result["status"] == "validating"
+
+
+def test_manim_agent_includes_durations_in_prompt(base_state):
+    base_state["script"] = "Hello world."
+    base_state["script_segments"] = [
+        {"text": "Hello.", "estimated_duration_sec": 1.5},
+        {"text": "World.", "estimated_duration_sec": 2.3},
+    ]
+    mock_resp = _mock_response(VALID_SCENE)
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_resp
+        from pipeline.agents.manim_agent import manim_agent
+        manim_agent(base_state)
+
+    call_args = client_instance.messages.create.call_args
+    messages = call_args.kwargs["messages"]
+    content = messages[0]["content"]
+    assert "1.5" in content
+    assert "2.3" in content
+
+
+def test_manim_agent_includes_feedback_on_revision(base_state):
+    base_state["script"] = "Hello world."
+    base_state["script_segments"] = [{"text": "Hello.", "estimated_duration_sec": 1.0}]
+    base_state["code_feedback"] = "Missing import for MathTex"
+    mock_resp = _mock_response(VALID_SCENE)
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_resp
+        from pipeline.agents.manim_agent import manim_agent
+        manim_agent(base_state)
+
+    call_args = client_instance.messages.create.call_args
+    messages = call_args.kwargs["messages"]
+    assert "Missing import for MathTex" in messages[0]["content"]
