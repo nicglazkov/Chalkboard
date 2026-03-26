@@ -1,8 +1,19 @@
 # pipeline/agents/manim_agent.py
 import json
-import anthropic
+import anthropic as _anthropic_module
 from config import CLAUDE_MODEL
 from pipeline.state import PipelineState
+
+
+class _AProxy:
+    """Per-module proxy so unittest.mock.patch can target this module's Anthropic independently."""
+    def __getattr__(self, name):
+        return getattr(_anthropic_module, name)
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+
+
+anthropic = _AProxy()
 
 SYSTEM_PROMPT = """You are an expert Manim Community Edition (v0.20.1) developer.
 Generate a complete, runnable Manim scene for an educational animation.

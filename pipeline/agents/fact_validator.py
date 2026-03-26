@@ -1,7 +1,18 @@
 # pipeline/agents/fact_validator.py
-import anthropic
+import anthropic as _anthropic_module
 from config import CLAUDE_MODEL
 from pipeline.state import PipelineState, ValidationResult
+
+
+class _AProxy:
+    """Per-module proxy so unittest.mock.patch can target this module's Anthropic independently."""
+    def __getattr__(self, name):
+        return getattr(_anthropic_module, name)
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+
+
+anthropic = _AProxy()
 
 EFFORT_INSTRUCTIONS = {
     "low": "Do a light check only. Flag only obvious factual errors. Approve if generally correct.",
@@ -43,6 +54,7 @@ def fact_validator(state: PipelineState, client=None) -> dict:
 
     updates: dict = {
         "fact_feedback": result.feedback,
+        "fact_verdict": result.verdict,
         "script_attempts": state["script_attempts"] + (1 if result.verdict == "needs_revision" else 0),
     }
     return updates

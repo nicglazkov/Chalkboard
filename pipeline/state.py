@@ -1,5 +1,9 @@
 # pipeline/state.py
 from typing import TypedDict, Literal
+try:
+    from typing import NotRequired
+except ImportError:
+    from typing_extensions import NotRequired
 from pydantic import BaseModel
 
 
@@ -22,3 +26,6 @@ class PipelineState(TypedDict):
     needs_web_search: bool
     user_approved_search: bool
     status: Literal["drafting", "validating", "needs_user_input", "approved", "failed"]
+    # Routing helpers: set by validators so conditional edges can read the latest verdict
+    fact_verdict: NotRequired[Literal["approved", "needs_revision"] | None]
+    code_verdict: NotRequired[Literal["approved", "needs_revision"] | None]

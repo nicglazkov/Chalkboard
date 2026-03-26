@@ -1,8 +1,19 @@
 # pipeline/agents/code_validator.py
 import ast
 import json
-import anthropic
+import anthropic as _anthropic_module
 from config import CLAUDE_MODEL
+
+
+class _AProxy:
+    """Per-module proxy so unittest.mock.patch can target this module's Anthropic independently."""
+    def __getattr__(self, name):
+        return getattr(_anthropic_module, name)
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+
+
+anthropic = _AProxy()
 from pipeline.state import PipelineState, ValidationResult
 
 SCHEMA = {
@@ -26,6 +37,7 @@ def code_validator(state: PipelineState, client=None) -> dict:
     except SyntaxError as e:
         return {
             "code_feedback": f"Syntax error: {e}",
+            "code_verdict": "needs_revision",
             "code_attempts": attempts + 1,
         }
 
@@ -48,7 +60,7 @@ def code_validator(state: PipelineState, client=None) -> dict:
     )
 
     result = ValidationResult.model_validate_json(response.content[0].text)
-    updates: dict = {"code_feedback": result.feedback}
+    updates: dict = {"code_feedback": result.feedback, "code_verdict": result.verdict}
     if result.verdict == "needs_revision":
         updates["code_attempts"] = attempts + 1
     else:
