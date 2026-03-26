@@ -35,10 +35,12 @@ def _build_user_message(state: PipelineState) -> str:
     return msg
 
 
-def script_agent(state: PipelineState) -> dict:
-    client = anthropic.Anthropic()
+def script_agent(state: PipelineState, client=None) -> dict:
+    if client is None:
+        client = anthropic.Anthropic()
 
     tools = []
+    # Per spec: effort=high always enables web search (no approval gate needed)
     if state.get("user_approved_search") or state["effort_level"] == "high":
         tools = [{"type": "web_search_20250305", "name": "web_search"}]
 

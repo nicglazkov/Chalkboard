@@ -1,4 +1,5 @@
 # tests/test_script_agent.py
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from pipeline.state import PipelineState
@@ -6,7 +7,6 @@ from tests.conftest import base_state
 
 
 def _make_claude_response(script_text: str, segments: list[dict]) -> MagicMock:
-    import json
     content = json.dumps({"script": script_text, "segments": segments, "needs_web_search": False})
     msg = MagicMock()
     msg.content = [MagicMock(text=content)]
@@ -28,7 +28,6 @@ def test_script_agent_returns_script_and_segments(base_state):
 
 
 def test_script_agent_sets_needs_web_search_when_flagged(base_state):
-    import json
     content = json.dumps({
         "script": "Quantum entanglement...",
         "segments": [{"text": "Quantum entanglement...", "estimated_duration_sec": 2.0}],
