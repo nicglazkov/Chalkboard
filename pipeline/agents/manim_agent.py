@@ -20,7 +20,9 @@ Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 def _format_segments(segments: list[dict]) -> str:
     lines = []
     for i, seg in enumerate(segments, 1):
-        lines.append(f"  Segment {i} ({seg['estimated_duration_sec']:.1f}s): {seg['text']}")
+        duration = seg.get("estimated_duration_sec", 0.0)
+        text = seg.get("text", "")
+        lines.append(f"  Segment {i} ({duration:.1f}s): {text}")
     return "\n".join(lines)
 
 

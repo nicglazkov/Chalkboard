@@ -2,6 +2,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
+from pipeline.agents.manim_agent import manim_agent
 
 
 def _mock_response(code: str) -> MagicMock:
@@ -28,7 +29,6 @@ def test_manim_agent_generates_chalkboard_scene(base_state):
 
     with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        from pipeline.agents.manim_agent import manim_agent
         result = manim_agent(base_state)
 
     assert "ChalkboardScene" in result["manim_code"]
@@ -46,7 +46,6 @@ def test_manim_agent_includes_durations_in_prompt(base_state):
     with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_resp
-        from pipeline.agents.manim_agent import manim_agent
         manim_agent(base_state)
 
     call_args = client_instance.messages.create.call_args
@@ -65,7 +64,6 @@ def test_manim_agent_includes_feedback_on_revision(base_state):
     with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_resp
-        from pipeline.agents.manim_agent import manim_agent
         manim_agent(base_state)
 
     call_args = client_instance.messages.create.call_args
