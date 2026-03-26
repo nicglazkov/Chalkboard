@@ -15,7 +15,7 @@ from pipeline.render_trigger import render_trigger
 def _after_fact_validator(state: PipelineState) -> str:
     if state["script_attempts"] >= 3:
         return "escalate_to_user"
-    if state.get("fact_verdict") == "needs_revision":
+    if state.get("fact_feedback") and state["script_attempts"] > 0:
         return "script_agent"
     return "manim_agent"
 
@@ -23,7 +23,7 @@ def _after_fact_validator(state: PipelineState) -> str:
 def _after_code_validator(state: PipelineState) -> str:
     if state["code_attempts"] >= 3:
         return "escalate_to_user"
-    if state.get("code_verdict") == "needs_revision":
+    if state["code_attempts"] > 0:
         return "manim_agent"
     return "render_trigger"
 
@@ -53,8 +53,6 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "code_attempts": state.get("code_attempts", 0),
         "fact_feedback": state.get("fact_feedback"),
         "code_feedback": state.get("code_feedback"),
-        "fact_verdict": state.get("fact_verdict"),
-        "code_verdict": state.get("code_verdict"),
         "needs_web_search": state.get("needs_web_search", False),
         "user_approved_search": state.get("user_approved_search", False),
         "status": "drafting",

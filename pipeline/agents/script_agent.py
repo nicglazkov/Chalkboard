@@ -1,18 +1,7 @@
 # pipeline/agents/script_agent.py
 import json
-import anthropic as _anthropic_module
+import anthropic
 from config import CLAUDE_MODEL
-
-
-class _AProxy:
-    """Per-module proxy so unittest.mock.patch can target this module's Anthropic independently."""
-    def __getattr__(self, name):
-        return getattr(_anthropic_module, name)
-    def __setattr__(self, name, value):
-        object.__setattr__(self, name, value)
-
-
-anthropic = _AProxy()
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = """You are an educational script writer. Given a topic, write a clear,
