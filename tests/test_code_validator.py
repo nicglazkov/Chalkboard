@@ -42,7 +42,7 @@ def test_code_validator_fails_on_syntax_error_without_claude_call(base_state):
     with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
         result = code_validator(base_state)
 
-    MockClient.return_value.messages.create.assert_not_called()
+    MockClient.assert_not_called()
     assert result["code_attempts"] == 1
     assert "syntax" in result["code_feedback"].lower()
 

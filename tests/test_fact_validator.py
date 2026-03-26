@@ -3,6 +3,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 from pipeline.state import PipelineState
+from pipeline.agents.fact_validator import fact_validator
 
 
 def _mock_response(verdict: str, feedback: str) -> MagicMock:
@@ -17,7 +18,6 @@ def test_fact_validator_approved(base_state):
 
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        from pipeline.agents.fact_validator import fact_validator
         result = fact_validator(base_state)
 
     assert result["fact_feedback"] == "Accurate."
@@ -31,7 +31,6 @@ def test_fact_validator_needs_revision_increments_attempts(base_state):
 
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        from pipeline.agents.fact_validator import fact_validator
         result = fact_validator(base_state)
 
     assert result["script_attempts"] == 2
@@ -46,7 +45,6 @@ def test_fact_validator_effort_low_uses_light_prompt(base_state):
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_resp
-        from pipeline.agents.fact_validator import fact_validator
         fact_validator(base_state)
 
     call_args = client_instance.messages.create.call_args
