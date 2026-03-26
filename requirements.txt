@@ -6,6 +6,7 @@ kokoro>=0.9.4
 soundfile
 numpy
 pydantic>=2.0
+python-dotenv
 pytest
 pytest-asyncio
 # Optional TTS backends:

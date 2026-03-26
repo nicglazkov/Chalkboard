@@ -6,20 +6,19 @@ Multi-agent pipeline: topic → validated Manim animation + voiceover.
 
 ### 1. API keys
 
-Set your Anthropic API key before running — this is always required:
+Copy the example env file and fill in your keys:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env
 ```
 
-To make it permanent, add that line to your `~/.zshrc` (or `~/.bashrc`).
-
-**TTS backend keys** (only needed if you change `TTS_BACKEND`):
-
-```bash
-export OPENAI_API_KEY=sk-...      # TTS_BACKEND=openai
-export ELEVENLABS_API_KEY=...     # TTS_BACKEND=elevenlabs
+Then open `.env` and set at minimum:
 ```
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...        # if using TTS_BACKEND=openai
+```
+
+The `.env` file is gitignored — your keys stay local and are never committed.
 
 ### 2. Choose a TTS backend
 
