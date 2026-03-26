@@ -4,18 +4,51 @@ Multi-agent pipeline: topic → validated Manim animation + voiceover.
 
 ## Quick start
 
-### Prerequisites
-- Python 3.10+
-- `espeak-ng` (for Kokoro TTS): `brew install espeak-ng` / `apt install espeak-ng`
-- Docker (for rendering)
-- `ANTHROPIC_API_KEY` env var
+### 1. API keys
 
-### Install
+Set your Anthropic API key before running — this is always required:
+
 ```bash
-pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Run
+To make it permanent, add that line to your `~/.zshrc` (or `~/.bashrc`).
+
+**TTS backend keys** (only needed if you change `TTS_BACKEND`):
+
+```bash
+export OPENAI_API_KEY=sk-...      # TTS_BACKEND=openai
+export ELEVENLABS_API_KEY=...     # TTS_BACKEND=elevenlabs
+```
+
+### 2. Choose a TTS backend
+
+| Backend | Quality | Requires |
+|---------|---------|---------|
+| `kokoro` (default) | Best | PyTorch ≥ 2.4, `espeak-ng` — **not available on Intel Macs** |
+| `openai` | Great | `pip install openai`, `OPENAI_API_KEY` |
+| `elevenlabs` | Great | `pip install elevenlabs`, `ELEVENLABS_API_KEY` |
+
+> **Intel Mac users:** PyTorch ≥ 2.4 has no x86_64 macOS wheels, so Kokoro won't install.
+> Use `TTS_BACKEND=openai` or `TTS_BACKEND=elevenlabs` instead.
+
+Set your backend before running:
+```bash
+export TTS_BACKEND=openai   # or elevenlabs
+```
+
+### 3. Prerequisites
+- Python 3.10+
+- `espeak-ng` (Kokoro only): `brew install espeak-ng` / `apt install espeak-ng`
+- Docker (for the final render step)
+
+### 4. Install
+```bash
+pip install -r requirements.txt
+pip install openai   # if using TTS_BACKEND=openai
+```
+
+### 5. Run
 ```bash
 python main.py --topic "explain how B-trees work" --effort medium
 ```
