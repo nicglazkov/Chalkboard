@@ -66,6 +66,7 @@ def script_agent(state: PipelineState, client=None) -> dict:
                                     "estimated_duration_sec": {"type": "number"},
                                 },
                                 "required": ["text", "estimated_duration_sec"],
+                                "additionalProperties": False,
                             },
                         },
                         "needs_web_search": {"type": "boolean"},
