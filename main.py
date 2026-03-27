@@ -5,6 +5,7 @@ load_dotenv()
 import asyncio
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import uuid
@@ -41,6 +42,20 @@ def _ensure_docker_image() -> None:
         )
 
 
+def _count_animations(scene_path: Path) -> int:
+    """Estimate total animation count by counting self.play( calls in scene.py."""
+    try:
+        return len(re.findall(r'self\.play\(', scene_path.read_text()))
+    except FileNotFoundError:
+        return 0
+
+
+def _parse_manim_line(line: str) -> int | None:
+    """Return animation number if line is a Manim CE progress line, else None."""
+    m = re.match(r'Animation (\d+) :', line)
+    return int(m.group(1)) if m else None
+
+
 def _render(run_id: str, verbose: bool = False) -> Path:
     output_dir = Path(OUTPUT_DIR).resolve()
     final_mp4 = output_dir / run_id / "final.mp4"
@@ -63,17 +78,33 @@ def _render(run_id: str, verbose: bool = False) -> Path:
             raise SystemExit("Docker render failed.")
         video_path = None  # use manifest fallback below
     else:
-        result = subprocess.run(docker_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(result.stdout)
-            print(result.stderr)
-            raise SystemExit("Docker render failed.")
+        total_anims = _count_animations(output_dir / run_id / "scene.py")
+        process = subprocess.Popen(
+            docker_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
         video_path = None
-        for line in result.stdout.splitlines():
+        anim_count = 0
+        lines_buffer = []
+        for line in process.stdout:
+            line = line.rstrip()
+            lines_buffer.append(line)
+            if len(lines_buffer) > 50:
+                lines_buffer.pop(0)
             if line.startswith("RENDER_COMPLETE:"):
                 container_path = line.split(":", 1)[1].strip()
                 video_path = output_dir / Path(container_path).relative_to("/output")
-                break
+            else:
+                anim_num = _parse_manim_line(line)
+                if anim_num is not None:
+                    anim_count = anim_num
+                    suffix = f"/{total_anims}" if total_anims else ""
+                    print(f"\r  [render] animation {anim_count}{suffix}...", end="", flush=True)
+        process.wait()
+        if anim_count:
+            print()
+        if process.returncode != 0:
+            print("\n".join(lines_buffer[-20:]))
+            raise SystemExit("Docker render failed.")
 
     if video_path is None or not video_path.exists():
         # Fallback: derive from manifest
