@@ -1,6 +1,18 @@
+import io
+import wave
+import asyncio
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-import asyncio
+
+
+def _make_wav_bytes(n_frames: int = 100, sample_rate: int = 24000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(b"\x00" * n_frames * 2)
+    return buf.getvalue()
 
 
 def test_openai_generate_audio_writes_wav(tmp_path):
@@ -10,7 +22,7 @@ def test_openai_generate_audio_writes_wav(tmp_path):
     ]
     output_path = tmp_path / "voiceover.wav"
 
-    fake_audio_bytes = b"\xff\xfb" + b"\x00" * 100
+    fake_audio_bytes = _make_wav_bytes()
 
     mock_response = MagicMock()
     mock_response.content = fake_audio_bytes

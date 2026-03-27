@@ -16,7 +16,7 @@ def _make_script_state():
 
 
 def _make_approved_state():
-    return {"fact_feedback": "Looks good.", "status": "validating"}
+    return {"fact_feedback": None, "status": "validating"}  # None = approved
 
 
 def _make_manim_state():
@@ -25,7 +25,7 @@ def _make_manim_state():
 
 
 def _make_code_approved_state():
-    return {"code_feedback": "Looks good.", "code_attempts": 0}
+    return {"code_feedback": None, "code_attempts": 0}  # None = approved
 
 
 def test_graph_happy_path_reaches_approved(tmp_path):
