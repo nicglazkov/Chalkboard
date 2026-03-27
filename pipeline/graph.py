@@ -55,6 +55,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "needs_web_search": state.get("needs_web_search", False),
         "user_approved_search": state.get("user_approved_search", False),
         "audience": state.get("audience", "intermediate"),
+        "tone": state.get("tone", "casual"),
         "status": "drafting",
     }
 

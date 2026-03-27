@@ -24,6 +24,12 @@ AUDIENCE_INSTRUCTIONS = {
     "expert": "Target audience: experts in the field. Use precise technical language, assume deep background knowledge, and focus on nuance and depth.",
 }
 
+TONE_INSTRUCTIONS = {
+    "casual": "Tone: conversational and friendly, as if explaining to a curious friend.",
+    "formal": "Tone: precise and academic, suitable for a university-level lecture.",
+    "socratic": "Tone: question-driven — pose key questions before answering them, guiding the viewer to discover insights.",
+}
+
 
 def _build_user_message(state: PipelineState) -> str:
     topic = state["topic"]
@@ -33,6 +39,7 @@ def _build_user_message(state: PipelineState) -> str:
 
     msg = f"Topic: {topic}\nEffort level: {effort}"
     msg += f"\n{AUDIENCE_INSTRUCTIONS[state.get('audience', 'intermediate')]}"
+    msg += f"\n{TONE_INSTRUCTIONS[state.get('tone', 'casual')]}"
     if feedback:
         msg += f"\n\nPrevious attempt had issues. Please rewrite the script fully, addressing this feedback:\n{feedback}"
     if web_approved:

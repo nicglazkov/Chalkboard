@@ -13,11 +13,12 @@ import uuid
 from pathlib import Path
 from langgraph.types import Command
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from config import CHECKPOINT_DB, DEFAULT_AUDIENCE, DEFAULT_EFFORT, OUTPUT_DIR, MANIM_QUALITY
+from config import CHECKPOINT_DB, DEFAULT_AUDIENCE, DEFAULT_EFFORT, DEFAULT_TONE, OUTPUT_DIR, MANIM_QUALITY
 from pipeline.graph import build_graph
 
 EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
+TONE_CHOICES = ["casual", "formal", "socratic"]
 DOCKER_IMAGE = "chalkboard-render"
 QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 
@@ -232,13 +233,13 @@ def _handle_interrupt(interrupt_value: str) -> Command:
     return Command(resume={"action": action, "guidance": guidance})
 
 
-async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate") -> None:
+async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate", tone: str = "casual") -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
         graph = build_graph(checkpointer=checkpointer)
         config = {"configurable": {"thread_id": thread_id}}
-        input_state = {"topic": topic, "effort_level": effort, "audience": audience}
+        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone}
 
         while True:
             async for event in graph.astream(input_state, config=config, stream_mode="updates"):
@@ -259,6 +260,8 @@ def main():
     parser.add_argument("--effort", choices=EFFORT_CHOICES, default=DEFAULT_EFFORT)
     parser.add_argument("--audience", choices=AUDIENCE_CHOICES, default=DEFAULT_AUDIENCE,
                         help="Target audience level")
+    parser.add_argument("--tone", choices=TONE_CHOICES, default=DEFAULT_TONE,
+                        help="Narration tone")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
@@ -272,7 +275,7 @@ def main():
         _check_tools()
 
     thread_id = args.run_id or str(uuid.uuid4())
-    asyncio.run(run(args.topic, args.effort, thread_id, audience=args.audience))
+    asyncio.run(run(args.topic, args.effort, thread_id, audience=args.audience, tone=args.tone))
 
     if not args.no_render:
         # Visual QA runs only on full renders — preview is low-quality by design

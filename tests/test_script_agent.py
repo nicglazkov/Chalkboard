@@ -90,3 +90,33 @@ def test_script_agent_uses_default_audience_when_not_set(base_state):
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "intermediate" in user_content.lower()
+
+
+def test_script_agent_includes_tone_in_prompt(base_state):
+    base_state["tone"] = "socratic"
+    segments = [{"text": "Socratic content.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Socratic content.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        script_agent(base_state)
+
+    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "question" in user_content.lower()
+
+
+def test_script_agent_uses_default_tone_when_not_set(base_state):
+    base_state.pop("tone", None)
+    segments = [{"text": "Casual content.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Casual content.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        script_agent(base_state)
+
+    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "conversational" in user_content.lower()
