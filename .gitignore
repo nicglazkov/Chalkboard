@@ -7,3 +7,4 @@ __pycache__/
 .env
 pipeline_state.db-shm
 pipeline_state.db-wal
+*.DS_Store*
