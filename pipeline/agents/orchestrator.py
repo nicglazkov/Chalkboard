@@ -20,7 +20,7 @@ def _build_escalation_message(state: PipelineState) -> str:
     return "\n".join(lines)
 
 
-def escalate_to_user(state: PipelineState) -> dict:
+async def escalate_to_user(state: PipelineState) -> dict:
     message = _build_escalation_message(state)
     print(message)
 

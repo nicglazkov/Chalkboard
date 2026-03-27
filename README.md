@@ -52,13 +52,27 @@ pip install openai   # if using TTS_BACKEND=openai
 python main.py --topic "explain how B-trees work" --effort medium
 ```
 
-### Render (Docker)
+### Render (Docker + local merge)
+
+The audio merge runs locally (not in Docker) to avoid macOS/QuickTime AAC compatibility issues.
+
 ```bash
 docker build -f docker/Dockerfile -t chalkboard-render .
 docker run --rm -v "$(pwd)/output:/output" chalkboard-render <run_id>
 ```
 
+Then merge the voiceover on the host:
+```bash
+RUN_ID=<run_id>
+ffmpeg -i "output/$RUN_ID/media/videos/scene/720p30/ChalkboardScene.mp4" \
+       -i "output/$RUN_ID/voiceover.wav" \
+       -c:v copy -c:a aac -b:a 128k \
+       "output/$RUN_ID/final.mp4"
+```
+
 Output: `output/<run_id>/final.mp4`
+
+> For `high` quality, replace `720p30` with `1080p60` in the ffmpeg command.
 
 ## Config (env vars)
 | Var | Default | Options |

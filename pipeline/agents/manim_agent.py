@@ -14,6 +14,12 @@ STRICT REQUIREMENTS:
 - Use self.play(..., run_time=X) for animations
 - The code must be syntactically valid Python
 
+KNOWN API PITFALLS (v0.20.1):
+- Brace.get_text(*text) does NOT accept font_size — set it on the returned object: t = brace.get_text('x'); t.scale(0.8)
+- VGroup.arrange() returns None — assign before arranging, don't chain
+- Always pass run_time as a keyword arg: self.play(anim, run_time=1.0)
+- Never use VGroup(*self.mobjects) — self.mobjects can contain non-VMobjects; use *[FadeOut(m) for m in self.mobjects] instead
+
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
 
@@ -42,7 +48,7 @@ def manim_agent(state: PipelineState, client=None) -> dict:
 
     response = client.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=4096,
+        max_tokens=16384,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_msg}],
         output_config={

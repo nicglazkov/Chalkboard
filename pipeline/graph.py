@@ -13,19 +13,19 @@ from pipeline.render_trigger import render_trigger
 
 
 def _after_fact_validator(state: PipelineState) -> str:
+    if not state.get("fact_feedback"):  # approved
+        return "manim_agent"
     if state["script_attempts"] >= 3:
         return "escalate_to_user"
-    if state.get("fact_feedback") and state["script_attempts"] > 0:
-        return "script_agent"
-    return "manim_agent"
+    return "script_agent"
 
 
 def _after_code_validator(state: PipelineState) -> str:
+    if not state.get("code_feedback"):  # approved
+        return "render_trigger"
     if state["code_attempts"] >= 3:
         return "escalate_to_user"
-    if state["code_attempts"] > 0:
-        return "manim_agent"
-    return "render_trigger"
+    return "manim_agent"
 
 
 def _after_escalate(state: PipelineState) -> str:

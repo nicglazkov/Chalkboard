@@ -33,11 +33,5 @@ if [ ! -f "$VIDEO" ]; then
   exit 1
 fi
 
-echo "Merging voiceover..."
-ffmpeg -y \
-  -i "${VIDEO}" \
-  -i "${RUN_DIR}/voiceover.wav" \
-  -c:v copy -c:a aac \
-  "${RUN_DIR}/final.mp4"
-
-echo "Done: ${RUN_DIR}/final.mp4"
+# Print video path for host-side merge step
+echo "RENDER_COMPLETE:${VIDEO}"

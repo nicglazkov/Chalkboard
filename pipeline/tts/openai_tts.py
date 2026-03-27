@@ -17,9 +17,13 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
     if openai is None:
         raise ImportError("Install openai: pip install openai")
 
+    import wave
+    import io
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    all_bytes: list[bytes] = []
+    all_pcm: list[bytes] = []
     durations: list[float] = []
+    wav_params = None
 
     for segment in segments:
         response = openai.audio.speech.create(
@@ -28,17 +32,18 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
             input=segment["text"],
             response_format="wav",
         )
-        chunk_bytes = response.content
-        # Estimate duration from WAV file size (2 bytes/sample, mono, 24kHz, 44-byte header)
-        pcm_bytes = max(0, len(chunk_bytes) - 44)
-        duration = pcm_bytes / (SAMPLE_RATE * 2)
-        durations.append(duration)
-        all_bytes.append(chunk_bytes)
+        with wave.open(io.BytesIO(response.content)) as wf:
+            if wav_params is None:
+                wav_params = wf.getparams()
+            frames = wf.readframes(wf.getnframes())
+            all_pcm.append(frames)
+            durations.append(wf.getnframes() / wf.getframerate())
 
-    # MVP caveat: concatenates raw WAV bytes across segments — valid for single-segment
-    # scripts, multi-segment produces multiple WAV headers. Fix by decode+re-encode before production.
-    with open(output_path, "wb") as f:
-        f.write(b"".join(all_bytes))
+    with wave.open(str(output_path), "wb") as out_wav:
+        out_wav.setnchannels(wav_params.nchannels)
+        out_wav.setsampwidth(wav_params.sampwidth)
+        out_wav.setframerate(wav_params.framerate)
+        out_wav.writeframes(b"".join(all_pcm))
 
     return output_path, durations
 
