@@ -57,6 +57,14 @@ def _parse_manim_line(line: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _docker_render_cmd(run_id: str, output_dir: Path, preview: bool = False) -> list[str]:
+    cmd = ["docker", "run", "--rm", "-v", f"{output_dir}:/output"]
+    if preview:
+        cmd += ["-e", "PREVIEW_MODE=1"]
+    cmd += [DOCKER_IMAGE, run_id]
+    return cmd
+
+
 def _render(run_id: str, verbose: bool = False) -> Path:
     output_dir = Path(OUTPUT_DIR).resolve()
     final_mp4 = output_dir / run_id / "final.mp4"
@@ -69,7 +77,7 @@ def _render(run_id: str, verbose: bool = False) -> Path:
 
     # Run Manim inside Docker
     print("\n  [render] rendering animation...")
-    docker_cmd = ["docker", "run", "--rm", "-v", f"{output_dir}:/output", DOCKER_IMAGE, run_id]
+    docker_cmd = _docker_render_cmd(run_id, output_dir)
 
     if verbose:
         # Stream Docker output directly to the terminal
@@ -135,6 +143,53 @@ def _render(run_id: str, verbose: bool = False) -> Path:
     return final_mp4
 
 
+def _render_preview(run_id: str) -> Path:
+    output_dir = Path(OUTPUT_DIR).resolve()
+    preview_mp4 = output_dir / run_id / "preview.mp4"
+
+    if preview_mp4.exists():
+        print(f"\n  [preview] already done — {preview_mp4}")
+        return preview_mp4
+
+    _ensure_docker_image()
+    print("\n  [preview] rendering preview at low quality (480p15)...")
+    docker_cmd = _docker_render_cmd(run_id, output_dir, preview=True)
+
+    process = subprocess.Popen(
+        docker_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    if process.stdout is None:
+        process.wait()
+        raise SystemExit("Docker preview render failed: could not capture output.")
+    video_path = None
+    lines_buffer = collections.deque(maxlen=50)
+    for line in process.stdout:
+        line = line.rstrip()
+        lines_buffer.append(line)
+        if line.startswith("RENDER_COMPLETE:"):
+            container_path = line.split(":", 1)[1].strip()
+            video_path = output_dir / Path(container_path).relative_to("/output")
+    process.wait()
+    if process.returncode != 0:
+        print("\n".join(lines_buffer[-20:]))
+        raise SystemExit("Docker preview render failed.")
+
+    if video_path is None or not video_path.exists():
+        raise SystemExit(f"Preview video not found at {video_path}")
+
+    wav_path = output_dir / run_id / "voiceover.wav"
+    subprocess.run(
+        ["ffmpeg", "-y",
+         "-i", str(video_path),
+         "-i", str(wav_path),
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest",
+         str(preview_mp4)],
+        check=True,
+        capture_output=True,
+    )
+    return preview_mp4
+
+
 def _print_progress(event: dict) -> None:
     for node_name, updates in event.items():
         if node_name == "__end__":
@@ -186,6 +241,7 @@ def main():
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
+    parser.add_argument("--preview", action="store_true", help="Render low-quality preview instead of full HD render")
     args = parser.parse_args()
 
     if not args.no_render:
@@ -195,8 +251,14 @@ def main():
     asyncio.run(run(args.topic, args.effort, thread_id))
 
     if not args.no_render:
-        final = _render(thread_id, verbose=args.verbose)
-        print(f"\nDone → {final}")
+        if args.preview:
+            preview = _render_preview(thread_id)
+            print(f"\nPreview → {preview}")
+            print(f"\nTo render the full video:")
+            print(f"  python main.py --topic {args.topic!r} --run-id {thread_id}")
+        else:
+            final = _render(thread_id, verbose=args.verbose)
+            print(f"\nDone → {final}")
     else:
         print(f"\nDone. Output files in output/{thread_id}/")
 
