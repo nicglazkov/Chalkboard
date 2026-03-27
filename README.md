@@ -1,89 +1,141 @@
 # Chalkboard
 
-Multi-agent pipeline: topic → validated Manim animation + voiceover.
+Turn any topic into a narrated, animated explainer video — fully automated.
+
+```
+topic → script → fact-check → Manim animation → code review → voiceover → final.mp4
+```
+
+Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic; when it gets stuck it asks you for guidance.
+
+---
 
 ## Quick start
 
-### 1. API keys
+### 1. Clone and install
 
-Copy the example env file and fill in your keys:
+```bash
+git clone https://github.com/nicglazkov/Chalkboard.git
+cd Chalkboard
+pip install -r requirements.txt
+```
+
+### 2. Set up API keys
 
 ```bash
 cp .env.example .env
 ```
 
-Then open `.env` and set at minimum:
+Open `.env` and fill in your keys:
+
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...        # if using TTS_BACKEND=openai
+TTS_BACKEND=openai          # see TTS section below
+OPENAI_API_KEY=sk-...       # if using TTS_BACKEND=openai
 ```
 
-The `.env` file is gitignored — your keys stay local and are never committed.
+### 3. Run
 
-### 2. Choose a TTS backend
-
-| Backend | Quality | Requires |
-|---------|---------|---------|
-| `kokoro` (default) | Best | PyTorch ≥ 2.4, `espeak-ng` — **not available on Intel Macs** |
-| `openai` | Great | `pip install openai`, `OPENAI_API_KEY` |
-| `elevenlabs` | Great | `pip install elevenlabs`, `ELEVENLABS_API_KEY` |
-
-> **Intel Mac users:** PyTorch ≥ 2.4 has no x86_64 macOS wheels, so Kokoro won't install.
-> Use `TTS_BACKEND=openai` or `TTS_BACKEND=elevenlabs` instead.
-
-Set your backend before running:
-```bash
-export TTS_BACKEND=openai   # or elevenlabs
-```
-
-### 3. Prerequisites
-- Python 3.10+
-- `espeak-ng` (Kokoro only): `brew install espeak-ng` / `apt install espeak-ng`
-- Docker (for the final render step)
-
-### 4. Install
-```bash
-pip install -r requirements.txt
-pip install openai   # if using TTS_BACKEND=openai
-```
-
-### 5. Run
 ```bash
 python main.py --topic "explain how B-trees work" --effort medium
 ```
 
-### Render (Docker + local merge)
-
-The audio merge runs locally (not in Docker) to avoid macOS/QuickTime AAC compatibility issues.
+Outputs are written to `output/<run-id>/`. When the pipeline finishes, render the video:
 
 ```bash
+# Build the render image once
 docker build -f docker/Dockerfile -t chalkboard-render .
-docker run --rm -v "$(pwd)/output:/output" chalkboard-render <run_id>
-```
 
-Then merge the voiceover on the host:
-```bash
-RUN_ID=<run_id>
+# Render (replace <run-id> with the ID printed by main.py)
+docker run --rm -v "$(pwd)/output:/output" chalkboard-render <run-id>
+
+# Merge voiceover on the host (avoids macOS/QuickTime AAC compatibility issues)
+RUN_ID=<run-id>
 ffmpeg -i "output/$RUN_ID/media/videos/scene/720p30/ChalkboardScene.mp4" \
        -i "output/$RUN_ID/voiceover.wav" \
        -c:v copy -c:a aac -b:a 128k \
        "output/$RUN_ID/final.mp4"
 ```
 
-Output: `output/<run_id>/final.mp4`
+> **High quality:** Replace `720p30` with `1080p60` in the ffmpeg command and set `MANIM_QUALITY=high`.
 
-> For `high` quality, replace `720p30` with `1080p60` in the ffmpeg command.
+---
 
-## Config (env vars)
-| Var | Default | Options |
-|-----|---------|---------|
+## TTS backends
+
+| Backend | Quality | Cost | Requires |
+|---------|---------|------|----------|
+| `openai` | Great | API | `OPENAI_API_KEY` |
+| `elevenlabs` | Great | API | `pip install elevenlabs`, `ELEVENLABS_API_KEY` |
+| `kokoro` | Best | Free (local) | PyTorch ≥ 2.4, `espeak-ng` — **not available on Intel Macs** |
+
+Set `TTS_BACKEND` in your `.env` file. Default is `kokoro`.
+
+> **Intel Mac users:** PyTorch ≥ 2.4 has no x86_64 macOS wheels. Use `openai` or `elevenlabs`.
+>
+> To install `espeak-ng` for Kokoro: `brew install espeak-ng` / `apt install espeak-ng`
+
+---
+
+## Effort levels
+
+`--effort` controls how thorough the validation is and whether web search is used.
+
+| Level | Fact-check | Web search | Segments |
+|-------|-----------|------------|---------|
+| `low` | Light — obvious errors only | Never | 3–4 |
+| `medium` (default) | Spot-check key claims | With approval | 4–6 |
+| `high` | Thorough | Always enabled | 5–8 |
+
+---
+
+## Resuming a crashed run
+
+Every run is checkpointed. If it crashes or you abort, resume with the same run ID:
+
+```bash
+python main.py --topic "..." --run-id <previous-run-id>
+```
+
+---
+
+## Configuration
+
+All settings can be overridden via `.env` or environment variables:
+
+| Variable | Default | Options |
+|----------|---------|---------|
 | `TTS_BACKEND` | `kokoro` | `kokoro`, `openai`, `elevenlabs` |
 | `MANIM_QUALITY` | `medium` | `low`, `medium`, `high` |
 | `DEFAULT_EFFORT` | `medium` | `low`, `medium`, `high` |
 | `OUTPUT_DIR` | `./output` | any path |
 | `CHECKPOINT_DB` | `pipeline_state.db` | any path |
 
-## Resume a crashed run
+---
+
+## Development
+
+### Run tests
+
 ```bash
-python main.py --topic "..." --run-id <previous-run-id>
+pytest
 ```
+
+### Project structure
+
+```
+pipeline/
+  agents/         # script_agent, fact_validator, manim_agent, code_validator, orchestrator
+  tts/            # kokoro, openai, elevenlabs backends
+  graph.py        # LangGraph state machine
+  state.py        # PipelineState TypedDict + ValidationResult
+  render_trigger.py  # writes output files, calls TTS
+docker/
+  Dockerfile      # extends manimcommunity/manim:v0.20.1
+  render.sh       # renders scene.py inside Docker
+tests/            # one test file per module
+config.py         # env var loading
+main.py           # CLI entry point
+```
+
+See [CLAUDE.md](CLAUDE.md) for full architecture documentation, design decisions, and contribution guidelines.
