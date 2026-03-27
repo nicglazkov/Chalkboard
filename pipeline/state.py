@@ -21,6 +21,7 @@ class PipelineState(TypedDict):
     effort_level: Literal["low", "medium", "high"]
     audience: Literal["beginner", "intermediate", "expert"]
     tone: Literal["casual", "formal", "socratic"]
+    theme: Literal["chalkboard", "light", "colorful"]
     needs_web_search: bool
     user_approved_search: bool
     status: Literal["drafting", "validating", "needs_user_input", "approved", "failed"]

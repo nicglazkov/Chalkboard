@@ -56,6 +56,9 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 |------|----------|---------|-------------|
 | `--topic` | **Yes** | — | Topic to explain, e.g. `"how B-trees work"` |
 | `--effort` | No | `medium` | Validation thoroughness — see [Effort levels](#effort-levels) |
+| `--audience` | No | `intermediate` | Target audience: `beginner`, `intermediate`, `expert` |
+| `--tone` | No | `casual` | Narration tone: `casual`, `formal`, `socratic` |
+| `--theme` | No | `chalkboard` | Visual color theme: `chalkboard`, `light`, `colorful` |
 | `--run-id` | No | auto | Resume a previous run using its ID |
 | `--preview` | No | off | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render |
 | `--no-render` | No | off | Run the AI pipeline only — skip Docker render and ffmpeg merge |

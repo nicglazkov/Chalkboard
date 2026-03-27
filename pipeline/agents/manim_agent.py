@@ -34,6 +34,29 @@ KNOWN API PITFALLS (v0.20.1):
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
+THEME_SPECS = {
+    "chalkboard": (
+        "COLOR THEME — chalkboard (dark background):\n"
+        "  Set self.camera.background_color = \"#1C1C1C\" at the start of construct().\n"
+        "  primary = ManimColor(\"#F5F0E8\")   # cream — use for main text and shapes\n"
+        "  accent  = ManimColor(\"#E8D44D\")   # chalk yellow — use for highlights\n"
+        "  secondary = ManimColor(\"#6EC6E8\") # sky blue — use for secondary elements"
+    ),
+    "light": (
+        "COLOR THEME — light (bright background):\n"
+        "  Set self.camera.background_color = \"#FAFAFA\" at the start of construct().\n"
+        "  primary = ManimColor(\"#1A1A1A\")   # near-black — use for main text and shapes\n"
+        "  accent  = ManimColor(\"#2563EB\")   # blue — use for highlights\n"
+        "  secondary = ManimColor(\"#16A34A\") # green — use for secondary elements"
+    ),
+    "colorful": (
+        "COLOR THEME — colorful (vibrant):\n"
+        "  Set self.camera.background_color = BLACK at the start of construct().\n"
+        "  Use Manim's built-in color constants (RED, BLUE, GREEN, YELLOW, ORANGE, PURPLE, TEAL).\n"
+        "  Vary colors across elements to create a visually dynamic animation."
+    ),
+}
+
 
 def _format_segments(segments: list[dict]) -> str:
     n = len(segments)
@@ -54,7 +77,8 @@ def manim_agent(state: PipelineState, client=None) -> dict:
         f"Create a Manim animation for this educational script.\n\n"
         f"Topic: {state['topic']}\n\n"
         f"Narration segments with timings:\n{_format_segments(state['script_segments'])}\n\n"
-        f"Full script for context:\n{state['script']}"
+        f"Full script for context:\n{state['script']}\n\n"
+        f"{THEME_SPECS[state.get('theme', 'chalkboard')]}"
     )
 
     if state.get("code_feedback"):

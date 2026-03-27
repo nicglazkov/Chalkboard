@@ -19,6 +19,7 @@ def base_state() -> PipelineState:
         effort_level="medium",
         audience="intermediate",
         tone="casual",
+        theme="chalkboard",
         needs_web_search=False,
         user_approved_search=False,
         status="drafting",
