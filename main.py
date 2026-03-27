@@ -4,6 +4,7 @@ load_dotenv()
 
 import asyncio
 import argparse
+import collections
 import json
 import re
 import shutil
@@ -82,14 +83,15 @@ def _render(run_id: str, verbose: bool = False) -> Path:
         process = subprocess.Popen(
             docker_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
         )
+        if process.stdout is None:
+            process.wait()
+            raise SystemExit("Docker render failed: could not capture output.")
         video_path = None
         anim_count = 0
-        lines_buffer = []
+        lines_buffer = collections.deque(maxlen=50)
         for line in process.stdout:
             line = line.rstrip()
             lines_buffer.append(line)
-            if len(lines_buffer) > 50:
-                lines_buffer.pop(0)
             if line.startswith("RENDER_COMPLETE:"):
                 container_path = line.split(":", 1)[1].strip()
                 video_path = output_dir / Path(container_path).relative_to("/output")
