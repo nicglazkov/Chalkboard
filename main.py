@@ -143,6 +143,24 @@ def _render(run_id: str, verbose: bool = False) -> Path:
     return final_mp4
 
 
+def _run_visual_qa(run_id: str, final_mp4: Path) -> None:
+    from pipeline.visual_qa import visual_qa  # lazy import — module added in Task 3
+    output_dir = Path(OUTPUT_DIR).resolve()
+    qa_dir = output_dir / run_id / "qa_frames"
+    print("\n  [qa] running visual quality check...")
+    try:
+        result = visual_qa(final_mp4, qa_dir)
+    except Exception as e:
+        print(f"  [qa] skipped — {e}")
+        return
+    if result["passed"]:
+        print("  [qa] passed")
+    else:
+        print("  [qa] issues found:")
+        for issue in result["issues"]:
+            print(f"        [{issue['severity']}] {issue['description']}")
+
+
 def _render_preview(run_id: str) -> Path:
     output_dir = Path(OUTPUT_DIR).resolve()
     preview_mp4 = output_dir / run_id / "preview.mp4"
@@ -259,6 +277,7 @@ def main():
         else:
             final = _render(thread_id, verbose=args.verbose)
             print(f"\nDone → {final}")
+            _run_visual_qa(thread_id, final)
     else:
         print(f"\nDone. Output files in output/{thread_id}/")
 
