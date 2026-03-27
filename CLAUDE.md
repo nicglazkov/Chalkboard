@@ -114,6 +114,7 @@ All agents use Claude with `output_config` JSON schema (structured outputs). The
 - `max_tokens`: 2048
 - Output: `{"script": str, "segments": [{text, estimated_duration_sec}], "needs_web_search": bool}`
 - Web search tool enabled when `effort_level == "high"` or `user_approved_search == True`
+- Reads `audience` and `tone` from state to inject targeting instructions into user message via `AUDIENCE_INSTRUCTIONS` and `TONE_INSTRUCTIONS` dicts
 
 ### fact_validator
 - Model: `CLAUDE_MODEL`
@@ -127,6 +128,7 @@ All agents use Claude with `output_config` JSON schema (structured outputs). The
 - Output: `{"manim_code": str}`
 - Scene class **must** be named `ChalkboardScene`
 - System prompt includes Manim v0.20.1 API pitfalls (see below)
+- Reads `theme` from state to inject a color palette block into user message via `THEME_SPECS` dict (background color, primary/accent/secondary palette)
 
 ### code_validator
 - Model: `CLAUDE_MODEL`

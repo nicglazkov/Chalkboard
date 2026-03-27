@@ -131,6 +131,9 @@ All settings can be overridden via `.env` or environment variables:
 | `TTS_BACKEND` | `kokoro` | `kokoro`, `openai`, `elevenlabs` |
 | `MANIM_QUALITY` | `medium` | `low`, `medium`, `high` |
 | `DEFAULT_EFFORT` | `medium` | `low`, `medium`, `high` |
+| `DEFAULT_AUDIENCE` | `intermediate` | `beginner`, `intermediate`, `expert` |
+| `DEFAULT_TONE` | `casual` | `casual`, `formal`, `socratic` |
+| `DEFAULT_THEME` | `chalkboard` | `chalkboard`, `light`, `colorful` |
 | `OUTPUT_DIR` | `./output` | any path |
 | `CHECKPOINT_DB` | `pipeline_state.db` | any path |
 
