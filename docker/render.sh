@@ -33,7 +33,11 @@ else
   MEDIA_DIR="${RUN_DIR}/media"
 fi
 
-echo "Rendering ${SCENE_CLASS} at quality=${QUALITY}..."
+if [ "${PREVIEW_MODE:-0}" = "1" ]; then
+  echo "Rendering ${SCENE_CLASS} at quality=low (preview)..."
+else
+  echo "Rendering ${SCENE_CLASS} at quality=${QUALITY}..."
+fi
 manim ${QUALITY_FLAG} --media_dir "${MEDIA_DIR}" \
   "${RUN_DIR}/scene.py" "${SCENE_CLASS}"
 

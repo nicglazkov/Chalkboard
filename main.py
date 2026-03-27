@@ -144,7 +144,7 @@ def _render(run_id: str, verbose: bool = False) -> Path:
 
 
 def _run_visual_qa(run_id: str, final_mp4: Path) -> None:
-    from pipeline.visual_qa import visual_qa  # lazy import — module added in Task 3
+    from pipeline.visual_qa import visual_qa  # lazy import keeps anthropic out of startup path
     output_dir = Path(OUTPUT_DIR).resolve()
     qa_dir = output_dir / run_id / "qa_frames"
     print("\n  [qa] running visual quality check...")
@@ -262,6 +262,9 @@ def main():
     parser.add_argument("--preview", action="store_true", help="Render low-quality preview instead of full HD render")
     args = parser.parse_args()
 
+    if args.verbose and args.preview:
+        raise SystemExit("--verbose and --preview cannot be combined.")
+
     if not args.no_render:
         _check_tools()
 
@@ -269,6 +272,7 @@ def main():
     asyncio.run(run(args.topic, args.effort, thread_id))
 
     if not args.no_render:
+        # Visual QA runs only on full renders — preview is low-quality by design
         if args.preview:
             preview = _render_preview(thread_id)
             print(f"\nPreview → {preview}")
