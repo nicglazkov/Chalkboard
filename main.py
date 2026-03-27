@@ -41,7 +41,7 @@ def _ensure_docker_image() -> None:
         )
 
 
-def _render(run_id: str) -> Path:
+def _render(run_id: str, verbose: bool = False) -> Path:
     output_dir = Path(OUTPUT_DIR).resolve()
     final_mp4 = output_dir / run_id / "final.mp4"
 
@@ -53,25 +53,27 @@ def _render(run_id: str) -> Path:
 
     # Run Manim inside Docker
     print("\n  [render] rendering animation...")
-    result = subprocess.run(
-        ["docker", "run", "--rm",
-         "-v", f"{output_dir}:/output",
-         DOCKER_IMAGE, run_id],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        print(result.stdout)
-        print(result.stderr)
-        raise SystemExit("Docker render failed.")
+    docker_cmd = ["docker", "run", "--rm", "-v", f"{output_dir}:/output", DOCKER_IMAGE, run_id]
 
-    # Parse video path from RENDER_COMPLETE:<path>
-    video_path = None
-    for line in result.stdout.splitlines():
-        if line.startswith("RENDER_COMPLETE:"):
-            # Path is inside the container (/output/...) — remap to host path
-            container_path = line.split(":", 1)[1].strip()
-            video_path = output_dir / Path(container_path).relative_to("/output")
-            break
+    if verbose:
+        # Stream Docker output directly to the terminal
+        process = subprocess.Popen(docker_cmd)
+        process.wait()
+        if process.returncode != 0:
+            raise SystemExit("Docker render failed.")
+        video_path = None  # use manifest fallback below
+    else:
+        result = subprocess.run(docker_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(result.stdout)
+            print(result.stderr)
+            raise SystemExit("Docker render failed.")
+        video_path = None
+        for line in result.stdout.splitlines():
+            if line.startswith("RENDER_COMPLETE:"):
+                container_path = line.split(":", 1)[1].strip()
+                video_path = output_dir / Path(container_path).relative_to("/output")
+                break
 
     if video_path is None or not video_path.exists():
         # Fallback: derive from manifest
@@ -150,6 +152,7 @@ def main():
     parser.add_argument("--effort", choices=EFFORT_CHOICES, default=DEFAULT_EFFORT)
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
+    parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
     args = parser.parse_args()
 
     if not args.no_render:
@@ -159,7 +162,7 @@ def main():
     asyncio.run(run(args.topic, args.effort, thread_id))
 
     if not args.no_render:
-        final = _render(thread_id)
+        final = _render(thread_id, verbose=args.verbose)
         print(f"\nDone → {final}")
     else:
         print(f"\nDone. Output files in output/{thread_id}/")
