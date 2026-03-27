@@ -39,6 +39,9 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int = 5) -> list[P
     )
     duration = float(result.stdout.strip())
 
+    if duration <= 0.0:
+        raise ValueError(f"Video has no duration (got {duration!r}): {video_path}")
+
     frame_paths = []
     for i in range(n_frames):
         t = duration * i / max(1, n_frames - 1)

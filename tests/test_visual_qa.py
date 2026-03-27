@@ -72,3 +72,45 @@ def test_visual_qa_sends_image_blocks_to_claude(tmp_path):
     image_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "image"]
     assert len(image_blocks) == 1
     assert image_blocks[0]["source"]["media_type"] == "image/png"
+
+
+def test_extract_frames_returns_frame_paths(tmp_path):
+    qa_dir = tmp_path / "qa_frames"
+    video_path = tmp_path / "final.mp4"
+
+    ffprobe_result = MagicMock()
+    ffprobe_result.stdout = "10.0\n"
+    ffprobe_result.returncode = 0
+
+    ffmpeg_result = MagicMock()
+    ffmpeg_result.returncode = 0
+
+    with patch("pipeline.visual_qa.subprocess.run") as mock_run:
+        # ffprobe call returns duration, then ffmpeg calls return success
+        mock_run.side_effect = [ffprobe_result] + [ffmpeg_result] * 5
+        # Create fake frame files so the paths exist
+        qa_dir.mkdir(parents=True, exist_ok=True)
+        for i in range(5):
+            (qa_dir / f"frame_{i:02d}.png").write_bytes(b"fake")
+
+        from pipeline.visual_qa import _extract_frames
+        paths = _extract_frames(video_path, qa_dir, n_frames=5)
+
+    assert len(paths) == 5
+    assert all(p.name.startswith("frame_") and p.name.endswith(".png") for p in paths)
+
+
+def test_extract_frames_raises_on_zero_duration(tmp_path):
+    qa_dir = tmp_path / "qa_frames"
+    video_path = tmp_path / "final.mp4"
+
+    ffprobe_result = MagicMock()
+    ffprobe_result.stdout = "0.0\n"
+    ffprobe_result.returncode = 0
+
+    with patch("pipeline.visual_qa.subprocess.run") as mock_run:
+        mock_run.return_value = ffprobe_result
+        from pipeline.visual_qa import _extract_frames
+        import pytest
+        with pytest.raises(ValueError, match="no duration"):
+            _extract_frames(video_path, qa_dir)
