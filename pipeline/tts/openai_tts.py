@@ -37,7 +37,9 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
                 wav_params = wf.getparams()
             frames = wf.readframes(wf.getnframes())
             all_pcm.append(frames)
-            durations.append(wf.getnframes() / wf.getframerate())
+            # Use actual bytes read — OpenAI WAV headers often have nframes=INT_MAX
+            actual_nframes = len(frames) // (wf.getnchannels() * wf.getsampwidth())
+            durations.append(actual_nframes / wf.getframerate())
 
     with wave.open(str(output_path), "wb") as out_wav:
         out_wav.setnchannels(wav_params.nchannels)
