@@ -17,6 +17,7 @@ def base_state() -> PipelineState:
         fact_feedback=None,
         code_feedback=None,
         effort_level="medium",
+        audience="intermediate",
         needs_web_search=False,
         user_approved_search=False,
         status="drafting",

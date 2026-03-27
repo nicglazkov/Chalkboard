@@ -18,6 +18,12 @@ Respond with valid JSON only:
 Estimate duration as word_count / 2.5 seconds (~150 wpm).
 Set needs_web_search to true only if the topic requires information beyond your training data."""
 
+AUDIENCE_INSTRUCTIONS = {
+    "beginner": "Target audience: beginners with no prior knowledge. Use simple vocabulary, avoid jargon, and build from first principles.",
+    "intermediate": "Target audience: intermediate learners with some background knowledge. Assume familiarity with basic concepts and explain more advanced ideas clearly.",
+    "expert": "Target audience: experts in the field. Use precise technical language, assume deep background knowledge, and focus on nuance and depth.",
+}
+
 
 def _build_user_message(state: PipelineState) -> str:
     topic = state["topic"]
@@ -26,6 +32,7 @@ def _build_user_message(state: PipelineState) -> str:
     web_approved = state.get("user_approved_search", False)
 
     msg = f"Topic: {topic}\nEffort level: {effort}"
+    msg += f"\n{AUDIENCE_INSTRUCTIONS[state.get('audience', 'intermediate')]}"
     if feedback:
         msg += f"\n\nPrevious attempt had issues. Please rewrite the script fully, addressing this feedback:\n{feedback}"
     if web_approved:

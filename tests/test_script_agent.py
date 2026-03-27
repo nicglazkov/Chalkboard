@@ -60,3 +60,33 @@ def test_script_agent_includes_feedback_in_revision(base_state):
     messages = call_args.kwargs["messages"]
     user_content = messages[0]["content"]
     assert "Claim X is incorrect" in user_content
+
+
+def test_script_agent_includes_audience_in_prompt(base_state):
+    base_state["audience"] = "expert"
+    segments = [{"text": "Expert content.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Expert content.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        script_agent(base_state)
+
+    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "expert" in user_content.lower()
+
+
+def test_script_agent_uses_default_audience_when_not_set(base_state):
+    base_state.pop("audience", None)
+    segments = [{"text": "Default audience.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Default audience.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        script_agent(base_state)
+
+    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "intermediate" in user_content.lower()
