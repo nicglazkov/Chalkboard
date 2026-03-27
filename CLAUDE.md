@@ -61,6 +61,9 @@ main.py               CLI entry point, async graph runner
 | `topic` | str | User-provided topic |
 | `run_id` | str | UUID for this run, used as output directory name |
 | `effort_level` | str | `"low"` / `"medium"` / `"high"` |
+| `audience` | str | `"beginner"` / `"intermediate"` / `"expert"` |
+| `tone` | str | `"casual"` / `"formal"` / `"socratic"` |
+| `theme` | str | `"chalkboard"` / `"light"` / `"colorful"` |
 | `script` | str | Full narration script |
 | `script_segments` | list[dict] | `[{"text": str, "estimated_duration_sec": float}]` |
 | `manim_code` | str | Complete Python source for the Manim scene |

@@ -91,6 +91,21 @@ def test_manim_agent_includes_theme_colors_in_prompt(base_state):
     assert "#FAFAFA" in content  # light theme background
 
 
+def test_manim_agent_colorful_theme_in_prompt(base_state):
+    base_state["script"] = "B-trees are balanced search trees."
+    base_state["script_segments"] = [{"text": "B-trees.", "estimated_duration_sec": 2.0}]
+    base_state["theme"] = "colorful"
+    mock_resp = _mock_response(VALID_SCENE)
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_resp
+        manim_agent(base_state)
+
+    content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "vibrant" in content.lower()
+
+
 def test_manim_agent_defaults_to_chalkboard_theme(base_state):
     base_state["script"] = "B-trees are balanced search trees."
     base_state["script_segments"] = [{"text": "B-trees.", "estimated_duration_sec": 2.0}]
