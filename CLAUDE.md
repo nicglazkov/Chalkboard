@@ -187,19 +187,20 @@ async def generate_audio(
 
 ---
 
-## Docker render workflow
+## Render workflow
 
-The Dockerfile extends `manimcommunity/manim:v0.20.1` and only performs the Manim render (no audio merge):
+`main.py` orchestrates the full pipeline end-to-end after the graph completes:
 
 ```
-docker run ... chalkboard-render <run_id>
-→ reads manifest.json
-→ runs: manim -qm --media_dir output/<run_id>/media output/<run_id>/scene.py ChalkboardScene
-→ outputs: output/<run_id>/media/videos/scene/720p30/ChalkboardScene.mp4
-→ prints: RENDER_COMPLETE:<path>
+1. _check_tools()         — verify docker and ffmpeg are in PATH
+2. _ensure_docker_image() — build chalkboard-render image if not present (once)
+3. docker run ...         — Manim render inside container, prints RENDER_COMPLETE:<path>
+4. ffmpeg merge           — host-side: video + voiceover.wav → final.mp4
 ```
 
-**The audio merge runs on the host** (not in Docker) because Linux ffmpeg's native AAC encoder produces output incompatible with macOS QuickTime. The host merge uses macOS ffmpeg which produces compatible AAC.
+**The audio merge runs on the host** (not in Docker) because Linux ffmpeg's native AAC encoder omits the encoder-delay edit list (`elst` box) that QuickTime requires, resulting in silent playback. Host ffmpeg (macOS/Windows/Linux native builds) produces standard AAC-LC that is compatible with all browsers, QuickTime, and native players.
+
+`--no-render` flag skips steps 1–4 and only runs the pipeline (useful for testing or when Docker is unavailable).
 
 ---
 

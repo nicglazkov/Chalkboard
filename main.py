@@ -5,13 +5,99 @@ load_dotenv()
 import asyncio
 import argparse
 import json
+import shutil
+import subprocess
 import uuid
+from pathlib import Path
 from langgraph.types import Command
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from config import CHECKPOINT_DB, DEFAULT_EFFORT
+from config import CHECKPOINT_DB, DEFAULT_EFFORT, OUTPUT_DIR, MANIM_QUALITY
 from pipeline.graph import build_graph
 
 EFFORT_CHOICES = ["low", "medium", "high"]
+DOCKER_IMAGE = "chalkboard-render"
+QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
+
+
+def _check_tools() -> None:
+    missing = [t for t in ("docker", "ffmpeg") if not shutil.which(t)]
+    if missing:
+        raise SystemExit(
+            f"Missing required tools: {', '.join(missing)}\n"
+            "Install Docker from https://docker.com and ffmpeg from https://ffmpeg.org"
+        )
+
+
+def _ensure_docker_image() -> None:
+    result = subprocess.run(
+        ["docker", "images", "-q", DOCKER_IMAGE],
+        capture_output=True, text=True
+    )
+    if not result.stdout.strip():
+        print(f"\nDocker image '{DOCKER_IMAGE}' not found — building now (one-time setup)...")
+        subprocess.run(
+            ["docker", "build", "-f", "docker/Dockerfile", "-t", DOCKER_IMAGE, "."],
+            check=True
+        )
+
+
+def _render(run_id: str) -> Path:
+    output_dir = Path(OUTPUT_DIR).resolve()
+    final_mp4 = output_dir / run_id / "final.mp4"
+
+    if final_mp4.exists():
+        print(f"\n  [render] already done — {final_mp4}")
+        return final_mp4
+
+    _ensure_docker_image()
+
+    # Run Manim inside Docker
+    print("\n  [render] rendering animation...")
+    result = subprocess.run(
+        ["docker", "run", "--rm",
+         "-v", f"{output_dir}:/output",
+         DOCKER_IMAGE, run_id],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        raise SystemExit("Docker render failed.")
+
+    # Parse video path from RENDER_COMPLETE:<path>
+    video_path = None
+    for line in result.stdout.splitlines():
+        if line.startswith("RENDER_COMPLETE:"):
+            # Path is inside the container (/output/...) — remap to host path
+            container_path = line.split(":", 1)[1].strip()
+            video_path = output_dir / Path(container_path).relative_to("/output")
+            break
+
+    if video_path is None or not video_path.exists():
+        # Fallback: derive from manifest
+        manifest = json.loads((output_dir / run_id / "manifest.json").read_text())
+        quality = manifest.get("quality", "medium")
+        subdir = QUALITY_SUBDIR.get(quality, "720p30")
+        scene_class = manifest.get("scene_class_name", "ChalkboardScene")
+        video_path = output_dir / run_id / "media" / "videos" / "scene" / subdir / f"{scene_class}.mp4"
+
+    if not video_path.exists():
+        raise SystemExit(f"Rendered video not found at {video_path}")
+
+    # Merge voiceover with host ffmpeg (host AAC is browser/QuickTime compatible)
+    print("  [render] merging voiceover...")
+    wav_path = output_dir / run_id / "voiceover.wav"
+    subprocess.run(
+        ["ffmpeg", "-y",
+         "-i", str(video_path),
+         "-i", str(wav_path),
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+         str(final_mp4)],
+        check=True,
+        capture_output=True,
+    )
+
+    return final_mp4
 
 
 def _print_progress(event: dict) -> None:
@@ -49,17 +135,13 @@ async def run(topic: str, effort: str, thread_id: str) -> None:
             async for event in graph.astream(input_state, config=config, stream_mode="updates"):
                 _print_progress(event)
 
-                # Check for interrupt
                 if "__interrupt__" in event:
                     interrupt_value = event["__interrupt__"][0].value
                     resume_cmd = _handle_interrupt(interrupt_value)
                     input_state = resume_cmd
                     break
             else:
-                # Stream completed without interrupt — done
                 break
-
-    print("\nDone. Check output/ for generated files.")
 
 
 def main():
@@ -67,10 +149,20 @@ def main():
     parser.add_argument("--topic", required=True, help="Topic to explain")
     parser.add_argument("--effort", choices=EFFORT_CHOICES, default=DEFAULT_EFFORT)
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
+    parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     args = parser.parse_args()
+
+    if not args.no_render:
+        _check_tools()
 
     thread_id = args.run_id or str(uuid.uuid4())
     asyncio.run(run(args.topic, args.effort, thread_id))
+
+    if not args.no_render:
+        final = _render(thread_id)
+        print(f"\nDone → {final}")
+    else:
+        print(f"\nDone. Output files in output/{thread_id}/")
 
 
 if __name__ == "__main__":

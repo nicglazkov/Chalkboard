@@ -14,6 +14,8 @@ Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an e
 
 ### 1. Clone and install
 
+**Prerequisites:** Python 3.10+, [Docker](https://docker.com), [ffmpeg](https://ffmpeg.org) (`brew install ffmpeg` / `apt install ffmpeg`)
+
 ```bash
 git clone https://github.com/nicglazkov/Chalkboard.git
 cd Chalkboard
@@ -40,24 +42,11 @@ OPENAI_API_KEY=sk-...       # if using TTS_BACKEND=openai
 python main.py --topic "explain how B-trees work" --effort medium
 ```
 
-Outputs are written to `output/<run-id>/`. When the pipeline finishes, render the video:
+That's it. The pipeline runs, renders the animation in Docker, and merges the voiceover — outputting `output/<run-id>/final.mp4`.
 
-```bash
-# Build the render image once
-docker build -f docker/Dockerfile -t chalkboard-render .
+> **First run only:** Docker will build the render image automatically (~30s). Subsequent runs use the cached image.
 
-# Render (replace <run-id> with the ID printed by main.py)
-docker run --rm -v "$(pwd)/output:/output" chalkboard-render <run-id>
-
-# Merge voiceover on the host (avoids macOS/QuickTime AAC compatibility issues)
-RUN_ID=<run-id>
-ffmpeg -i "output/$RUN_ID/media/videos/scene/720p30/ChalkboardScene.mp4" \
-       -i "output/$RUN_ID/voiceover.wav" \
-       -c:v copy -c:a aac -b:a 128k \
-       "output/$RUN_ID/final.mp4"
-```
-
-> **High quality:** Replace `720p30` with `1080p60` in the ffmpeg command and set `MANIM_QUALITY=high`.
+> **High quality:** Set `MANIM_QUALITY=high` in `.env` for 1080p60 output.
 
 ---
 
