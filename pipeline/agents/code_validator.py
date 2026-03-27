@@ -37,7 +37,10 @@ def code_validator(state: PipelineState, client=None) -> dict:
         f"Script:\n{state['script']}\n\n"
         f"Manim code:\n{code}\n\n"
         f"Check: Does the animation visualize the script? Are Manim CE v0.20 APIs used correctly? "
-        f"Is the class named ChalkboardScene?"
+        f"Is the class named ChalkboardScene?\n\n"
+        f"Sync check: The scene must load _seg_data from (Path(__file__).parent / \"segments.json\") "
+        f"and use _d[i] (not hardcoded float literals) for all self.wait() calls. "
+        f"If any self.wait() call uses a hardcoded float literal, return needs_revision."
     )
 
     response = client.messages.create(

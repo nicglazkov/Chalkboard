@@ -13,12 +13,17 @@ def _mock_response(code: str) -> MagicMock:
 
 VALID_SCENE = '''
 from manim import *
+import json
+from pathlib import Path
 
 class ChalkboardScene(Scene):
     def construct(self):
+        _seg_data = json.loads((Path(__file__).parent / "segments.json").read_text())
+        _d = [s["actual_duration_sec"] for s in _seg_data]
+        _d = _d + [2.0] * max(0, 1 - len(_d))
         title = Text("B-Trees")
-        self.play(Write(title))
-        self.wait(2.0)
+        self.play(Write(title), run_time=1.0)
+        self.wait(max(0.0, _d[0] - 1.0))
 '''
 
 
