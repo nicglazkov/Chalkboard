@@ -50,6 +50,23 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 
 ---
 
+## CLI flags
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--topic` | **Yes** | — | Topic to explain, e.g. `"how B-trees work"` |
+| `--effort` | No | `medium` | Validation thoroughness — see [Effort levels](#effort-levels) |
+| `--run-id` | No | auto | Resume a previous run using its ID |
+| `--preview` | No | off | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render |
+| `--no-render` | No | off | Run the AI pipeline only — skip Docker render and ffmpeg merge |
+| `--verbose` | No | off | Stream raw Docker/Manim output to the terminal while rendering |
+
+> `--verbose` and `--preview` cannot be combined.
+
+After a full render, Chalkboard automatically runs a visual quality check: it samples 5 frames from `final.mp4` and flags any overlapping elements, off-screen text, or readability issues.
+
+---
+
 ## TTS backends
 
 | Backend | Quality | Cost | Requires |
@@ -84,6 +101,20 @@ Every run is checkpointed. If it crashes or you abort, resume with the same run 
 
 ```bash
 python main.py --topic "..." --run-id <previous-run-id>
+```
+
+### Preview → full render workflow
+
+Run `--preview` first to quickly check the visuals at low quality, then do the full HD render with `--run-id` (the pipeline result is already checkpointed — it won't re-run):
+
+```bash
+# Step 1: generate script + animation, render preview
+python main.py --topic "how B-trees work" --preview
+# → output/<run-id>/preview.mp4 (480p, fast)
+
+# Step 2: full HD render (pipeline skipped — uses checkpoint)
+python main.py --topic "how B-trees work" --run-id <run-id>
+# → output/<run-id>/final.mp4 (full quality + visual QA)
 ```
 
 ---
