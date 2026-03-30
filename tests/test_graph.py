@@ -30,15 +30,27 @@ def _make_code_approved_state():
 
 def test_graph_happy_path_reaches_approved(tmp_path):
     """Full pipeline run with all validators approving on first try."""
+    async def mock_script_agent(state, **kw):
+        return _make_script_state()
+
+    async def mock_fact_validator(state, **kw):
+        return _make_approved_state()
+
+    async def mock_manim_agent(state, **kw):
+        return _make_manim_state()
+
+    async def mock_code_validator(state, **kw):
+        return _make_code_approved_state()
+
     async def mock_tts(segments, path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"\x00")
         return path, [2.0]
 
-    with patch("pipeline.graph.script_agent", return_value=_make_script_state()) as MockScript, \
-         patch("pipeline.graph.fact_validator", return_value=_make_approved_state()) as MockFact, \
-         patch("pipeline.graph.manim_agent", return_value=_make_manim_state()) as MockManim, \
-         patch("pipeline.graph.code_validator", return_value=_make_code_approved_state()) as MockCode, \
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -57,7 +69,10 @@ def test_graph_retries_script_on_fact_failure(tmp_path):
     """Script validator fails once, then passes on second attempt."""
     call_counts = {"fact": 0}
 
-    def fact_side_effect(state, **kw):
+    async def mock_script_agent(state, **kw):
+        return _make_script_state()
+
+    async def mock_fact_validator(state, **kw):
         call_counts["fact"] += 1
         if call_counts["fact"] == 1:
             return {
@@ -66,15 +81,21 @@ def test_graph_retries_script_on_fact_failure(tmp_path):
             }
         return {"fact_feedback": None, "status": "validating"}
 
+    async def mock_manim_agent(state, **kw):
+        return _make_manim_state()
+
+    async def mock_code_validator(state, **kw):
+        return _make_code_approved_state()
+
     async def mock_tts(segments, path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"\x00")
         return path, [2.0]
 
-    with patch("pipeline.graph.script_agent", return_value=_make_script_state()), \
-         patch("pipeline.graph.fact_validator", side_effect=fact_side_effect), \
-         patch("pipeline.graph.manim_agent", return_value=_make_manim_state()), \
-         patch("pipeline.graph.code_validator", return_value=_make_code_approved_state()), \
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -93,11 +114,11 @@ def test_graph_escalates_after_max_retries(tmp_path):
     """After 3 script failures, escalation is triggered and abort sets status=failed."""
     call_counts = {"fact": 0, "script": 0}
 
-    def script_side_effect(state, **kw):
+    async def mock_script_agent(state, **kw):
         call_counts["script"] += 1
         return _make_script_state()
 
-    def fact_side_effect(state, **kw):
+    async def mock_fact_validator(state, **kw):
         call_counts["fact"] += 1
         attempts = state.get("script_attempts", 0) + 1
         return {
@@ -107,8 +128,8 @@ def test_graph_escalates_after_max_retries(tmp_path):
 
     abort_payload = {"action": "abort", "guidance": ""}
 
-    with patch("pipeline.graph.script_agent", side_effect=script_side_effect), \
-         patch("pipeline.graph.fact_validator", side_effect=fact_side_effect), \
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.agents.orchestrator.interrupt", return_value=abort_payload), \
          patch("pipeline.render_trigger.get_backend"), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):

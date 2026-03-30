@@ -1,7 +1,9 @@
 # pipeline/agents/manim_agent.py
+import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL
+from pipeline.retry import api_call_with_retry, TIMEOUT_MANIM_AGENT
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = """You are an expert Manim Community Edition (v0.20.1) developer.
@@ -69,7 +71,7 @@ def _format_segments(segments: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def manim_agent(state: PipelineState, client=None) -> dict:
+async def manim_agent(state: PipelineState, client=None) -> dict:
     if client is None:
         client = anthropic.Anthropic()
 
@@ -84,23 +86,26 @@ def manim_agent(state: PipelineState, client=None) -> dict:
     if state.get("code_feedback"):
         user_msg += f"\n\nPrevious attempt had issues. Rewrite the scene fully, addressing:\n{state['code_feedback']}"
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=16384,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_msg}],
-        output_config={
-            "format": {
-                "type": "json_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": {"manim_code": {"type": "string"}},
-                    "required": ["manim_code"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-    )
+    def _call():
+        return client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=16384,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {"manim_code": {"type": "string"}},
+                        "required": ["manim_code"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+        )
+
+    response = await api_call_with_retry(_call, timeout=TIMEOUT_MANIM_AGENT, label="manim_agent")
 
     data = json.loads(response.content[0].text)
     return {"manim_code": data["manim_code"], "status": "validating"}

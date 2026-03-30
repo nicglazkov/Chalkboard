@@ -1,4 +1,5 @@
 # tests/test_script_agent.py
+import asyncio
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -20,7 +21,7 @@ def test_script_agent_returns_script_and_segments(base_state):
     with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        result = script_agent(base_state)
+        result = asyncio.run(script_agent(base_state))
 
     assert result["script"] == "B-trees are balanced."
     assert len(result["script_segments"]) == 1
@@ -39,7 +40,7 @@ def test_script_agent_sets_needs_web_search_when_flagged(base_state):
     with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        result = script_agent(base_state)
+        result = asyncio.run(script_agent(base_state))
 
     assert result["needs_web_search"] is True
 
@@ -54,7 +55,7 @@ def test_script_agent_includes_feedback_in_revision(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        script_agent(base_state)
+        asyncio.run(script_agent(base_state))
 
     call_args = client_instance.messages.create.call_args
     messages = call_args.kwargs["messages"]
@@ -71,7 +72,7 @@ def test_script_agent_includes_audience_in_prompt(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        script_agent(base_state)
+        asyncio.run(script_agent(base_state))
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "expert" in user_content.lower()
@@ -86,7 +87,7 @@ def test_script_agent_uses_default_audience_when_not_set(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        script_agent(base_state)
+        asyncio.run(script_agent(base_state))
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "intermediate" in user_content.lower()
@@ -101,7 +102,7 @@ def test_script_agent_includes_tone_in_prompt(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        script_agent(base_state)
+        asyncio.run(script_agent(base_state))
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "question" in user_content.lower()
@@ -116,7 +117,7 @@ def test_script_agent_uses_default_tone_when_not_set(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
-        script_agent(base_state)
+        asyncio.run(script_agent(base_state))
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "conversational" in user_content.lower()

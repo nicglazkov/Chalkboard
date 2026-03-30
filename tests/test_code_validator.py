@@ -1,4 +1,5 @@
 # tests/test_code_validator.py
+import asyncio
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -35,7 +36,7 @@ def test_code_validator_passes_valid_code(base_state):
 
     with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        result = code_validator(base_state)
+        result = asyncio.run(code_validator(base_state))
 
     assert result["code_feedback"] is None  # cleared on approval
     assert result["code_attempts"] == 0  # not incremented on pass
@@ -46,7 +47,7 @@ def test_code_validator_fails_on_syntax_error_without_claude_call(base_state):
     base_state["code_attempts"] = 0
 
     with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
-        result = code_validator(base_state)
+        result = asyncio.run(code_validator(base_state))
 
     MockClient.assert_not_called()
     assert result["code_attempts"] == 1
@@ -61,7 +62,7 @@ def test_code_validator_increments_attempts_on_semantic_fail(base_state):
 
     with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        result = code_validator(base_state)
+        result = asyncio.run(code_validator(base_state))
 
     assert result["code_attempts"] == 2
     assert "hash tables" in result["code_feedback"]
@@ -82,7 +83,7 @@ class ChalkboardScene(Scene):
 
     with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        result = code_validator(base_state)
+        result = asyncio.run(code_validator(base_state))
 
     assert result["code_feedback"] == "self.wait uses hardcoded float"
     assert result["code_attempts"] == 1

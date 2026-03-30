@@ -1,6 +1,8 @@
 # pipeline/agents/fact_validator.py
+import asyncio
 import anthropic
 from config import CLAUDE_MODEL
+from pipeline.retry import api_call_with_retry, TIMEOUT_FACT_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
 
 EFFORT_INSTRUCTIONS = {
@@ -20,7 +22,7 @@ SCHEMA = {
 }
 
 
-def fact_validator(state: PipelineState, client=None) -> dict:
+async def fact_validator(state: PipelineState, client=None) -> dict:
     if client is None:
         client = anthropic.Anthropic()
     effort = state["effort_level"]
@@ -32,12 +34,15 @@ def fact_validator(state: PipelineState, client=None) -> dict:
         f"Script:\n{state['script']}"
     )
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1024,
-        messages=[{"role": "user", "content": user_msg}],
-        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-    )
+    def _call():
+        return client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": user_msg}],
+            output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
+        )
+
+    response = await api_call_with_retry(_call, timeout=TIMEOUT_FACT_VALIDATOR, label="fact_validator")
 
     result = ValidationResult.model_validate_json(response.content[0].text)
 

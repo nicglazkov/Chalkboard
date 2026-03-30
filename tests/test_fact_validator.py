@@ -1,4 +1,5 @@
 # tests/test_fact_validator.py
+import asyncio
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -18,7 +19,7 @@ def test_fact_validator_approved(base_state):
 
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        result = fact_validator(base_state)
+        result = asyncio.run(fact_validator(base_state))
 
     assert result["fact_feedback"] is None  # cleared on approval
     assert result["script_attempts"] == 0  # not incremented on pass
@@ -31,7 +32,7 @@ def test_fact_validator_needs_revision_increments_attempts(base_state):
 
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
-        result = fact_validator(base_state)
+        result = asyncio.run(fact_validator(base_state))
 
     assert result["script_attempts"] == 2
     assert "hash maps" in result["fact_feedback"]
@@ -45,7 +46,7 @@ def test_fact_validator_effort_low_uses_light_prompt(base_state):
     with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_resp
-        fact_validator(base_state)
+        asyncio.run(fact_validator(base_state))
 
     call_args = client_instance.messages.create.call_args
     messages = call_args.kwargs["messages"]

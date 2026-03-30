@@ -1,8 +1,10 @@
 # pipeline/agents/code_validator.py
 import ast
+import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL
+from pipeline.retry import api_call_with_retry, TIMEOUT_CODE_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
 
 SCHEMA = {
@@ -16,7 +18,7 @@ SCHEMA = {
 }
 
 
-def code_validator(state: PipelineState, client=None) -> dict:
+async def code_validator(state: PipelineState, client=None) -> dict:
     code = state["manim_code"]
     attempts = state["code_attempts"]
 
@@ -43,12 +45,15 @@ def code_validator(state: PipelineState, client=None) -> dict:
         f"If any self.wait() call uses a hardcoded float literal, return needs_revision."
     )
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
-        messages=[{"role": "user", "content": user_msg}],
-        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-    )
+    def _call():
+        return client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": user_msg}],
+            output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
+        )
+
+    response = await api_call_with_retry(_call, timeout=TIMEOUT_CODE_VALIDATOR, label="code_validator")
 
     result = ValidationResult.model_validate_json(response.content[0].text)
     if result.verdict == "needs_revision":

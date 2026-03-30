@@ -1,7 +1,9 @@
 # pipeline/agents/script_agent.py
+import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL
+from pipeline.retry import api_call_with_retry, TIMEOUT_SCRIPT_AGENT
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = """You are an educational script writer. Given a topic, write a clear,
@@ -49,7 +51,7 @@ def _build_user_message(state: PipelineState) -> str:
     return msg
 
 
-def script_agent(state: PipelineState, client=None) -> dict:
+async def script_agent(state: PipelineState, client=None) -> dict:
     if client is None:
         client = anthropic.Anthropic()
 
@@ -58,39 +60,42 @@ def script_agent(state: PipelineState, client=None) -> dict:
     if state.get("user_approved_search") or state["effort_level"] == "high":
         tools = [{"type": "web_search_20250305", "name": "web_search"}]
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": _build_user_message(state)}],
-        tools=tools if tools else anthropic.NOT_GIVEN,
-        output_config={
-            "format": {
-                "type": "json_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "script": {"type": "string"},
-                        "segments": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "text": {"type": "string"},
-                                    "estimated_duration_sec": {"type": "number"},
+    def _call():
+        return client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": _build_user_message(state)}],
+            tools=tools if tools else anthropic.NOT_GIVEN,
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "script": {"type": "string"},
+                            "segments": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                        "estimated_duration_sec": {"type": "number"},
+                                    },
+                                    "required": ["text", "estimated_duration_sec"],
+                                    "additionalProperties": False,
                                 },
-                                "required": ["text", "estimated_duration_sec"],
-                                "additionalProperties": False,
                             },
+                            "needs_web_search": {"type": "boolean"},
                         },
-                        "needs_web_search": {"type": "boolean"},
+                        "required": ["script", "segments", "needs_web_search"],
+                        "additionalProperties": False,
                     },
-                    "required": ["script", "segments", "needs_web_search"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-    )
+                }
+            },
+        )
+
+    response = await api_call_with_retry(_call, timeout=TIMEOUT_SCRIPT_AGENT, label="script_agent")
 
     data = json.loads(response.content[0].text)
     return {
