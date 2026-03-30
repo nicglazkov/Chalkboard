@@ -2,6 +2,7 @@
 import base64
 import os
 from pathlib import Path
+from typing import Any
 
 try:
     import pathspec as _pathspec
@@ -74,7 +75,7 @@ def collect_files(paths: list[str], ignore_patterns: list[str] | None = None) ->
 def _walk_directory(root: Path, extra_spec) -> list[Path]:
     """Walk root recursively, respecting .gitignore at each directory level."""
     result: list[Path] = []
-    gitignore_specs: dict[Path, object] = {}
+    gitignore_specs: dict[Path, Any] = {}
 
     for dirpath, dirnames, filenames in os.walk(root):
         current = Path(dirpath)
@@ -90,7 +91,7 @@ def _walk_directory(root: Path, extra_spec) -> list[Path]:
                     "gitignore", gitignore_path.read_text().splitlines()
                 )
                 gitignore_specs[current] = spec
-            except Exception:
+            except OSError:
                 pass
 
         for filename in sorted(filenames):
