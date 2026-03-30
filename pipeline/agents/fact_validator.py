@@ -1,5 +1,4 @@
 # pipeline/agents/fact_validator.py
-import asyncio
 import anthropic
 from config import CLAUDE_MODEL
 from pipeline.retry import api_call_with_retry, TIMEOUT_FACT_VALIDATOR

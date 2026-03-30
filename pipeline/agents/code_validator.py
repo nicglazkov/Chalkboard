@@ -1,6 +1,5 @@
 # pipeline/agents/code_validator.py
 import ast
-import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL

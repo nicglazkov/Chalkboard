@@ -1,5 +1,4 @@
 # pipeline/agents/script_agent.py
-import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL

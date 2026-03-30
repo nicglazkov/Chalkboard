@@ -1,5 +1,4 @@
 # pipeline/agents/manim_agent.py
-import asyncio
 import json
 import anthropic
 from config import CLAUDE_MODEL
