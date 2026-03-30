@@ -23,6 +23,7 @@ def base_state() -> PipelineState:
         needs_web_search=False,
         user_approved_search=False,
         status="drafting",
+        context_file_paths=[],
     )
 
 
