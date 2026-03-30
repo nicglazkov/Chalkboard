@@ -123,7 +123,6 @@ def test_manim_agent_defaults_to_chalkboard_theme(base_state):
 
 
 def test_manim_agent_with_context_blocks_sends_list_content(base_state):
-    import asyncio
     base_state["script"] = "Script about trees."
     base_state["script_segments"] = [{"text": "Trees.", "estimated_duration_sec": 2.0}]
     context_blocks = [
@@ -147,7 +146,6 @@ def test_manim_agent_with_context_blocks_sends_list_content(base_state):
 
 
 def test_manim_agent_without_context_blocks_sends_string_content(base_state):
-    import asyncio
     base_state["script"] = "Script."
     base_state["script_segments"] = [{"text": "S.", "estimated_duration_sec": 1.0}]
     mock_response = MagicMock()
