@@ -44,7 +44,7 @@ def collect_files(paths: list[str], ignore_patterns: list[str] | None = None) ->
 
     ignore_patterns = ignore_patterns or []
     extra_spec = (
-        _pathspec.PathSpec.from_lines("gitwildmatch", ignore_patterns)
+        _pathspec.PathSpec.from_lines("gitignore", ignore_patterns)
         if ignore_patterns else None
     )
     result: list[Path] = []
@@ -87,7 +87,7 @@ def _walk_directory(root: Path, extra_spec) -> list[Path]:
         if gitignore_path.exists():
             try:
                 spec = _pathspec.PathSpec.from_lines(
-                    "gitwildmatch", gitignore_path.read_text().splitlines()
+                    "gitignore", gitignore_path.read_text().splitlines()
                 )
                 gitignore_specs[current] = spec
             except Exception:
