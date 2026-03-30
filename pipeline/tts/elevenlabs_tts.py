@@ -1,10 +1,9 @@
 # pipeline/tts/elevenlabs_tts.py
 # Requires: pip install elevenlabs
-import asyncio
-import io
 import os
 import wave
 from pathlib import Path
+from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_SEGMENT
 
 try:
     from elevenlabs import ElevenLabs
@@ -15,7 +14,7 @@ ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # "George" — swap via ELEVENLABS
 SAMPLE_RATE = 24000
 
 
-def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
+async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
     if ElevenLabs is None:
         raise ImportError("Install elevenlabs: pip install elevenlabs")
 
@@ -26,15 +25,22 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
     durations: list[float] = []
 
     for segment in segments:
-        audio_iter = client.text_to_speech.convert(
-            voice_id=voice_id,
-            text=segment["text"],
-            model_id="eleven_turbo_v2_5",
-            output_format="pcm_24000",  # raw 16-bit PCM, no headers
+        def _call(seg=segment):
+            audio_iter = client.text_to_speech.convert(
+                voice_id=voice_id,
+                text=seg["text"],
+                model_id="eleven_turbo_v2_5",
+                output_format="pcm_24000",
+            )
+            pcm = b"".join(audio_iter)
+            duration = len(pcm) / (SAMPLE_RATE * 2)
+            return pcm, duration
+
+        pcm, duration = await api_call_with_retry(
+            _call, timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
         )
-        pcm = b"".join(audio_iter)
         all_pcm.append(pcm)
-        durations.append(len(pcm) / (SAMPLE_RATE * 2))  # 16-bit = 2 bytes/sample
+        durations.append(duration)
 
     with wave.open(str(output_path), "wb") as out_wav:
         out_wav.setnchannels(1)
@@ -43,7 +49,3 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
         out_wav.writeframes(b"".join(all_pcm))
 
     return output_path, durations
-
-
-async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
-    return await asyncio.to_thread(_generate_sync, segments, output_path)

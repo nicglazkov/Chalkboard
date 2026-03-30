@@ -3,13 +3,20 @@ import asyncio
 import numpy as np
 import soundfile as sf
 from pathlib import Path
-from kokoro import KPipeline
+from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_KOKORO
+
+try:
+    from kokoro import KPipeline
+except ImportError:
+    KPipeline = None  # type: ignore[assignment,misc]
 
 SAMPLE_RATE = 24000
 DEFAULT_VOICE = "af_heart"
 
 
 def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
+    if KPipeline is None:
+        raise ImportError("Install kokoro: pip install kokoro")
     pipeline = KPipeline(lang_code="a")
     all_audio: list[np.ndarray] = []
     durations: list[float] = []
@@ -29,4 +36,8 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
 
 
 async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
-    return await asyncio.to_thread(_generate_sync, segments, output_path)
+    return await api_call_with_retry(
+        lambda: _generate_sync(segments, output_path),
+        timeout=TIMEOUT_TTS_KOKORO,
+        label="kokoro_tts",
+    )
