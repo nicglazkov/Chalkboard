@@ -156,6 +156,7 @@ pipeline/
   graph.py        # LangGraph state machine
   state.py        # PipelineState TypedDict + ValidationResult
   render_trigger.py  # writes output files, calls TTS
+  retry.py        # timeout constants, api_call_with_retry, TimeoutExhausted
 docker/
   Dockerfile      # extends manimcommunity/manim:v0.20.1
   render.sh       # renders scene.py inside Docker

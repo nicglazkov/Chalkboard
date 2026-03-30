@@ -31,11 +31,12 @@ pipeline/
   graph.py           LangGraph state machine + routing functions
   state.py           PipelineState TypedDict, ValidationResult
   render_trigger.py  Calls TTS, writes output files
+  retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
   agents/
-    script_agent.py     Script generation (Claude)
-    fact_validator.py   Fact checking (Claude)
-    manim_agent.py      Manim code generation (Claude)
-    code_validator.py   Syntax + semantic code review (Claude)
+    script_agent.py     Script generation (Claude) — async
+    fact_validator.py   Fact checking (Claude) — async
+    manim_agent.py      Manim code generation (Claude) — async
+    code_validator.py   Syntax + semantic code review (Claude) — async
     orchestrator.py     escalate_to_user node (LangGraph interrupt)
   tts/
     base.py             Backend registry (get_backend)
@@ -109,9 +110,12 @@ def _after_code_validator(state):
 
 All agents use Claude with `output_config` JSON schema (structured outputs). The schema must have `"additionalProperties": false` on **every nested object**, not just the top level — the API rejects schemas that omit this on nested objects.
 
+All four agents are `async def` and wrap their `messages.create()` call with `api_call_with_retry` from `pipeline/retry.py`. LangGraph awaits async nodes directly.
+
 ### script_agent
 - Model: `CLAUDE_MODEL` (claude-sonnet-4-6)
 - `max_tokens`: 2048
+- Timeout: `TIMEOUT_SCRIPT_AGENT` = 120s (may use web search tool)
 - Output: `{"script": str, "segments": [{text, estimated_duration_sec}], "needs_web_search": bool}`
 - Web search tool enabled when `effort_level == "high"` or `user_approved_search == True`
 - Reads `audience` and `tone` from state to inject targeting instructions into user message via `AUDIENCE_INSTRUCTIONS` and `TONE_INSTRUCTIONS` dicts
@@ -119,12 +123,14 @@ All agents use Claude with `output_config` JSON schema (structured outputs). The
 ### fact_validator
 - Model: `CLAUDE_MODEL`
 - `max_tokens`: 1024
+- Timeout: `TIMEOUT_FACT_VALIDATOR` = 60s
 - Output: `{"verdict": "approved"|"needs_revision", "feedback": str}`
 - Effort-based instructions: low = light check, medium = spot-check, high = thorough
 
 ### manim_agent
 - Model: `CLAUDE_MODEL`
 - `max_tokens`: 16384 — Manim scenes are long; 4096 was too small
+- Timeout: `TIMEOUT_MANIM_AGENT` = 180s
 - Output: `{"manim_code": str}`
 - Scene class **must** be named `ChalkboardScene`
 - System prompt includes Manim v0.20.1 API pitfalls (see below)
@@ -133,7 +139,8 @@ All agents use Claude with `output_config` JSON schema (structured outputs). The
 ### code_validator
 - Model: `CLAUDE_MODEL`
 - `max_tokens`: 2048
-- Fast path: `ast.parse()` syntax check before calling Claude
+- Timeout: `TIMEOUT_CODE_VALIDATOR` = 60s
+- Fast path: `ast.parse()` syntax check before calling Claude (no timeout needed — pure Python)
 - Output: `{"verdict": "approved"|"needs_revision", "feedback": str}`
 
 ---
@@ -148,6 +155,32 @@ These are baked into `manim_agent`'s system prompt. When Claude generates code t
 - Always pass `run_time` as a keyword arg: `self.play(anim, run_time=1.0)`
 
 When Manim rendering fails, read the traceback from `docker run` output. Most failures are API misuse in the generated code. Patch `output/<run_id>/scene.py` to verify the fix, then add the pattern to `manim_agent.py`'s system prompt.
+
+---
+
+## Timeout & retry infrastructure
+
+All indefinite hang points are protected. Two mechanisms:
+
+**`api_call_with_retry(fn, timeout, max_attempts=3, label)` — `pipeline/retry.py`**
+
+Wraps any sync callable in `asyncio.to_thread` with `asyncio.wait_for`. On any exception or timeout, prints `  [label] failed (ExcType) — retrying (attempt N/M)...` and retries. Raises `TimeoutExhausted` after all attempts. Used by all agents, all TTS backends, and `visual_qa`. `TimeoutExhausted` propagates through LangGraph's `graph.astream()` and is caught in `run()`, which routes it through `_handle_interrupt` (same UX as validation exhaustion).
+
+**`subprocess_with_timeout(cmd, timeout, on_line=None)` — `main.py`**
+
+Uses `threading.Timer` to call `process.kill()` after `timeout` seconds. The stdout loop runs on the calling thread (live progress preserved). Returns `(returncode, lines_buffer, timed_out)`. Used for Docker render calls.
+
+**Timeout constants** (all in `pipeline/retry.py`):
+
+| Constant | Value | Used by |
+|----------|-------|---------|
+| `TIMEOUT_SCRIPT_AGENT` | 120s | script_agent |
+| `TIMEOUT_FACT_VALIDATOR` | 60s | fact_validator |
+| `TIMEOUT_MANIM_AGENT` | 180s | manim_agent |
+| `TIMEOUT_CODE_VALIDATOR` | 60s | code_validator |
+| `TIMEOUT_VISUAL_QA` | 90s | visual_qa |
+| `TIMEOUT_TTS_SEGMENT` | 30s | OpenAI, ElevenLabs (per segment) |
+| `TIMEOUT_TTS_KOKORO` | 120s | Kokoro (full call) |
 
 ---
 
@@ -198,14 +231,29 @@ async def generate_audio(
 
 ```
 1. _check_tools()         — verify docker and ffmpeg are in PATH
-2. _ensure_docker_image() — build chalkboard-render image if not present (once)
+2. _ensure_docker_image() — build chalkboard-render image if not present (once, timeout 600s)
 3. docker run ...         — Manim render inside container, prints RENDER_COMPLETE:<path>
-4. ffmpeg merge           — host-side: video + voiceover.wav → final.mp4
+4. ffmpeg merge           — host-side: video + voiceover.wav → final.mp4 (timeout 120s)
 ```
 
 **The audio merge runs on the host** (not in Docker) because Linux ffmpeg's native AAC encoder omits the encoder-delay edit list (`elst` box) that QuickTime requires, resulting in silent playback. Host ffmpeg (macOS/Windows/Linux native builds) produces standard AAC-LC that is compatible with all browsers, QuickTime, and native players.
 
 `--no-render` flag skips steps 1–4 and only runs the pipeline (useful for testing or when Docker is unavailable).
+
+### Adaptive render timeout
+
+Step 3 uses `_compute_render_timeout(run_id, output_dir)` to set a per-run timeout instead of a fixed value:
+
+```
+timeout = (BASE + anim_count × PER_ANIM + audio_duration × AUDIO_RATIO) × quality_mult
+timeout = clamp(timeout, MIN=90s, MAX=1200s)
+```
+
+Constants (in `main.py`): `BASE=60s`, `PER_ANIM=5s`, `AUDIO_RATIO=3.0`, `quality_mult={low:0.5, medium:1.0, high:2.0}`. Animation count comes from `_count_animations(scene.py)`; audio duration from `segments.json`.
+
+### Render retry
+
+`_render()` and `_render_preview()` each attempt the Docker render up to 3 times. Between attempts, `media/` and `media_preview/` are deleted so Manim starts clean. On the third failure, `RenderFailed` propagates to `main()`, which prompts the user with `retry_render / abort`. `subprocess_with_timeout` (threading.Timer + process.kill) is used for all Docker subprocess calls to guarantee the process is killed on timeout.
 
 ---
 
@@ -233,6 +281,8 @@ pytest tests/test_graph.py  # specific file
 Tests mock the Anthropic client at the graph node level (`pipeline.graph.script_agent`, etc.), not at `anthropic.Anthropic`. Patching `anthropic.Anthropic` fails because the module reference is shared across imports.
 
 Graph integration tests (`test_graph.py`) use `MemorySaver` (in-memory checkpointer) so they don't touch the filesystem.
+
+**Async agent mocks:** Since all four agents are now `async def`, graph tests must use `async def mock_agent(state, **kw)` functions (patched via `new=mock_agent`), not `AsyncMock`. LangGraph checks `inspect.iscoroutinefunction()` to decide whether to `await` a node — `AsyncMock` instances fail this check and cause the node to return a coroutine object instead of a result.
 
 ---
 
