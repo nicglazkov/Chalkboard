@@ -1,5 +1,4 @@
 # pipeline/tts/kokoro_tts.py
-import asyncio
 import numpy as np
 import soundfile as sf
 from pathlib import Path
