@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import threading
 import uuid
 from pathlib import Path
 from langgraph.types import Command
@@ -23,6 +24,16 @@ THEME_CHOICES = ["chalkboard", "light", "colorful"]
 DOCKER_IMAGE = "chalkboard-render"
 QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 
+# ---------------------------------------------------------------------------
+# Render timeout constants
+# ---------------------------------------------------------------------------
+RENDER_TIMEOUT_BASE         = 60.0
+RENDER_TIMEOUT_PER_ANIM     = 5.0
+RENDER_TIMEOUT_AUDIO_RATIO  = 3.0
+RENDER_TIMEOUT_QUALITY_MULT = {"low": 0.5, "medium": 1.0, "high": 2.0}
+RENDER_TIMEOUT_MIN          = 90.0
+RENDER_TIMEOUT_MAX          = 1200.0
+
 
 def _check_tools() -> None:
     missing = [t for t in ("docker", "ffmpeg") if not shutil.which(t)]
@@ -31,6 +42,69 @@ def _check_tools() -> None:
             f"Missing required tools: {', '.join(missing)}\n"
             "Install Docker from https://docker.com and ffmpeg from https://ffmpeg.org"
         )
+
+
+def subprocess_with_timeout(
+    cmd: list[str], timeout: float, on_line=None
+) -> tuple[int, collections.deque, bool]:
+    """
+    Run cmd as a subprocess. Kill it after `timeout` seconds.
+    Calls on_line(line) for each line of stdout if provided.
+    Returns (returncode, lines_buffer, timed_out).
+    """
+    timed_out = [False]
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+
+    def _kill():
+        timed_out[0] = True
+        process.kill()
+
+    timer = threading.Timer(timeout, _kill)
+    timer.start()
+    lines_buffer: collections.deque = collections.deque(maxlen=50)
+    try:
+        for line in process.stdout:
+            line = line.rstrip()
+            lines_buffer.append(line)
+            if on_line:
+                on_line(line)
+    finally:
+        timer.cancel()
+
+    process.wait()
+    return process.returncode, lines_buffer, timed_out[0]
+
+
+def _compute_render_timeout(run_id: str, output_dir: Path) -> float:
+    """
+    Compute adaptive render timeout from segments.json (audio duration)
+    and scene.py (animation count) and manifest.json (quality).
+    """
+    run_dir = output_dir / run_id
+
+    try:
+        segments = json.loads((run_dir / "segments.json").read_text())
+        audio_duration = sum(s.get("actual_duration_sec", 0.0) for s in segments)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        audio_duration = 30.0  # conservative fallback
+
+    anim_count = _count_animations(run_dir / "scene.py")
+
+    try:
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        quality = manifest.get("quality", "medium")
+    except (FileNotFoundError, json.JSONDecodeError):
+        quality = "medium"
+
+    mult = RENDER_TIMEOUT_QUALITY_MULT.get(quality, 1.0)
+    raw = (
+        RENDER_TIMEOUT_BASE
+        + anim_count * RENDER_TIMEOUT_PER_ANIM
+        + audio_duration * RENDER_TIMEOUT_AUDIO_RATIO
+    ) * mult
+    return max(RENDER_TIMEOUT_MIN, min(RENDER_TIMEOUT_MAX, raw))
 
 
 def _ensure_docker_image() -> None:
