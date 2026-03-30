@@ -121,3 +121,39 @@ def test_script_agent_uses_default_tone_when_not_set(base_state):
 
     user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "conversational" in user_content.lower()
+
+
+def test_script_agent_with_context_blocks_sends_list_content(base_state):
+    context_blocks = [
+        {"type": "text", "text": "--- file: notes.txt ---"},
+        {"type": "text", "text": "Important source material"},
+    ]
+    segments = [{"text": "Script.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Script.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        asyncio.run(script_agent(base_state, context_blocks=context_blocks))
+
+    call_args = client_instance.messages.create.call_args
+    content = call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, list)
+    assert any("source material" in b.get("text", "") for b in content)
+    assert any("Important source material" in b.get("text", "") for b in content)
+
+
+def test_script_agent_without_context_blocks_sends_string_content(base_state):
+    segments = [{"text": "Script.", "estimated_duration_sec": 1.0}]
+    mock_response = _make_claude_response("Script.", segments)
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.script_agent import script_agent
+        asyncio.run(script_agent(base_state))
+
+    call_args = client_instance.messages.create.call_args
+    content = call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, str)

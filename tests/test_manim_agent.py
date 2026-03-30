@@ -120,3 +120,45 @@ def test_manim_agent_defaults_to_chalkboard_theme(base_state):
 
     content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "#1C1C1C" in content  # chalkboard theme background
+
+
+def test_manim_agent_with_context_blocks_sends_list_content(base_state):
+    import asyncio
+    base_state["script"] = "Script about trees."
+    base_state["script_segments"] = [{"text": "Trees.", "estimated_duration_sec": 2.0}]
+    context_blocks = [
+        {"type": "text", "text": "--- file: diagram.py ---"},
+        {"type": "text", "text": "class Tree: pass"},
+    ]
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text='{"manim_code": "from manim import *"}')]
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.manim_agent import manim_agent
+        asyncio.run(manim_agent(base_state, context_blocks=context_blocks))
+
+    call_args = client_instance.messages.create.call_args
+    content = call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, list)
+    assert any("source material" in b.get("text", "") for b in content)
+    assert any("class Tree" in b.get("text", "") for b in content)
+
+
+def test_manim_agent_without_context_blocks_sends_string_content(base_state):
+    import asyncio
+    base_state["script"] = "Script."
+    base_state["script_segments"] = [{"text": "S.", "estimated_duration_sec": 1.0}]
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text='{"manim_code": "from manim import *"}')]
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.create.return_value = mock_response
+        from pipeline.agents.manim_agent import manim_agent
+        asyncio.run(manim_agent(base_state))
+
+    call_args = client_instance.messages.create.call_args
+    content = call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, str)

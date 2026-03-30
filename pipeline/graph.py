@@ -62,13 +62,23 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
     }
 
 
-def build_graph(checkpointer=None) -> StateGraph:
+def build_graph(checkpointer=None, context_blocks=None) -> StateGraph:
+    if context_blocks:
+        async def _script_agent(state):
+            return await script_agent(state, context_blocks=context_blocks)
+
+        async def _manim_agent(state):
+            return await manim_agent(state, context_blocks=context_blocks)
+    else:
+        _script_agent = script_agent
+        _manim_agent = manim_agent
+
     builder = StateGraph(PipelineState)
 
     builder.add_node("init", _init_state)
-    builder.add_node("script_agent", script_agent)
+    builder.add_node("script_agent", _script_agent)
     builder.add_node("fact_validator", fact_validator)
-    builder.add_node("manim_agent", manim_agent)
+    builder.add_node("manim_agent", _manim_agent)
     builder.add_node("code_validator", code_validator)
     builder.add_node("escalate_to_user", escalate_to_user)
     builder.add_node("render_trigger", render_trigger)

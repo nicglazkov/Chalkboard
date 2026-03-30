@@ -70,9 +70,11 @@ def _format_segments(segments: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def manim_agent(state: PipelineState, client=None) -> dict:
+async def manim_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
     if client is None:
-        client = anthropic.Anthropic()
+        has_pdf = context_blocks and any(b.get("type") == "document" for b in context_blocks)
+        kwargs = {"default_headers": {"anthropic-beta": "pdfs-2024-09-25"}} if has_pdf else {}
+        client = anthropic.Anthropic(**kwargs)
 
     user_msg = (
         f"Create a Manim animation for this educational script.\n\n"
@@ -85,12 +87,24 @@ async def manim_agent(state: PipelineState, client=None) -> dict:
     if state.get("code_feedback"):
         user_msg += f"\n\nPrevious attempt had issues. Rewrite the scene fully, addressing:\n{state['code_feedback']}"
 
+    if context_blocks:
+        content = [
+            {
+                "type": "text",
+                "text": "The following files are provided as source material. Use them to inform what the animation should visualize:",
+            }
+        ]
+        content.extend(context_blocks)
+        content.append({"type": "text", "text": user_msg})
+    else:
+        content = user_msg
+
     def _call():
         return client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=16384,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
+            messages=[{"role": "user", "content": content}],
             output_config={
                 "format": {
                     "type": "json_schema",

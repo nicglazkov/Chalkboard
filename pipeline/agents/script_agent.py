@@ -50,21 +50,34 @@ def _build_user_message(state: PipelineState) -> str:
     return msg
 
 
-async def script_agent(state: PipelineState, client=None) -> dict:
+async def script_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
     if client is None:
-        client = anthropic.Anthropic()
+        has_pdf = context_blocks and any(b.get("type") == "document" for b in context_blocks)
+        kwargs = {"default_headers": {"anthropic-beta": "pdfs-2024-09-25"}} if has_pdf else {}
+        client = anthropic.Anthropic(**kwargs)
 
     tools = []
-    # Per spec: effort=high always enables web search (no approval gate needed)
     if state.get("user_approved_search") or state["effort_level"] == "high":
         tools = [{"type": "web_search_20250305", "name": "web_search"}]
+
+    if context_blocks:
+        content = [
+            {
+                "type": "text",
+                "text": "The following files are provided as source material. Use them to inform the script content, facts, and framing:",
+            }
+        ]
+        content.extend(context_blocks)
+        content.append({"type": "text", "text": _build_user_message(state)})
+    else:
+        content = _build_user_message(state)
 
     def _call():
         return client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=2048,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": _build_user_message(state)}],
+            messages=[{"role": "user", "content": content}],
             tools=tools if tools else anthropic.NOT_GIVEN,
             output_config={
                 "format": {
