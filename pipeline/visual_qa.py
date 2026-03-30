@@ -1,10 +1,12 @@
 # pipeline/visual_qa.py
+import asyncio
 import base64
 import json
 import subprocess
 from pathlib import Path
 import anthropic
 from config import CLAUDE_MODEL
+from pipeline.retry import api_call_with_retry, TIMEOUT_VISUAL_QA
 
 SCHEMA = {
     "type": "object",
@@ -35,7 +37,7 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int = 5) -> list[P
     result = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, timeout=60,
     )
     duration = float(result.stdout.strip())
 
@@ -49,7 +51,7 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int = 5) -> list[P
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(t), "-i", str(video_path),
              "-frames:v", "1", str(frame_path)],
-            capture_output=True, check=True,
+            capture_output=True, check=True, timeout=30,
         )
         frame_paths.append(frame_path)
 
@@ -59,7 +61,6 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int = 5) -> list[P
 def visual_qa(video_path: Path, qa_dir: Path, client=None) -> dict:
     """
     Run visual QA on a rendered video by sampling frames and reviewing with Claude.
-
     Returns {"passed": bool, "issues": [{"severity": "warning"|"error", "description": str}]}
     """
     if client is None:
@@ -84,18 +85,18 @@ def visual_qa(video_path: Path, qa_dir: Path, client=None) -> dict:
         content.append({"type": "text", "text": f"Frame {i + 1}/{len(frame_paths)}:"})
         content.append({
             "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": frame_data,
-            },
+            "source": {"type": "base64", "media_type": "image/png", "data": frame_data},
         })
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1024,
-        messages=[{"role": "user", "content": content}],
-        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-    )
+    def _call():
+        return client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": content}],
+            output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
+        )
 
+    response = asyncio.run(
+        api_call_with_retry(_call, timeout=TIMEOUT_VISUAL_QA, label="visual_qa")
+    )
     return json.loads(response.content[0].text)
