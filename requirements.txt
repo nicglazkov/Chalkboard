@@ -9,6 +9,8 @@ pydantic>=2.0
 python-dotenv
 pytest
 pytest-asyncio
+pathspec
+python-docx
 # Optional TTS backends (uncomment as needed):
 openai
 # elevenlabs
