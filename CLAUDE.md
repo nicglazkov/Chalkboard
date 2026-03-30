@@ -32,6 +32,7 @@ pipeline/
   state.py           PipelineState TypedDict, ValidationResult
   render_trigger.py  Calls TTS, writes output files
   retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
+  context.py         collect_files, load_context_blocks, measure_context
   agents/
     script_agent.py     Script generation (Claude) — async
     fact_validator.py   Fact checking (Claude) — async
@@ -74,6 +75,7 @@ main.py               CLI entry point, async graph runner
 | `code_feedback` | str \| None | Feedback from code_validator; **None means approved** |
 | `needs_web_search` | bool | script_agent flagged it wants web search |
 | `user_approved_search` | bool | User approved web search (unused in current routing) |
+| `context_file_paths` | list[str] | Paths of loaded context files; empty list if none. Informational only — never read by agents. |
 | `status` | str | `"drafting"` / `"validating"` / `"approved"` / `"failed"` |
 
 ### Critical invariant: None = approved
@@ -283,6 +285,28 @@ Tests mock the Anthropic client at the graph node level (`pipeline.graph.script_
 Graph integration tests (`test_graph.py`) use `MemorySaver` (in-memory checkpointer) so they don't touch the filesystem.
 
 **Async agent mocks:** Since all four agents are now `async def`, graph tests must use `async def mock_agent(state, **kw)` functions (patched via `new=mock_agent`), not `AsyncMock`. LangGraph checks `inspect.iscoroutinefunction()` to decide whether to `await` a node — `AsyncMock` instances fail this check and cause the node to return a coroutine object instead of a result.
+
+---
+
+## Context injection
+
+Users can pass local files as source material via `--context path` (repeatable) and `--context-ignore pattern` (repeatable). The pipeline loads the files before the graph runs, reports token usage, and injects the content into `script_agent` and `manim_agent`.
+
+**Architecture:** preprocessing in `main.py` → `pipeline/context.py` → agents as a parameter. Content blocks are never stored in `PipelineState` (only file paths are stored). LangGraph checkpointing is unaffected.
+
+**`pipeline/context.py`** — three public functions:
+
+- `collect_files(paths, ignore_patterns=None) -> list[Path]` — walks directories recursively, applies `.gitignore` via `pathspec`, applies extra patterns, skips hidden directories, deduplicates. Raises `FileNotFoundError` for missing paths.
+- `load_context_blocks(files) -> list[dict]` — converts files to Anthropic content blocks. Text/code → `text` blocks; images → base64 `image` blocks; PDFs → base64 `document` blocks; `.docx` → python-docx paragraph extraction. Each file gets a `--- file: <path> ---` label block followed by the content block.
+- `measure_context(blocks, client) -> tuple[int, int]` — returns `(token_count, context_window)` via `client.messages.count_tokens` and `client.models.retrieve`. Nothing hardcoded.
+
+**Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` is passed. Prompts if tokens > 10k. Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
+
+**Agent integration:** `build_graph(context_blocks=None)` creates async closure wrappers around `script_agent` and `manim_agent` when `context_blocks` is truthy, so LangGraph's `inspect.iscoroutinefunction()` check passes on the closures. On retry loops (fact/code validation failures), the same closures are invoked — context is preserved automatically.
+
+**PDF beta header:** when any context block has `type == "document"`, agents initialize `anthropic.Anthropic(default_headers={"anthropic-beta": "pdfs-2024-09-25"})`.
+
+**Resume behavior:** `context_blocks` is not in `PipelineState`. On `--run-id` resume, re-pass `--context` to inject source material. If `--run-id` is used without `--context`, a note is printed.
 
 ---
 
