@@ -126,3 +126,76 @@ def _walk_directory(root: Path, extra_spec) -> list[Path]:
                 print(f"  Warning: cannot read {file_path} — skipping")
 
     return result
+
+
+def load_context_blocks(files: list[Path]) -> list[dict]:
+    """
+    Convert a list of files to Anthropic content blocks.
+    Each file gets a label block then a content block.
+    Unsupported extensions are skipped with a warning.
+    """
+    if DocxDocument is None and any(f.suffix.lower() == ".docx" for f in files):
+        raise ImportError("Install python-docx: pip install python-docx")
+
+    blocks: list[dict] = []
+
+    for file_path in files:
+        ext = file_path.suffix.lower()
+
+        if ext in TEXT_EXTENSIONS:
+            blocks.append({"type": "text", "text": f"--- file: {file_path} ---"})
+            blocks.append({"type": "text", "text": file_path.read_text(errors="replace")})
+
+        elif ext in IMAGE_MEDIA_TYPES:
+            data = base64.standard_b64encode(file_path.read_bytes()).decode()
+            blocks.append({"type": "text", "text": f"--- file: {file_path} ---"})
+            blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": IMAGE_MEDIA_TYPES[ext],
+                    "data": data,
+                },
+            })
+
+        elif ext == ".pdf":
+            data = base64.standard_b64encode(file_path.read_bytes()).decode()
+            blocks.append({"type": "text", "text": f"--- file: {file_path} ---"})
+            blocks.append({
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": data,
+                },
+            })
+
+        elif ext == ".docx":
+            doc = DocxDocument(str(file_path))
+            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            blocks.append({"type": "text", "text": f"--- file: {file_path} ---"})
+            blocks.append({"type": "text", "text": text})
+
+        else:
+            print(f"  Warning: skipping unsupported file type: {file_path}")
+
+    return blocks
+
+
+def measure_context(blocks: list[dict], client) -> tuple[int, int]:
+    """
+    Returns (token_count, context_window) using the Anthropic API.
+    Both values are fetched live — nothing is hardcoded.
+    """
+    from config import CLAUDE_MODEL
+
+    response = client.messages.count_tokens(
+        model=CLAUDE_MODEL,
+        messages=[{"role": "user", "content": blocks}],
+    )
+    token_count = response.input_tokens
+
+    model_info = client.models.retrieve(CLAUDE_MODEL)
+    context_window = model_info.context_window
+
+    return token_count, context_window
