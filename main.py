@@ -17,6 +17,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from config import CHECKPOINT_DB, DEFAULT_AUDIENCE, DEFAULT_EFFORT, DEFAULT_THEME, DEFAULT_TONE, OUTPUT_DIR, MANIM_QUALITY
 from pipeline.graph import build_graph
 from pipeline.retry import TimeoutExhausted
+from pipeline.context import collect_files, load_context_blocks, measure_context
 
 EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
@@ -47,6 +48,40 @@ def _check_tools() -> None:
             f"Missing required tools: {', '.join(missing)}\n"
             "Install Docker from https://docker.com and ffmpeg from https://ffmpeg.org"
         )
+
+
+def _report_context(blocks: list[dict]) -> bool:
+    """
+    Print context token report. Returns True if pipeline should proceed, False to abort.
+    Always prints the report. Prompts for confirmation only when tokens > 10k.
+    """
+    import anthropic as _anthropic
+    try:
+        client = _anthropic.Anthropic()
+        token_count, context_window = measure_context(blocks, client)
+        pct = int(token_count / context_window * 100)
+        n_files = sum(
+            1 for b in blocks
+            if b.get("type") == "text" and b.get("text", "").startswith("--- file:")
+        )
+        print(
+            f"\nContext: {n_files} file{'s' if n_files != 1 else ''}, "
+            f"~{token_count // 1000}k tokens  "
+            f"(model window: {context_window // 1000}k, ~{pct}% used by context)"
+        )
+        if pct >= 90:
+            raise SystemExit(
+                f"Error: context files use {pct}% of the model context window. "
+                "Reduce files before proceeding."
+            )
+        if token_count > 10_000:
+            answer = input("\nContext is large. Proceed? (y/n): ").strip().lower()
+            return answer == "y"
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"  Warning: could not measure context tokens ({e}) — proceeding without report.")
+    return True
 
 
 def subprocess_with_timeout(
@@ -335,13 +370,15 @@ def _handle_interrupt(interrupt_value: str) -> Command:
     return Command(resume={"action": action, "guidance": guidance})
 
 
-async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate", tone: str = "casual", theme: str = "chalkboard") -> None:
+async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate",
+              tone: str = "casual", theme: str = "chalkboard",
+              context_blocks=None, context_file_paths=None) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
-        graph = build_graph(checkpointer=checkpointer)
+        graph = build_graph(checkpointer=checkpointer, context_blocks=context_blocks)
         config = {"configurable": {"thread_id": thread_id}}
-        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme}
+        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or []}
 
         while True:
             try:
@@ -375,6 +412,14 @@ def main():
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
     parser.add_argument("--preview", action="store_true", help="Render low-quality preview instead of full HD render")
+    parser.add_argument(
+        "--context", action="append", dest="context", default=[], metavar="PATH",
+        help="File or directory to include as context. Repeatable.",
+    )
+    parser.add_argument(
+        "--context-ignore", action="append", dest="context_ignore", default=[], metavar="PATTERN",
+        help="Glob pattern to exclude from context directories. Repeatable.",
+    )
     args = parser.parse_args()
 
     if args.verbose and args.preview:
@@ -384,7 +429,23 @@ def main():
         _check_tools()
 
     thread_id = args.run_id or str(uuid.uuid4())
-    asyncio.run(run(args.topic, args.effort, thread_id, audience=args.audience, tone=args.tone, theme=args.theme))
+
+    context_blocks = None
+    context_file_paths: list[str] = []
+    if args.context:
+        files = collect_files(args.context, ignore_patterns=args.context_ignore or None)
+        context_blocks = load_context_blocks(files)
+        context_file_paths = [str(f) for f in files]
+        if not _report_context(context_blocks):
+            raise SystemExit("Aborted.")
+    elif args.run_id:
+        print("Note: resuming without context files. Pass --context to include source material.")
+
+    asyncio.run(run(
+        args.topic, args.effort, thread_id,
+        audience=args.audience, tone=args.tone, theme=args.theme,
+        context_blocks=context_blocks, context_file_paths=context_file_paths,
+    ))
 
     if not args.no_render:
         if args.preview:
