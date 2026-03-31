@@ -116,7 +116,7 @@ All four agents are `async def` and wrap their `messages.create()` call with `ap
 
 ### script_agent
 - Model: `CLAUDE_MODEL` (claude-sonnet-4-6)
-- `max_tokens`: 2048
+- `max_tokens`: 4096
 - Timeout: `TIMEOUT_SCRIPT_AGENT` = 120s (may use web search tool)
 - Output: `{"script": str, "segments": [{text, estimated_duration_sec}], "needs_web_search": bool}`
 - Web search tool enabled when `effort_level == "high"` or `user_approved_search == True`

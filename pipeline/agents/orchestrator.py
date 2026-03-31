@@ -1,5 +1,5 @@
 # pipeline/agents/orchestrator.py
-from langgraph.types import interrupt
+import asyncio
 from pipeline.state import PipelineState
 
 
@@ -24,9 +24,16 @@ async def escalate_to_user(state: PipelineState) -> dict:
     message = _build_escalation_message(state)
     print(message)
 
-    resume = interrupt(message)
-    action = resume.get("action", "abort")
-    guidance = resume.get("guidance", "")
+    print("\nEnter action (retry_script / retry_code / abort):")
+    try:
+        action = (await asyncio.to_thread(input, "  action: ")).strip()
+        guidance = ""
+        if action in ("retry_script", "retry_code"):
+            guidance = (await asyncio.to_thread(input, "  guidance: ")).strip()
+    except EOFError:
+        print("  [non-interactive stdin — defaulting to abort]")
+        action = "abort"
+        guidance = ""
 
     if action == "retry_script":
         return {

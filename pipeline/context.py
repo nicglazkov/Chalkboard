@@ -16,12 +16,23 @@ except ImportError:
 
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
-    ".java", ".c", ".cpp", ".h", ".hpp", ".rb", ".swift", ".kt", ".sh",
-    ".bash", ".zsh", ".fish", ".yaml", ".yml", ".json", ".toml", ".csv",
+    ".java", ".c", ".cpp", ".c++", ".cc", ".cxx", ".h", ".hpp", ".hxx",
+    ".rb", ".swift", ".kt", ".sh", ".bash", ".zsh", ".fish",
+    ".yaml", ".yml", ".json", ".toml", ".csv",
     ".html", ".css", ".scss", ".xml", ".ini", ".env", ".sql", ".graphql",
     ".proto", ".tf", ".hcl", ".vue", ".php", ".scala", ".clj", ".hs",
     ".ml", ".r", ".lua", ".pl", ".ex", ".exs", ".erl", ".dart", ".elm",
     ".gitignore", ".editorconfig", ".dockerignore", ".makefile",
+}
+
+# Filenames with no extension that are always plain text
+TEXT_FILENAMES = {
+    "Makefile", "makefile", "GNUmakefile",
+    "Dockerfile", "dockerfile",
+    "LICENSE", "LICENCE", "LICENSE.md", "LICENCE.md",
+    "README", "CHANGELOG", "AUTHORS", "CONTRIBUTING", "NOTICE",
+    "Gemfile", "Rakefile", "Procfile",
+    ".gitignore", ".dockerignore", ".editorconfig",
 }
 
 IMAGE_MEDIA_TYPES = {
@@ -142,7 +153,7 @@ def load_context_blocks(files: list[Path]) -> list[dict]:
     for file_path in files:
         ext = file_path.suffix.lower()
 
-        if ext in TEXT_EXTENSIONS:
+        if ext in TEXT_EXTENSIONS or file_path.name in TEXT_FILENAMES:
             blocks.append({"type": "text", "text": f"--- file: {file_path} ---"})
             blocks.append({"type": "text", "text": file_path.read_text(errors="replace")})
 
@@ -196,6 +207,6 @@ def measure_context(blocks: list[dict], client) -> tuple[int, int]:
     token_count = response.input_tokens
 
     model_info = client.models.retrieve(CLAUDE_MODEL)
-    context_window = model_info.context_window
+    context_window = model_info.max_input_tokens
 
     return token_count, context_window

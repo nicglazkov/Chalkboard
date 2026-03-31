@@ -11,9 +11,12 @@ def test_escalate_surfaces_script_feedback(base_state):
     base_state["script_attempts"] = 3
     base_state["status"] = "validating"
 
-    resume_payload = {"action": "retry_script", "guidance": "Focus on CS accuracy."}
+    responses = iter(["retry_script", "Focus on CS accuracy."])
 
-    with patch("pipeline.agents.orchestrator.interrupt", return_value=resume_payload):
+    async def mock_to_thread(fn, *args, **kwargs):
+        return next(responses)
+
+    with patch("asyncio.to_thread", new=mock_to_thread):
         result = asyncio.run(escalate_to_user(base_state))
 
     assert result["script_attempts"] == 0
@@ -26,9 +29,10 @@ def test_escalate_routes_abort(base_state):
     base_state["code_feedback"] = "Can't fix."
     base_state["code_attempts"] = 3
 
-    resume_payload = {"action": "abort", "guidance": ""}
+    async def mock_to_thread(fn, *args, **kwargs):
+        return "abort"
 
-    with patch("pipeline.agents.orchestrator.interrupt", return_value=resume_payload):
+    with patch("asyncio.to_thread", new=mock_to_thread):
         result = asyncio.run(escalate_to_user(base_state))
 
     assert result["status"] == "failed"
@@ -38,9 +42,12 @@ def test_escalate_retry_code_resets_code_attempts(base_state):
     base_state["code_feedback"] = "Wrong API."
     base_state["code_attempts"] = 3
 
-    resume_payload = {"action": "retry_code", "guidance": "Use MathTex for equations."}
+    responses = iter(["retry_code", "Use MathTex for equations."])
 
-    with patch("pipeline.agents.orchestrator.interrupt", return_value=resume_payload):
+    async def mock_to_thread(fn, *args, **kwargs):
+        return next(responses)
+
+    with patch("asyncio.to_thread", new=mock_to_thread):
         result = asyncio.run(escalate_to_user(base_state))
 
     assert result["code_attempts"] == 0

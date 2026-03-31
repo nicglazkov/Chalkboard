@@ -172,7 +172,7 @@ def test_load_context_blocks_multiple_files(tmp_path):
 def test_measure_context_returns_token_count_and_window():
     mock_client = MagicMock()
     mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=42000)
-    mock_client.models.retrieve.return_value = MagicMock(context_window=200000)
+    mock_client.models.retrieve.return_value = MagicMock(max_input_tokens=200000)
 
     blocks = [{"type": "text", "text": "hello"}]
     token_count, context_window = measure_context(blocks, mock_client)
@@ -185,7 +185,7 @@ def test_measure_context_calls_correct_api():
     from config import CLAUDE_MODEL
     mock_client = MagicMock()
     mock_client.messages.count_tokens.return_value = MagicMock(input_tokens=100)
-    mock_client.models.retrieve.return_value = MagicMock(context_window=200000)
+    mock_client.models.retrieve.return_value = MagicMock(max_input_tokens=200000)
 
     blocks = [{"type": "text", "text": "test"}]
     measure_context(blocks, mock_client)

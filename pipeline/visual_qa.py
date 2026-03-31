@@ -46,7 +46,7 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int = 5) -> list[P
 
     frame_paths = []
     for i in range(n_frames):
-        t = duration * i / max(1, n_frames - 1)
+        t = duration * i / n_frames  # sample at 0%, 20%, ..., 80% — never seek to exact end
         frame_path = qa_dir / f"frame_{i:02d}.png"
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(t), "-i", str(video_path),

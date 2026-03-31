@@ -75,7 +75,7 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
     def _call():
         return client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=2048,
+            max_tokens=4096,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": content}],
             tools=tools if tools else anthropic.NOT_GIVEN,

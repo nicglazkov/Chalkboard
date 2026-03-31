@@ -12,7 +12,6 @@ import subprocess
 import threading
 import uuid
 from pathlib import Path
-from langgraph.types import Command
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from config import CHECKPOINT_DB, DEFAULT_AUDIENCE, DEFAULT_EFFORT, DEFAULT_THEME, DEFAULT_TONE, OUTPUT_DIR, MANIM_QUALITY
 from pipeline.graph import build_graph
@@ -360,16 +359,6 @@ def _print_progress(event: dict) -> None:
         print(f"  [{node_name}]{attempts_info} → {status or 'done'}")
 
 
-def _handle_interrupt(interrupt_value: str) -> Command:
-    print("\n" + interrupt_value)
-    print("\nEnter action (retry_script / retry_code / abort):")
-    action = input("  action: ").strip()
-    guidance = ""
-    if action in ("retry_script", "retry_code"):
-        guidance = input("  guidance: ").strip()
-    return Command(resume={"action": action, "guidance": guidance})
-
-
 async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate",
               tone: str = "casual", theme: str = "chalkboard",
               context_blocks=None, context_file_paths=None) -> None:
@@ -384,18 +373,14 @@ async def run(topic: str, effort: str, thread_id: str, audience: str = "intermed
             try:
                 async for event in graph.astream(input_state, config=config, stream_mode="updates"):
                     _print_progress(event)
-
-                    if "__interrupt__" in event:
-                        interrupt_value = event["__interrupt__"][0].value
-                        resume_cmd = _handle_interrupt(interrupt_value)
-                        input_state = resume_cmd
-                        break
-                else:
-                    break
+                break
             except TimeoutExhausted as e:
                 print(f"\n  [pipeline] {e}")
-                resume_cmd = _handle_interrupt(str(e))
-                input_state = resume_cmd
+                print("\nEnter action (retry / abort):")
+                action = (await asyncio.to_thread(input, "  action: ")).strip()
+                if action != "retry":
+                    return
+                input_state = None  # resume from last checkpoint
 
 
 def main():

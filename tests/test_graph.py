@@ -126,11 +126,12 @@ def test_graph_escalates_after_max_retries(tmp_path):
             "script_attempts": attempts,
         }
 
-    abort_payload = {"action": "abort", "guidance": ""}
+    async def mock_to_thread(fn, *args, **kwargs):
+        return "abort"
 
     with patch("pipeline.graph.script_agent", new=mock_script_agent), \
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
-         patch("pipeline.agents.orchestrator.interrupt", return_value=abort_payload), \
+         patch("asyncio.to_thread", new=mock_to_thread), \
          patch("pipeline.render_trigger.get_backend"), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
