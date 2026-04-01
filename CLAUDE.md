@@ -155,6 +155,8 @@ These are baked into `manim_agent`'s system prompt. When Claude generates code t
 - **`VGroup(*self.mobjects)`** fails if `self.mobjects` contains non-VMobject items (camera, etc.) — use `*[FadeOut(m) for m in self.mobjects]`
 - **`VGroup.arrange()`** returns `None` — don't chain, assign first
 - Always pass `run_time` as a keyword arg: `self.play(anim, run_time=1.0)`
+- **Pointer labels + descriptive text below an array**: use `buff=0.85` or more so pointer triangles/labels don't overlap the description line
+- **Animating a label to track a pointer**: never use `obj.copy().next_to(...)` inside `.animate` — `.animate` captures positions before the frame; use `boxes[i].get_top() + UP * 0.55` or similar absolute offsets instead
 
 When Manim rendering fails, read the traceback from `docker run` output. Most failures are API misuse in the generated code. Patch `output/<run_id>/scene.py` to verify the fix, then add the pattern to `manim_agent.py`'s system prompt.
 

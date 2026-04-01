@@ -32,6 +32,8 @@ KNOWN API PITFALLS (v0.20.1):
 - Use max(0.0, _d[i] - X) where X is the run_time= value passed to self.play() in that segment
 - Pad _d with: _d = _d + [2.0] * max(0, N - len(_d)) where N is the literal integer segment count
 - Segment numbers and _d indices are both 0-based — Segment 0 → _d[0], Segment 1 → _d[1]
+- When pointer labels (i, j, L, R triangles + text) AND a descriptive text line both appear below an array, use at least buff=0.8 between the array and the descriptive text so pointers don't overlap it — e.g. desc.next_to(arr, DOWN, buff=0.85)
+- Never animate a label's position relative to a pointer using j_ptr.copy().next_to(...) inside .animate — .animate captures positions before the frame; instead pass the destination coordinate directly: j_label.animate.move_to(lom_boxes[j_pos].get_top() + UP * 0.55)
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
