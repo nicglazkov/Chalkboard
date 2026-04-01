@@ -261,6 +261,30 @@ Constants (in `main.py`): `BASE=60s`, `PER_ANIM=5s`, `AUDIO_RATIO=3.0`, `quality
 
 ---
 
+## Visual QA
+
+After each full render, `main.py` runs `_run_qa_loop()` which calls `_run_visual_qa()` which calls `pipeline/visual_qa.py`.
+
+**Frame extraction (`_extract_frames`):** uses `ffprobe` to get duration, then `ffmpeg` to grab evenly-spaced frames. Sampling rate is controlled by `--qa-density`:
+
+| Density | `seconds_per_frame` | `max_frames` |
+|---------|--------------------:|-------------:|
+| `zero`  | — (skip QA)         | —            |
+| `normal` (default) | 30s | 10 |
+| `high`  | 15s                 | 20           |
+
+Minimum is always 5 frames regardless of density. Formula: `n_frames = max(5, min(int(duration / spf), max_frames))`.
+
+**Sampling formula:** `t = duration * i / n_frames` — samples at 0%, 1/n, …, (n-1)/n of the video duration. Never seeks to the exact end (ffmpeg silently produces no frame at `t == duration`).
+
+**Claude review:** `visual_qa()` sends frames + optional `scene_code` to Claude with a structured-output schema. Returns `{"passed": bool, "issues": [{severity, description}]}`. When `scene_code` is included, Claude can reference the specific method/construct responsible for each issue.
+
+**QA loop (`_run_qa_loop`):** if QA finds `error`-severity issues, calls `_qa_regenerate_scene()` (re-invokes `manim_agent` with issues as `code_feedback`), deletes old render artifacts, and re-renders. Up to 2 regeneration attempts. Warnings do not trigger regeneration.
+
+**`--qa-density zero`** skips all of the above — `_run_visual_qa` returns `None` immediately.
+
+---
+
 ## Checkpointing and resume
 
 LangGraph uses `AsyncSqliteSaver` (stored in `pipeline_state.db`) to checkpoint after every node. On resume (`--run-id`), execution resumes from the last successful checkpoint.
@@ -271,7 +295,11 @@ LangGraph uses `AsyncSqliteSaver` (stored in `pipeline_state.db`) to checkpoint 
 
 ## escalate_to_user
 
-`escalate_to_user` uses LangGraph's `interrupt()` to pause the graph and wait for user input. It **must be `async`**. If declared as a sync function, LangGraph wraps it in `run_in_executor` (thread pool), which drops the `contextvars` context that `interrupt()` requires — causing `RuntimeError: Called get_config outside of a runnable context`.
+`escalate_to_user` is an `async def` LangGraph node that prompts the user when max retries are hit. It uses `asyncio.to_thread(input, prompt)` (not LangGraph's `interrupt()`) to read from stdin without blocking the event loop. On `EOFError` (non-interactive stdin), it defaults to `"abort"`.
+
+**Why not `interrupt()`:** LangGraph 1.1.3's `interrupt()` calls `get_config()` which requires Python 3.11+ in async nodes — on Python 3.10 `var_child_runnable_config.get()` returns `None`, causing `RuntimeError: Called get_config outside of a runnable context`. The `asyncio.to_thread` approach works on 3.10+.
+
+The node **must be `async def`**. LangGraph checks `inspect.iscoroutinefunction()` to decide whether to `await` a node — a sync wrapper would run in a thread pool, which drops the contextvars context.
 
 ---
 

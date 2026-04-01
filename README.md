@@ -65,10 +65,11 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 | `--verbose` | No | off | Stream raw Docker/Manim output to the terminal while rendering |
 | `--context` | No | — | File or directory to use as source material. Repeatable. |
 | `--context-ignore` | No | — | Glob pattern to exclude from context directories. Repeatable. |
+| `--qa-density` | No | `normal` | Visual QA frame sampling: `zero` (skip), `normal` (1/30s, up to 10 frames), `high` (1/15s, up to 20 frames) |
 
 > `--verbose` and `--preview` cannot be combined.
 
-After a full render, Chalkboard automatically runs a visual quality check: it samples 5 frames from `final.mp4` and flags any overlapping elements, off-screen text, or readability issues.
+After a full render, Chalkboard automatically runs a visual quality check: it samples frames from `final.mp4` and asks Claude to flag overlapping elements, off-screen text, or readability issues. If errors are found, it regenerates the Manim scene and re-renders (up to 2 attempts). Use `--qa-density high` for longer or more complex animations, or `--qa-density zero` to skip QA entirely.
 
 ---
 
