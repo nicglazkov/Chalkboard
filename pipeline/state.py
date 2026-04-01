@@ -26,3 +26,4 @@ class PipelineState(TypedDict):
     user_approved_search: bool
     status: Literal["drafting", "validating", "needs_user_input", "approved", "failed"]
     context_file_paths: list[str]
+    speed: float

@@ -14,7 +14,7 @@ OPENAI_MODEL = "gpt-4o-mini-tts"
 OPENAI_VOICE = "alloy"
 
 
-async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
+async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0) -> tuple[Path, list[float]]:
     if openai is None:
         raise ImportError("Install openai: pip install openai")
 
@@ -30,6 +30,7 @@ async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path,
                 voice=OPENAI_VOICE,
                 input=seg["text"],
                 response_format="wav",
+                speed=speed,
             )
             with wave.open(io.BytesIO(response.content)) as wf:
                 params = wf.getparams()

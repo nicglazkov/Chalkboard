@@ -14,7 +14,8 @@ async def render_trigger(state: PipelineState) -> dict:
     # Generate TTS audio, get actual per-segment durations
     generate_audio = get_backend(TTS_BACKEND)
     wav_path = run_dir / "voiceover.wav"
-    _, actual_durations = await generate_audio(state["script_segments"], wav_path)
+    speed = state.get("speed", 1.0)
+    _, actual_durations = await generate_audio(state["script_segments"], wav_path, speed=speed)
 
     # Build segments.json with actual durations
     segments_out = [

@@ -492,13 +492,13 @@ def _print_progress(event: dict) -> None:
 
 async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate",
               tone: str = "casual", theme: str = "chalkboard",
-              context_blocks=None, context_file_paths=None) -> None:
+              context_blocks=None, context_file_paths=None, speed: float = 1.0) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
         graph = build_graph(checkpointer=checkpointer, context_blocks=context_blocks)
         config = {"configurable": {"thread_id": thread_id}}
-        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or []}
+        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [], "speed": speed}
 
         while True:
             try:
@@ -576,6 +576,10 @@ def main():
         "--burn-captions", action="store_true",
         help="Burn subtitles into video (re-encodes video; captions.srt is always written)",
     )
+    parser.add_argument(
+        "--speed", type=float, default=1.0,
+        help="Narration speed multiplier (e.g. 1.25). OpenAI: 0.25-4.0 natively; others use ffmpeg atempo.",
+    )
     args = parser.parse_args()
 
     if args.verbose and args.preview:
@@ -601,6 +605,7 @@ def main():
         args.topic, args.effort, thread_id,
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
+        speed=args.speed,
     ))
 
     if not args.no_render:

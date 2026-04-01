@@ -16,7 +16,7 @@ def test_render_trigger_writes_all_output_files(base_state, tmp_path):
     base_state["script_segments"] = [{"text": "Hello.", "estimated_duration_sec": 1.0}]
     base_state["run_id"] = "test-run-001"
 
-    async def mock_generate(segments, output_path):
+    async def mock_generate(segments, output_path, speed=1.0):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"\x00" * 100)
         return output_path, [1.05]
@@ -44,7 +44,7 @@ def test_render_trigger_segments_json_uses_actual_durations(base_state, tmp_path
     base_state["script_segments"] = [{"text": "Hello.", "estimated_duration_sec": 1.0}]
     base_state["run_id"] = "run-dur-test"
 
-    async def mock_generate(segments, output_path):
+    async def mock_generate(segments, output_path, speed=1.0):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"\x00")
         return output_path, [2.73]  # actual duration differs from estimate

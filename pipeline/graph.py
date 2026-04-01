@@ -59,6 +59,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "theme": state.get("theme", "chalkboard"),
         "status": "drafting",
         "context_file_paths": state.get("context_file_paths", []),
+        "speed": state.get("speed", 1.0),
     }
 
 

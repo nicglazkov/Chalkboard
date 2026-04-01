@@ -42,7 +42,7 @@ def test_graph_happy_path_reaches_approved(tmp_path):
     async def mock_code_validator(state, **kw):
         return _make_code_approved_state()
 
-    async def mock_tts(segments, path):
+    async def mock_tts(segments, path, speed=1.0):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"\x00")
         return path, [2.0]
@@ -87,7 +87,7 @@ def test_graph_retries_script_on_fact_failure(tmp_path):
     async def mock_code_validator(state, **kw):
         return _make_code_approved_state()
 
-    async def mock_tts(segments, path):
+    async def mock_tts(segments, path, speed=1.0):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"\x00")
         return path, [2.0]

@@ -3,6 +3,7 @@ import numpy as np
 import soundfile as sf
 from pathlib import Path
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_KOKORO
+from pipeline.tts.base import _apply_speed_to_wav
 
 try:
     from kokoro import KPipeline
@@ -34,9 +35,13 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
     return output_path, durations
 
 
-async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
-    return await api_call_with_retry(
+async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0) -> tuple[Path, list[float]]:
+    path, durations = await api_call_with_retry(
         lambda: _generate_sync(segments, output_path),
         timeout=TIMEOUT_TTS_KOKORO,
         label="kokoro_tts",
     )
+    if speed != 1.0:
+        _apply_speed_to_wav(output_path, speed)
+        durations = [d / speed for d in durations]
+    return path, durations

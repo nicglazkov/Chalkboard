@@ -4,6 +4,7 @@ import os
 import wave
 from pathlib import Path
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_SEGMENT
+from pipeline.tts.base import _apply_speed_to_wav
 
 try:
     from elevenlabs import ElevenLabs
@@ -14,7 +15,7 @@ ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # "George" — swap via ELEVENLABS
 SAMPLE_RATE = 24000
 
 
-async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
+async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0) -> tuple[Path, list[float]]:
     if ElevenLabs is None:
         raise ImportError("Install elevenlabs: pip install elevenlabs")
 
@@ -47,5 +48,9 @@ async def generate_audio(segments: list[dict], output_path: Path) -> tuple[Path,
         out_wav.setsampwidth(2)
         out_wav.setframerate(SAMPLE_RATE)
         out_wav.writeframes(b"".join(all_pcm))
+
+    if speed != 1.0:
+        _apply_speed_to_wav(output_path, speed)
+        durations = [d / speed for d in durations]
 
     return output_path, durations

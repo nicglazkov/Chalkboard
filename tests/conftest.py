@@ -24,6 +24,7 @@ def base_state() -> PipelineState:
         user_approved_search=False,
         status="drafting",
         context_file_paths=[],
+        speed=1.0,
     )
 
 
