@@ -11,6 +11,8 @@ pytest
 pytest-asyncio
 pathspec
 python-docx
+httpx
+beautifulsoup4
 # Optional TTS backends (uncomment as needed):
 openai
 # elevenlabs

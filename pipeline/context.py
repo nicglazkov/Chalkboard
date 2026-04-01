@@ -14,6 +14,16 @@ try:
 except ImportError:
     DocxDocument = None  # type: ignore[assignment,misc]
 
+try:
+    import httpx as _httpx
+except ImportError:
+    _httpx = None  # type: ignore[assignment]
+
+try:
+    from bs4 import BeautifulSoup as _BeautifulSoup
+except ImportError:
+    _BeautifulSoup = None  # type: ignore[assignment,misc]
+
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
     ".java", ".c", ".cpp", ".c++", ".cc", ".cxx", ".h", ".hpp", ".hxx",
@@ -191,6 +201,37 @@ def load_context_blocks(files: list[Path]) -> list[dict]:
             print(f"  Warning: skipping unsupported file type: {file_path}")
 
     return blocks
+
+
+def fetch_url_blocks(url: str) -> list[dict]:
+    """
+    Fetch a URL and return Anthropic content blocks (same format as load_context_blocks).
+    HTML is stripped to plain text via BeautifulSoup. Content truncated at 100k chars.
+    """
+    if _httpx is None:
+        raise ImportError("Install httpx: pip install httpx")
+    if _BeautifulSoup is None:
+        raise ImportError("Install beautifulsoup4: pip install beautifulsoup4")
+
+    response = _httpx.get(url, follow_redirects=True, timeout=30)
+    response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "")
+    if "text/html" in content_type:
+        soup = _BeautifulSoup(response.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "header", "footer"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+    else:
+        text = response.text
+
+    if len(text) > 100_000:
+        text = text[:100_000] + "\n[... truncated]"
+
+    return [
+        {"type": "text", "text": f"--- url: {url} ---"},
+        {"type": "text", "text": text},
+    ]
 
 
 def measure_context(blocks: list[dict], client) -> tuple[int, int]:

@@ -195,3 +195,68 @@ def test_measure_context_calls_correct_api():
         messages=[{"role": "user", "content": blocks}],
     )
     mock_client.models.retrieve.assert_called_once_with(CLAUDE_MODEL)
+
+
+# ---------------------------------------------------------------------------
+# fetch_url_blocks
+# ---------------------------------------------------------------------------
+
+def test_fetch_url_blocks_returns_label_and_text():
+    from pipeline.context import fetch_url_blocks
+    mock_response = MagicMock()
+    mock_response.text = "<html><body><p>Hello world</p></body></html>"
+    mock_response.headers = {"content-type": "text/html"}
+    mock_response.raise_for_status = MagicMock()
+
+    mock_httpx = MagicMock()
+    mock_httpx.get.return_value = mock_response
+
+    mock_bs4 = MagicMock()
+    mock_bs4.return_value.get_text.return_value = "Hello world"
+
+    with patch("pipeline.context._httpx", mock_httpx), \
+         patch("pipeline.context._BeautifulSoup", mock_bs4):
+        blocks = fetch_url_blocks("https://example.com/article")
+
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "text"
+    assert "--- url: https://example.com/article ---" in blocks[0]["text"]
+    assert blocks[1]["type"] == "text"
+    assert "Hello world" in blocks[1]["text"]
+
+
+def test_fetch_url_blocks_truncates_long_content():
+    from pipeline.context import fetch_url_blocks
+    long_content = "x" * 200_000
+    mock_response = MagicMock()
+    mock_response.text = long_content
+    mock_response.headers = {"content-type": "text/plain"}
+    mock_response.raise_for_status = MagicMock()
+
+    mock_httpx = MagicMock()
+    mock_httpx.get.return_value = mock_response
+
+    with patch("pipeline.context._httpx", mock_httpx), \
+         patch("pipeline.context._BeautifulSoup", MagicMock()):
+        blocks = fetch_url_blocks("https://example.com")
+
+    content = blocks[1]["text"]
+    assert len(content) <= 100_020  # 100k chars + "[... truncated]"
+    assert "[... truncated]" in content
+
+
+def test_fetch_url_blocks_raises_on_missing_httpx():
+    from pipeline.context import fetch_url_blocks
+    with patch("pipeline.context._httpx", None):
+        with pytest.raises(ImportError, match="httpx"):
+            fetch_url_blocks("https://example.com")
+
+
+def test_fetch_url_blocks_raises_on_missing_bs4():
+    from pipeline.context import fetch_url_blocks
+    mock_httpx = MagicMock()
+    mock_httpx.get.return_value = MagicMock()
+    with patch("pipeline.context._httpx", mock_httpx), \
+         patch("pipeline.context._BeautifulSoup", None):
+        with pytest.raises(ImportError, match="beautifulsoup4"):
+            fetch_url_blocks("https://example.com")

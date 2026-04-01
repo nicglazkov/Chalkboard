@@ -569,6 +569,10 @@ def main():
         help="Glob pattern to exclude from context directories. Repeatable.",
     )
     parser.add_argument(
+        "--url", action="append", dest="urls", default=[], metavar="URL",
+        help="URL to fetch as source context (HTML stripped to text). Repeatable.",
+    )
+    parser.add_argument(
         "--qa-density", choices=["zero", "normal", "high"], default="normal",
         help="Visual QA frame sampling density: zero=skip, normal=1/30s (default), high=1/15s",
     )
@@ -596,10 +600,22 @@ def main():
         files = collect_files(args.context, ignore_patterns=args.context_ignore or None)
         context_blocks = load_context_blocks(files)
         context_file_paths = [str(f) for f in files]
+
+    if args.urls:
+        from pipeline.context import fetch_url_blocks
+        for url in args.urls:
+            print(f"\n  Fetching {url}...")
+            try:
+                url_blocks = fetch_url_blocks(url)
+            except Exception as e:
+                raise SystemExit(f"Failed to fetch {url}: {e}")
+            context_blocks = (context_blocks or []) + url_blocks
+
+    if context_blocks:
         if not _report_context(context_blocks):
             raise SystemExit("Aborted.")
     elif args.run_id:
-        print("Note: resuming without context files. Pass --context to include source material.")
+        print("Note: resuming without context files. Pass --context or --url to include source material.")
 
     asyncio.run(run(
         args.topic, args.effort, thread_id,
