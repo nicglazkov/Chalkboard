@@ -269,22 +269,70 @@ def _render(run_id: str, verbose: bool = False) -> Path:
                 raise
 
 
-def _run_visual_qa(run_id: str, final_mp4: Path) -> None:
+def _run_visual_qa(run_id: str, final_mp4: Path) -> dict | None:
+    """Run visual QA. Returns result dict, or None if skipped."""
     from pipeline.visual_qa import visual_qa  # lazy import keeps anthropic out of startup path
     output_dir = Path(OUTPUT_DIR).resolve()
     qa_dir = output_dir / run_id / "qa_frames"
+    scene_py = output_dir / run_id / "scene.py"
+    scene_code = scene_py.read_text() if scene_py.exists() else None
     print("\n  [qa] running visual quality check...")
     try:
-        result = visual_qa(final_mp4, qa_dir)
+        result = visual_qa(final_mp4, qa_dir, scene_code=scene_code)
     except Exception as e:
         print(f"  [qa] skipped — {e}")
-        return
+        return None
     if result["passed"]:
         print("  [qa] passed")
     else:
         print("  [qa] issues found:")
         for issue in result["issues"]:
             print(f"        [{issue['severity']}] {issue['description']}")
+    return result
+
+
+async def _qa_regenerate_scene(
+    run_id: str, qa_issues: str,
+    theme: str, audience: str, tone: str, effort_level: str,
+    context_blocks=None,
+) -> None:
+    """Re-invoke manim_agent with QA feedback, overwrite scene.py in place."""
+    from pipeline.agents.manim_agent import manim_agent
+    output_dir = Path(OUTPUT_DIR).resolve()
+    run_dir = output_dir / run_id
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    topic = manifest["topic"]
+    script = (run_dir / "script.txt").read_text()
+    segments = json.loads((run_dir / "segments.json").read_text())
+    current_code = (run_dir / "scene.py").read_text()
+
+    state = {
+        "run_id": run_id,
+        "topic": topic,
+        "script": script,
+        "script_segments": segments,
+        "manim_code": current_code,
+        "code_feedback": (
+            "Visual quality check found these issues that must be fixed:\n"
+            f"{qa_issues}\n"
+            "Fix the Manim code so there are no overlapping elements, truncated text, "
+            "or elements extending off-screen."
+        ),
+        "code_attempts": 1,
+        "theme": theme, "audience": audience, "tone": tone,
+        "effort_level": effort_level,
+        "fact_feedback": None, "script_attempts": 0,
+        "needs_web_search": False, "user_approved_search": False,
+        "status": "validating", "context_file_paths": [],
+    }
+
+    if context_blocks:
+        result = await manim_agent(state, context_blocks=context_blocks)
+    else:
+        result = await manim_agent(state)
+
+    (run_dir / "scene.py").write_text(result["manim_code"])
 
 
 def _render_preview_once(run_id: str, output_dir: Path, preview_mp4: Path) -> Path:
@@ -383,6 +431,38 @@ async def run(topic: str, effort: str, thread_id: str, audience: str = "intermed
                 input_state = None  # resume from last checkpoint
 
 
+def _run_qa_loop(
+    run_id: str, final_mp4: Path,
+    theme: str, audience: str, tone: str, effort_level: str,
+    context_blocks=None, verbose: bool = False,
+    max_qa_attempts: int = 2,
+) -> None:
+    """Run visual QA; if errors found, regenerate the Manim code and re-render (up to max_qa_attempts)."""
+    output_dir = Path(OUTPUT_DIR).resolve()
+
+    for qa_attempt in range(max_qa_attempts + 1):
+        result = _run_visual_qa(run_id, final_mp4)
+        if result is None or result["passed"]:
+            return
+
+        errors = [i for i in result["issues"] if i["severity"] == "error"]
+        if not errors or qa_attempt >= max_qa_attempts:
+            return  # warnings only, or out of attempts
+
+        issues_text = "\n".join(f"[{i['severity']}] {i['description']}" for i in result["issues"])
+        print(f"\n  [qa] regenerating scene to fix errors (attempt {qa_attempt + 1}/{max_qa_attempts})...")
+        asyncio.run(_qa_regenerate_scene(
+            run_id, issues_text, theme, audience, tone, effort_level,
+            context_blocks=context_blocks,
+        ))
+        # Clear old render artifacts so Docker re-renders the new scene.py
+        run_dir = output_dir / run_id
+        final_mp4.unlink(missing_ok=True)
+        shutil.rmtree(run_dir / "media", ignore_errors=True)
+        final_mp4 = _render(run_id, verbose=verbose)
+        print(f"\n  [qa] re-rendered → {final_mp4}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Chalkboard — AI animation pipeline")
     parser.add_argument("--topic", required=True, help="Topic to explain")
@@ -453,7 +533,13 @@ def main():
                 try:
                     final = _render(thread_id, verbose=args.verbose)
                     print(f"\nDone → {final}")
-                    _run_visual_qa(thread_id, final)
+                    _run_qa_loop(
+                        thread_id, final,
+                        theme=args.theme, audience=args.audience,
+                        tone=args.tone, effort_level=args.effort,
+                        context_blocks=context_blocks,
+                        verbose=args.verbose,
+                    )
                     break
                 except RenderFailed as e:
                     print(f"\n  [render] all 3 attempts failed: {e}")
