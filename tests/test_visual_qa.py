@@ -114,3 +114,35 @@ def test_extract_frames_raises_on_zero_duration(tmp_path):
         import pytest
         with pytest.raises(ValueError, match="no duration"):
             _extract_frames(video_path, qa_dir)
+
+
+def test_visual_qa_density_normal_uses_30s_interval(tmp_path):
+    qa_dir = tmp_path / "qa_frames"
+    qa_dir.mkdir()
+    frame = _make_fake_png(qa_dir / "frame_00.png")
+
+    with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
+         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+        mock_extract.return_value = [frame]
+        MockClient.return_value.messages.create.return_value = _mock_response(True, [])
+        visual_qa(tmp_path / "final.mp4", qa_dir, density="normal")
+
+    _, kwargs = mock_extract.call_args
+    assert kwargs["seconds_per_frame"] == 30
+    assert kwargs["max_frames"] == 10
+
+
+def test_visual_qa_density_high_uses_15s_interval(tmp_path):
+    qa_dir = tmp_path / "qa_frames"
+    qa_dir.mkdir()
+    frame = _make_fake_png(qa_dir / "frame_00.png")
+
+    with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
+         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+        mock_extract.return_value = [frame]
+        MockClient.return_value.messages.create.return_value = _mock_response(True, [])
+        visual_qa(tmp_path / "final.mp4", qa_dir, density="high")
+
+    _, kwargs = mock_extract.call_args
+    assert kwargs["seconds_per_frame"] == 15
+    assert kwargs["max_frames"] == 20

@@ -30,8 +30,20 @@ SCHEMA = {
 }
 
 
-def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int | None = None) -> list[Path]:
-    """Extract evenly-spaced frames. n_frames defaults to 1 per 30s, min 5, max 10."""
+# seconds-per-frame and max-frames per density level
+_QA_DENSITY = {
+    "normal": (30, 10),  # 1 frame per 30s, cap at 10
+    "high":   (15, 20),  # 1 frame per 15s, cap at 20
+}
+
+
+def _extract_frames(
+    video_path: Path, qa_dir: Path,
+    n_frames: int | None = None,
+    seconds_per_frame: int = 30,
+    max_frames: int = 10,
+) -> list[Path]:
+    """Extract evenly-spaced frames. n_frames defaults to 1 per seconds_per_frame, min 5."""
     qa_dir.mkdir(parents=True, exist_ok=True)
 
     result = subprocess.run(
@@ -45,7 +57,7 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int | None = None)
         raise ValueError(f"Video has no duration (got {duration!r}): {video_path}")
 
     if n_frames is None:
-        n_frames = max(5, min(int(duration / 30), 10))
+        n_frames = max(5, min(int(duration / seconds_per_frame), max_frames))
 
     frame_paths = []
     for i in range(n_frames):
@@ -61,9 +73,14 @@ def _extract_frames(video_path: Path, qa_dir: Path, n_frames: int | None = None)
     return frame_paths
 
 
-def visual_qa(video_path: Path, qa_dir: Path, client=None, scene_code: str | None = None) -> dict:
+def visual_qa(
+    video_path: Path, qa_dir: Path,
+    client=None, scene_code: str | None = None,
+    density: str = "normal",
+) -> dict:
     """
     Run visual QA on a rendered video by sampling frames and reviewing with Claude.
+    density: "normal" (1/30s, max 10) or "high" (1/15s, max 20).
     scene_code: if provided, included in the prompt so Claude can pinpoint which
                 class/method is responsible for each issue.
     Returns {"passed": bool, "issues": [{"severity": "warning"|"error", "description": str}]}
@@ -71,7 +88,8 @@ def visual_qa(video_path: Path, qa_dir: Path, client=None, scene_code: str | Non
     if client is None:
         client = anthropic.Anthropic()
 
-    frame_paths = _extract_frames(video_path, qa_dir)
+    spf, max_f = _QA_DENSITY.get(density, _QA_DENSITY["normal"])
+    frame_paths = _extract_frames(video_path, qa_dir, seconds_per_frame=spf, max_frames=max_f)
 
     content = [
         {

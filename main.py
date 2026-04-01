@@ -269,8 +269,11 @@ def _render(run_id: str, verbose: bool = False) -> Path:
                 raise
 
 
-def _run_visual_qa(run_id: str, final_mp4: Path) -> dict | None:
-    """Run visual QA. Returns result dict, or None if skipped."""
+def _run_visual_qa(run_id: str, final_mp4: Path, density: str = "normal") -> dict | None:
+    """Run visual QA. Returns result dict, or None if skipped (density='zero' or error)."""
+    if density == "zero":
+        print("\n  [qa] skipped (--qa-density zero)")
+        return None
     from pipeline.visual_qa import visual_qa  # lazy import keeps anthropic out of startup path
     output_dir = Path(OUTPUT_DIR).resolve()
     qa_dir = output_dir / run_id / "qa_frames"
@@ -278,7 +281,7 @@ def _run_visual_qa(run_id: str, final_mp4: Path) -> dict | None:
     scene_code = scene_py.read_text() if scene_py.exists() else None
     print("\n  [qa] running visual quality check...")
     try:
-        result = visual_qa(final_mp4, qa_dir, scene_code=scene_code)
+        result = visual_qa(final_mp4, qa_dir, scene_code=scene_code, density=density)
     except Exception as e:
         print(f"  [qa] skipped — {e}")
         return None
@@ -435,13 +438,13 @@ def _run_qa_loop(
     run_id: str, final_mp4: Path,
     theme: str, audience: str, tone: str, effort_level: str,
     context_blocks=None, verbose: bool = False,
-    max_qa_attempts: int = 2,
+    max_qa_attempts: int = 2, qa_density: str = "normal",
 ) -> None:
     """Run visual QA; if errors found, regenerate the Manim code and re-render (up to max_qa_attempts)."""
     output_dir = Path(OUTPUT_DIR).resolve()
 
     for qa_attempt in range(max_qa_attempts + 1):
-        result = _run_visual_qa(run_id, final_mp4)
+        result = _run_visual_qa(run_id, final_mp4, density=qa_density)
         if result is None or result["passed"]:
             return
 
@@ -484,6 +487,10 @@ def main():
     parser.add_argument(
         "--context-ignore", action="append", dest="context_ignore", default=[], metavar="PATTERN",
         help="Glob pattern to exclude from context directories. Repeatable.",
+    )
+    parser.add_argument(
+        "--qa-density", choices=["zero", "normal", "high"], default="normal",
+        help="Visual QA frame sampling density: zero=skip, normal=1/30s (default), high=1/15s",
     )
     args = parser.parse_args()
 
@@ -539,6 +546,7 @@ def main():
                         tone=args.tone, effort_level=args.effort,
                         context_blocks=context_blocks,
                         verbose=args.verbose,
+                        qa_density=args.qa_density,
                     )
                     break
                 except RenderFailed as e:
