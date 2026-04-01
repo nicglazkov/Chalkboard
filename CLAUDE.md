@@ -20,7 +20,7 @@ main.py
        └─ escalate_to_user  — interrupt() when max retries hit
 ```
 
-After the pipeline completes, the user runs Docker to render the Manim animation, then merges the voiceover with local ffmpeg.
+After the pipeline completes, `main.py` automatically runs Docker to render the Manim animation and then merges the voiceover with host-side ffmpeg into `final.mp4`.
 
 ---
 
@@ -32,7 +32,7 @@ pipeline/
   state.py           PipelineState TypedDict, ValidationResult
   render_trigger.py  Calls TTS, writes output files
   retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
-  context.py         collect_files, load_context_blocks, measure_context
+  context.py         collect_files, load_context_blocks, fetch_url_blocks, measure_context
   agents/
     script_agent.py     Script generation (Claude) — async
     fact_validator.py   Fact checking (Claude) — async
@@ -344,7 +344,7 @@ Users can pass local files as source material via `--context path` (repeatable) 
 - `fetch_url_blocks(url) -> list[dict]` — fetches a URL via `httpx`, strips HTML (script/style/nav/header/footer tags removed via BeautifulSoup), truncates at 100k chars with `[... truncated]` marker. Returns `[{"type": "text", "text": "--- url: <url> ---"}, {"type": "text", "text": <content>}]`. Raises `ImportError` if `httpx` or `beautifulsoup4` not installed.
 - `measure_context(blocks, client) -> tuple[int, int]` — returns `(token_count, context_window)` via `client.messages.count_tokens` and `client.models.retrieve`. Nothing hardcoded.
 
-**Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` or `--url` is passed. Prompts if tokens > 10k. Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
+**Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` or `--url` is passed. Prompts if tokens > 10k — pass `--yes` to skip this prompt (useful for scripted or non-interactive runs). Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
 
 **URL input:** `--url` (repeatable) calls `fetch_url_blocks()` per URL and merges the resulting blocks with any `--context` file blocks before `_report_context` is called. Both feed into the same `context_blocks` list delivered to `build_graph()`.
 

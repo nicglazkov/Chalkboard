@@ -109,7 +109,7 @@ Before the pipeline starts, Chalkboard reports how many tokens the context uses:
 Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
 ```
 
-If context exceeds 10k tokens you'll be prompted to confirm. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
+If context exceeds 10k tokens you'll be prompted to confirm — pass `--yes` to skip this prompt for scripted or non-interactive runs. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
 
 **Resuming with context:** `--context` and `--url` are not stored in the checkpoint. Pass them again on resume to re-inject source material:
 
@@ -240,7 +240,7 @@ pytest
 pipeline/
   agents/         # script_agent, fact_validator, manim_agent, code_validator, orchestrator
   tts/            # kokoro, openai, elevenlabs backends
-  context.py      # collect_files, load_context_blocks, measure_context
+  context.py      # collect_files, load_context_blocks, fetch_url_blocks, measure_context
   graph.py        # LangGraph state machine
   state.py        # PipelineState TypedDict + ValidationResult
   render_trigger.py  # writes output files, calls TTS
