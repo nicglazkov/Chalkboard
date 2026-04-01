@@ -235,6 +235,7 @@ async def generate_audio(
 | `manifest.json` | `{run_id, topic, scene_class_name, quality, timestamp}` |
 | `captions.srt` | SRT subtitle file written by `_generate_caption_files()` in `main.py` after render |
 | `chapters.txt` | FFMETADATA1 chapter file; embedded into `final.mp4` by ffmpeg during merge |
+| `quiz.json` | `[{question, options, answer, explanation}]` — written by `_generate_quiz()` in `main.py` when `--quiz` is passed |
 
 `manifest.json` is read by `docker/render.sh` to know which class to render and at what quality.
 
@@ -347,6 +348,10 @@ Users can pass local files as source material via `--context path` (repeatable) 
 **Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` or `--url` is passed. Prompts if tokens > 10k — pass `--yes` to skip this prompt (useful for scripted or non-interactive runs). Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
 
 **URL input:** `--url` (repeatable) calls `fetch_url_blocks()` per URL and merges the resulting blocks with any `--context` file blocks before `_report_context` is called. Both feed into the same `context_blocks` list delivered to `build_graph()`.
+
+**GitHub input:** `--github owner/repo` (or full GitHub URL) calls `_github_to_raw_url()` in `main.py` to construct `https://raw.githubusercontent.com/<owner>/<repo>/HEAD/README.md`, then passes it to `fetch_url_blocks()`. Strips `.git` suffixes, trailing slashes, and `/tree/<branch>` path components. Raises `ValueError` on unparseable input.
+
+**Quiz generation:** `--quiz` triggers `_generate_quiz(run_id)` in `main.py` after the pipeline and render complete. Reads `script.txt`, calls Claude synchronously (outside the async graph) with a structured-output schema, and writes `quiz.json`. Works with `--no-render` since it only needs `script.txt`.
 
 **Agent integration:** `build_graph(context_blocks=None)` creates async closure wrappers around `script_agent` and `manim_agent` when `context_blocks` is truthy, so LangGraph's `inspect.iscoroutinefunction()` check passes on the closures. On retry loops (fact/code validation failures), the same closures are invoked — context is preserved automatically.
 

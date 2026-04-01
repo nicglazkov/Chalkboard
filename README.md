@@ -67,6 +67,8 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 | `--context` | No | — | File or directory to use as source material. Repeatable. |
 | `--context-ignore` | No | — | Glob pattern to exclude from context directories. Repeatable. |
 | `--url` | No | — | URL to fetch as source material (HTML stripped to text). Repeatable. |
+| `--github` | No | — | GitHub repo (`owner/repo` or URL) — fetches its README as context. Repeatable. |
+| `--quiz` | No | off | Generate comprehension questions (`quiz.json`) after the pipeline. |
 | `--burn-captions` | No | off | Burn subtitles into the video (re-encodes; `captions.srt` is always written regardless) |
 | `--qa-density` | No | `normal` | Visual QA frame sampling: `zero` (skip), `normal` (1/30s, up to 10 frames), `high` (1/15s, up to 20 frames) |
 | `--yes` | No | off | Skip confirmation prompts (e.g. large-context warning when `--url` content exceeds 10k tokens) |
@@ -99,6 +101,12 @@ python main.py --topic "explain my project" --context ./README.md --url https://
 
 # Obsidian vault page
 python main.py --topic "visualize my notes" --context ~/Documents/vault/page.md
+
+# GitHub repo README
+python main.py --topic "explain this project" --github nicglazkov/Chalkboard
+
+# GitHub URL form
+python main.py --topic "explain this library" --github https://github.com/owner/repo
 ```
 
 Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
@@ -141,6 +149,31 @@ To also **burn subtitles into the video** (re-encodes, slower):
 ```bash
 python main.py --topic "..." --burn-captions
 ```
+
+---
+
+## Quiz generation
+
+Add `--quiz` to generate comprehension questions alongside any video:
+
+```bash
+python main.py --topic "explain binary search" --quiz
+```
+
+After the pipeline finishes, Chalkboard calls Claude with the completed script and writes `output/<run-id>/quiz.json` — a list of 4–6 multiple-choice questions with answer keys and explanations:
+
+```json
+[
+  {
+    "question": "What does binary search require about the input list?",
+    "options": ["A) It must be unsorted", "B) It must be sorted", "C) It must have no duplicates", "D) It must be numeric"],
+    "answer": "B",
+    "explanation": "Binary search only works on sorted lists because it relies on halving the search space based on order."
+  }
+]
+```
+
+Works with `--no-render` too — quiz generation only needs the script, not the video.
 
 ---
 

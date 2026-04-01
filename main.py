@@ -40,6 +40,25 @@ class RenderFailed(Exception):
     """Raised when a render attempt fails (timeout or non-zero exit)."""
 
 
+def _github_to_raw_url(repo: str) -> str:
+    """Convert a GitHub repo identifier to its raw README URL.
+
+    Accepts 'owner/repo', 'https://github.com/owner/repo', URLs with
+    trailing paths/branches, and .git suffixes.
+    """
+    repo = repo.rstrip("/")
+    if "github.com" in repo:
+        m = re.search(r"github\.com/([^/]+/[^/]+)", repo)
+        if not m:
+            raise ValueError(f"Cannot parse GitHub URL: {repo!r}")
+        slug = m.group(1).removesuffix(".git")
+    elif re.match(r"^[^/]+/[^/]+$", repo):
+        slug = repo
+    else:
+        raise ValueError(f"Expected 'owner/repo' or a GitHub URL, got: {repo!r}")
+    return f"https://raw.githubusercontent.com/{slug}/HEAD/README.md"
+
+
 def _check_tools() -> None:
     missing = [t for t in ("docker", "ffmpeg") if not shutil.which(t)]
     if missing:
@@ -555,6 +574,79 @@ def _run_qa_loop(
         print(f"\n  [qa] re-rendered → {final_mp4}")
 
 
+def _generate_quiz(run_id: str) -> Path | None:
+    """Generate MCQ comprehension questions for a completed run.
+
+    Reads script.txt from the run directory, calls Claude, and writes
+    quiz.json alongside the other output files. Returns the quiz path.
+    """
+    import anthropic as _anthropic
+    from config import CLAUDE_MODEL
+
+    run_dir = Path(OUTPUT_DIR) / run_id
+    script_path = run_dir / "script.txt"
+    if not script_path.exists():
+        print("  [quiz] script.txt not found — skipping.")
+        return None
+
+    script = script_path.read_text()
+    client = _anthropic.Anthropic()
+
+    print("\n  [quiz] generating comprehension questions...")
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=2048,
+        system="You generate educational multiple-choice comprehension questions for explainer videos.",
+        messages=[{
+            "role": "user",
+            "content": (
+                "Generate 4–6 multiple-choice comprehension questions for this educational script.\n\n"
+                f"{script}\n\n"
+                "For each question provide the question text, exactly 4 answer options (labelled A–D), "
+                "the correct answer letter, and a one-sentence explanation of why it is correct."
+            ),
+        }],
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "questions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "question":    {"type": "string"},
+                                    "options":     {"type": "array", "items": {"type": "string"}},
+                                    "answer":      {"type": "string"},
+                                    "explanation": {"type": "string"},
+                                },
+                                "required": ["question", "options", "answer", "explanation"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["questions"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+    )
+
+    data = json.loads(response.content[0].text)
+    questions = data["questions"]
+
+    quiz_path = run_dir / "quiz.json"
+    quiz_path.write_text(json.dumps(questions, indent=2))
+
+    print(f"\n  Quiz ({len(questions)} questions) → {quiz_path}")
+    for i, q in enumerate(questions, 1):
+        print(f"    Q{i}: {q['question']}")
+
+    return quiz_path
+
+
 def main():
     parser = argparse.ArgumentParser(description="Chalkboard — AI animation pipeline")
     parser.add_argument("--topic", required=True, help="Topic to explain")
@@ -580,6 +672,14 @@ def main():
     parser.add_argument(
         "--url", action="append", dest="urls", default=[], metavar="URL",
         help="URL to fetch as source context (HTML stripped to text). Repeatable.",
+    )
+    parser.add_argument(
+        "--github", action="append", dest="github", default=[], metavar="REPO",
+        help="GitHub repo (owner/repo or URL) — fetches README as context. Repeatable.",
+    )
+    parser.add_argument(
+        "--quiz", action="store_true",
+        help="Generate comprehension questions (quiz.json) after the pipeline.",
     )
     parser.add_argument(
         "--qa-density", choices=["zero", "normal", "high"], default="normal",
@@ -622,6 +722,20 @@ def main():
                 url_blocks = fetch_url_blocks(url)
             except Exception as e:
                 raise SystemExit(f"Failed to fetch {url}: {e}")
+            context_blocks = (context_blocks or []) + url_blocks
+
+    if args.github:
+        from pipeline.context import fetch_url_blocks
+        for repo in args.github:
+            try:
+                raw_url = _github_to_raw_url(repo)
+            except ValueError as e:
+                raise SystemExit(str(e))
+            print(f"\n  Fetching GitHub README: {raw_url}...")
+            try:
+                url_blocks = fetch_url_blocks(raw_url)
+            except Exception as e:
+                raise SystemExit(f"Failed to fetch README for {repo!r}: {e}")
             context_blocks = (context_blocks or []) + url_blocks
 
     if context_blocks:
@@ -676,6 +790,9 @@ def main():
                     raise SystemExit("Aborted.")
     else:
         print(f"\nDone. Output files in output/{thread_id}/")
+
+    if args.quiz:
+        _generate_quiz(thread_id)
 
 
 if __name__ == "__main__":
