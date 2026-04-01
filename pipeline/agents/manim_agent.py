@@ -20,8 +20,12 @@ STRICT REQUIREMENTS:
     _d = _d + [2.0] * max(0, N - len(_d))
   Replace N with the exact integer from "Total segments: N" shown above.
 - Never hardcode a float literal as the argument to self.wait() — always use _d[i]
-- When an animation fills part of a segment's time, subtract the animation's run_time from _d[i]:
-    self.wait(max(0.0, _d[i] - X))  where X is the numeric value passed to run_time= above
+- When an animation fills part of a segment's time, subtract the animation's run_time from _d[i].
+  IMPORTANT: self.wait(0) raises ValueError — Manim requires duration > 0. Always guard:
+    _r = max(0.0, _d[i] - X)
+    if _r > 0:
+        self.wait(_r)
+  NEVER write self.wait(max(0.0, ...)) directly — if the value is 0.0 it will crash.
 
 KNOWN API PITFALLS (v0.20.1):
 - Brace.get_text(*text) does NOT accept font_size — set it on the returned object: t = brace.get_text('x'); t.scale(0.8)
@@ -29,7 +33,7 @@ KNOWN API PITFALLS (v0.20.1):
 - Always pass run_time as a keyword arg: self.play(anim, run_time=1.0)
 - Never use VGroup(*self.mobjects) — self.mobjects can contain non-VMobjects; use *[FadeOut(m) for m in self.mobjects] instead
 - Never hardcode self.wait(X) with a float literal — always use _d[i] loaded from segments.json
-- Use max(0.0, _d[i] - X) where X is the run_time= value passed to self.play() in that segment
+- self.wait(0) crashes — always guard: _r = max(0.0, _d[i] - X); if _r > 0: self.wait(_r)
 - Pad _d with: _d = _d + [2.0] * max(0, N - len(_d)) where N is the literal integer segment count
 - Segment numbers and _d indices are both 0-based — Segment 0 → _d[0], Segment 1 → _d[1]
 - When pointer labels (i, j, L, R triangles + text) AND a descriptive text line both appear below an array, use at least buff=0.8 between the array and the descriptive text so pointers don't overlap it — e.g. desc.next_to(arr, DOWN, buff=0.85)

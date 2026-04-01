@@ -76,6 +76,7 @@ main.py               CLI entry point, async graph runner
 | `needs_web_search` | bool | script_agent flagged it wants web search |
 | `user_approved_search` | bool | User approved web search (unused in current routing) |
 | `context_file_paths` | list[str] | Paths of loaded context files; empty list if none. Informational only — never read by agents. |
+| `speed` | float | Narration speed multiplier (default `1.0`). Passed to TTS backend. |
 | `status` | str | `"drafting"` / `"validating"` / `"approved"` / `"failed"` |
 
 ### Critical invariant: None = approved
@@ -157,6 +158,7 @@ These are baked into `manim_agent`'s system prompt. When Claude generates code t
 - Always pass `run_time` as a keyword arg: `self.play(anim, run_time=1.0)`
 - **Pointer labels + descriptive text below an array**: use `buff=0.85` or more so pointer triangles/labels don't overlap the description line
 - **Animating a label to track a pointer**: never use `obj.copy().next_to(...)` inside `.animate` — `.animate` captures positions before the frame; use `boxes[i].get_top() + UP * 0.55` or similar absolute offsets instead
+- **`self.wait(0)` crashes** — Manim requires `duration > 0`. Never call `self.wait(max(0.0, ...))` directly. Instead: `_r = max(0.0, _d[i] - X); if _r > 0: self.wait(_r)`. This matters especially when `--speed > 1.0` shortens segment durations below the animation time budget.
 
 When Manim rendering fails, read the traceback from `docker run` output. Most failures are API misuse in the generated code. Patch `output/<run_id>/scene.py` to verify the fix, then add the pattern to `manim_agent.py`'s system prompt.
 
@@ -196,8 +198,14 @@ All backends implement the same async contract:
 async def generate_audio(
     segments: list[dict],   # [{"text": str, "estimated_duration_sec": float}]
     output_path: Path,      # write voiceover.wav here
+    speed: float = 1.0,     # playback speed multiplier
 ) -> tuple[Path, list[float]]:  # (wav_path, actual_durations_per_segment)
 ```
+
+**Speed handling:**
+- **OpenAI**: `speed=` passed directly to `audio.speech.create()`. Actual durations measured from the returned WAV — no post-processing needed.
+- **Kokoro / ElevenLabs**: generate at 1.0x, then apply `ffmpeg atempo` in-place on the output WAV via `_apply_speed_to_wav(wav_path, speed)` from `pipeline/tts/base.py`. Durations are divided by `speed` afterward.
+- `_build_atempo(speed)` in `base.py` chains multiple `atempo=` filters when `speed` is outside [0.5, 2.0] (the range ffmpeg's single filter accepts). E.g., `speed=4.0` → `"atempo=2.0,atempo=2.000000"`.
 
 **Critical:** OpenAI and ElevenLabs TTS APIs return streaming WAV/PCM responses with invalid or overflowed headers. Do not concatenate raw response bytes. Instead:
 - **OpenAI**: response is WAV with `nframes=0xFFFFFFFF` header; use `wave.open()` to extract PCM, write a clean WAV
@@ -206,10 +214,11 @@ async def generate_audio(
 
 ### Adding a new TTS backend
 
-1. Create `pipeline/tts/yourbackend_tts.py` implementing `generate_audio(segments, output_path)`
-2. Register it in `pipeline/tts/base.py` `get_backend()` dispatch
-3. Add to the TTS table in `README.md`
-4. Add tests in `tests/test_yourbackend_tts.py`
+1. Create `pipeline/tts/yourbackend_tts.py` implementing `generate_audio(segments, output_path, speed=1.0)`
+2. For native speed support: pass `speed` to the API. For backends without it: call `_apply_speed_to_wav(output_path, speed)` after generation and divide durations by `speed`.
+3. Register it in `pipeline/tts/base.py` `get_backend()` dispatch
+4. Add to the TTS table in `README.md`
+5. Add tests in `tests/test_yourbackend_tts.py`
 
 ---
 
@@ -220,12 +229,16 @@ async def generate_audio(
 | File | Contents |
 |------|----------|
 | `scene.py` | Complete Manim Python source |
-| `voiceover.wav` | Concatenated TTS audio for all segments |
-| `segments.json` | `[{"text": str, "actual_duration_sec": float}]` — uses actual TTS durations, not estimates |
+| `voiceover.wav` | Concatenated TTS audio for all segments (at final speed) |
+| `segments.json` | `[{"text": str, "actual_duration_sec": float}]` — post-speed actual durations |
 | `script.txt` | Full narration script as plain text |
 | `manifest.json` | `{run_id, topic, scene_class_name, quality, timestamp}` |
+| `captions.srt` | SRT subtitle file written by `_generate_caption_files()` in `main.py` after render |
+| `chapters.txt` | FFMETADATA1 chapter file; embedded into `final.mp4` by ffmpeg during merge |
 
 `manifest.json` is read by `docker/render.sh` to know which class to render and at what quality.
+
+`captions.srt` and `chapters.txt` are written by `_generate_caption_files(run_dir)` in `main.py` after Docker render completes but before the ffmpeg merge. Both are derived from `segments.json` (cumulative `actual_duration_sec` timestamps). `chapters.txt` is passed to ffmpeg as `-f ffmetadata -i chapters.txt -map_metadata 2` to embed chapter atoms in the MP4. `--burn-captions` adds `-vf subtitles=<path>` and switches `-c:v` from `copy` to `libx264 -preset fast`.
 
 ---
 
@@ -324,19 +337,22 @@ Users can pass local files as source material via `--context path` (repeatable) 
 
 **Architecture:** preprocessing in `main.py` → `pipeline/context.py` → agents as a parameter. Content blocks are never stored in `PipelineState` (only file paths are stored). LangGraph checkpointing is unaffected.
 
-**`pipeline/context.py`** — three public functions:
+**`pipeline/context.py`** — four public functions:
 
 - `collect_files(paths, ignore_patterns=None) -> list[Path]` — walks directories recursively, applies `.gitignore` via `pathspec`, applies extra patterns, skips hidden directories, deduplicates. Raises `FileNotFoundError` for missing paths.
 - `load_context_blocks(files) -> list[dict]` — converts files to Anthropic content blocks. Text/code → `text` blocks; images → base64 `image` blocks; PDFs → base64 `document` blocks; `.docx` → python-docx paragraph extraction. Each file gets a `--- file: <path> ---` label block followed by the content block.
+- `fetch_url_blocks(url) -> list[dict]` — fetches a URL via `httpx`, strips HTML (script/style/nav/header/footer tags removed via BeautifulSoup), truncates at 100k chars with `[... truncated]` marker. Returns `[{"type": "text", "text": "--- url: <url> ---"}, {"type": "text", "text": <content>}]`. Raises `ImportError` if `httpx` or `beautifulsoup4` not installed.
 - `measure_context(blocks, client) -> tuple[int, int]` — returns `(token_count, context_window)` via `client.messages.count_tokens` and `client.models.retrieve`. Nothing hardcoded.
 
-**Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` is passed. Prompts if tokens > 10k. Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
+**Token reporting** (in `_report_context`, `main.py`): always prints the count when `--context` or `--url` is passed. Prompts if tokens > 10k. Hard-exits if context exceeds 90% of the model context window. If the count API call fails, prints a warning and proceeds.
+
+**URL input:** `--url` (repeatable) calls `fetch_url_blocks()` per URL and merges the resulting blocks with any `--context` file blocks before `_report_context` is called. Both feed into the same `context_blocks` list delivered to `build_graph()`.
 
 **Agent integration:** `build_graph(context_blocks=None)` creates async closure wrappers around `script_agent` and `manim_agent` when `context_blocks` is truthy, so LangGraph's `inspect.iscoroutinefunction()` check passes on the closures. On retry loops (fact/code validation failures), the same closures are invoked — context is preserved automatically.
 
 **PDF beta header:** when any context block has `type == "document"`, agents initialize `anthropic.Anthropic(default_headers={"anthropic-beta": "pdfs-2024-09-25"})`.
 
-**Resume behavior:** `context_blocks` is not in `PipelineState`. On `--run-id` resume, re-pass `--context` to inject source material. If `--run-id` is used without `--context`, a note is printed.
+**Resume behavior:** `context_blocks` is not in `PipelineState`. On `--run-id` resume, re-pass `--context` / `--url` to inject source material. If `--run-id` is used without either, a note is printed.
 
 ---
 

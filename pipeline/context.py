@@ -213,7 +213,8 @@ def fetch_url_blocks(url: str) -> list[dict]:
     if _BeautifulSoup is None:
         raise ImportError("Install beautifulsoup4: pip install beautifulsoup4")
 
-    response = _httpx.get(url, follow_redirects=True, timeout=30)
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; Chalkboard/1.0; +https://github.com/nicglazkov/Chalkboard)"}
+    response = _httpx.get(url, follow_redirects=True, timeout=30, headers=headers)
     response.raise_for_status()
 
     content_type = response.headers.get("content-type", "")

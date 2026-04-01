@@ -49,7 +49,7 @@ def _check_tools() -> None:
         )
 
 
-def _report_context(blocks: list[dict]) -> bool:
+def _report_context(blocks: list[dict], _yes: bool = False) -> bool:
     """
     Print context token report. Returns True if pipeline should proceed, False to abort.
     Always prints the report. Prompts for confirmation only when tokens > 10k.
@@ -63,9 +63,18 @@ def _report_context(blocks: list[dict]) -> bool:
             1 for b in blocks
             if b.get("type") == "text" and b.get("text", "").startswith("--- file:")
         )
+        n_urls = sum(
+            1 for b in blocks
+            if b.get("type") == "text" and b.get("text", "").startswith("--- url:")
+        )
+        parts = []
+        if n_files:
+            parts.append(f"{n_files} file{'s' if n_files != 1 else ''}")
+        if n_urls:
+            parts.append(f"{n_urls} URL{'s' if n_urls != 1 else ''}")
+        sources = ", ".join(parts) if parts else "0 sources"
         print(
-            f"\nContext: {n_files} file{'s' if n_files != 1 else ''}, "
-            f"~{token_count // 1000}k tokens  "
+            f"\nContext: {sources}, ~{token_count // 1000}k tokens  "
             f"(model window: {context_window // 1000}k, ~{pct}% used by context)"
         )
         if pct >= 90:
@@ -73,7 +82,7 @@ def _report_context(blocks: list[dict]) -> bool:
                 f"Error: context files use {pct}% of the model context window. "
                 "Reduce files before proceeding."
             )
-        if token_count > 10_000:
+        if token_count > 10_000 and not _yes:
             answer = input("\nContext is large. Proceed? (y/n): ").strip().lower()
             return answer == "y"
     except SystemExit:
@@ -584,6 +593,10 @@ def main():
         "--speed", type=float, default=1.0,
         help="Narration speed multiplier (e.g. 1.25). OpenAI: 0.25-4.0 natively; others use ffmpeg atempo.",
     )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Skip confirmation prompts (e.g. large-context warning).",
+    )
     args = parser.parse_args()
 
     if args.verbose and args.preview:
@@ -612,7 +625,7 @@ def main():
             context_blocks = (context_blocks or []) + url_blocks
 
     if context_blocks:
-        if not _report_context(context_blocks):
+        if not _report_context(context_blocks, _yes=args.yes):
             raise SystemExit("Aborted.")
     elif args.run_id:
         print("Note: resuming without context files. Pass --context or --url to include source material.")

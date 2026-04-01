@@ -59,13 +59,17 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 | `--audience` | No | `intermediate` | Target audience: `beginner`, `intermediate`, `expert` |
 | `--tone` | No | `casual` | Narration tone: `casual`, `formal`, `socratic` |
 | `--theme` | No | `chalkboard` | Visual color theme: `chalkboard`, `light`, `colorful` |
+| `--speed` | No | `1.0` | Narration speed multiplier (e.g. `1.25` for 25% faster). OpenAI: native (0.25–4.0). Kokoro/ElevenLabs: ffmpeg atempo. |
 | `--run-id` | No | auto | Resume a previous run using its ID |
 | `--preview` | No | off | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render |
 | `--no-render` | No | off | Run the AI pipeline only — skip Docker render and ffmpeg merge |
 | `--verbose` | No | off | Stream raw Docker/Manim output to the terminal while rendering |
 | `--context` | No | — | File or directory to use as source material. Repeatable. |
 | `--context-ignore` | No | — | Glob pattern to exclude from context directories. Repeatable. |
+| `--url` | No | — | URL to fetch as source material (HTML stripped to text). Repeatable. |
+| `--burn-captions` | No | off | Burn subtitles into the video (re-encodes; `captions.srt` is always written regardless) |
 | `--qa-density` | No | `normal` | Visual QA frame sampling: `zero` (skip), `normal` (1/30s, up to 10 frames), `high` (1/15s, up to 20 frames) |
+| `--yes` | No | off | Skip confirmation prompts (e.g. large-context warning when `--url` content exceeds 10k tokens) |
 
 > `--verbose` and `--preview` cannot be combined.
 
@@ -75,7 +79,7 @@ After a full render, Chalkboard automatically runs a visual quality check: it sa
 
 ## Context injection
 
-Pass local files as source material so the pipeline builds animations from your content:
+Pass local files or URLs as source material so the pipeline builds animations from your content:
 
 ```bash
 # Explain a codebase
@@ -86,9 +90,18 @@ python main.py --topic "summarize this paper" --context paper.pdf
 
 # Use a repo, excluding lock files and build output
 python main.py --topic "visualize this" --context ./repo --context-ignore "*.lock" --context-ignore "dist/"
+
+# Ground the script in a web article
+python main.py --topic "explain this concept" --url https://en.wikipedia.org/wiki/...
+
+# Combine files and URLs
+python main.py --topic "explain my project" --context ./README.md --url https://example.com/blog-post
+
+# Obsidian vault page
+python main.py --topic "visualize my notes" --context ~/Documents/vault/page.md
 ```
 
-Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`).
+Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
 
 Before the pipeline starts, Chalkboard reports how many tokens the context uses:
 
@@ -98,13 +111,49 @@ Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
 
 If context exceeds 10k tokens you'll be prompted to confirm. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
 
-**Resuming with context:** `--context` is not stored in the checkpoint. Pass it again on resume to re-inject source material:
+**Resuming with context:** `--context` and `--url` are not stored in the checkpoint. Pass them again on resume to re-inject source material:
 
 ```bash
 python main.py --topic "..." --run-id <id> --context ./src
 ```
 
-**Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only needed for `.docx` files.
+**Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only for `.docx`. `pip install httpx beautifulsoup4` only for `--url`.
+
+---
+
+## Captions & chapter markers
+
+Every full render automatically produces:
+
+- **`captions.srt`** — subtitle file (one entry per script segment, cumulative timestamps)
+- **Chapter atoms embedded in `final.mp4`** — visible in QuickTime, VLC, and most players' chapter menus
+- **YouTube chapter list printed to stdout** — copy-paste into your video description
+
+```
+  Chapters:
+    0:00  A B-tree is a self-balancing search tree...
+    0:42  Each node can hold multiple keys and child...
+    1:18  Insertion works by finding the correct lea...
+```
+
+To also **burn subtitles into the video** (re-encodes, slower):
+
+```bash
+python main.py --topic "..." --burn-captions
+```
+
+---
+
+## Narration speed
+
+Adjust the speaking pace with `--speed` (default `1.0`):
+
+```bash
+python main.py --topic "..." --speed 1.25   # 25% faster
+python main.py --topic "..." --speed 0.85   # 15% slower
+```
+
+OpenAI TTS uses its native speed parameter (0.25–4.0). Kokoro and ElevenLabs are processed via ffmpeg `atempo` after generation. Either way, `segments.json` records the post-speed actual durations, so chapter and SRT timestamps are always accurate.
 
 ---
 
