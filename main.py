@@ -167,6 +167,70 @@ def _count_animations(scene_path: Path) -> int:
         return 0
 
 
+def _format_srt_time(seconds: float) -> str:
+    """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
+    ms = int(seconds * 1000)
+    h = ms // 3_600_000
+    ms %= 3_600_000
+    m = ms // 60_000
+    ms %= 60_000
+    s = ms // 1000
+    ms %= 1000
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _generate_caption_files(run_dir: Path) -> tuple[Path | None, Path | None]:
+    """Write captions.srt and chapters.txt (FFMETADATA1) from segments.json.
+    Prints YouTube-compatible chapter list to stdout.
+    Returns (srt_path, chapters_path), or (None, None) if segments.json missing/empty.
+    """
+    segments_path = run_dir / "segments.json"
+    if not segments_path.exists():
+        return None, None
+    segments = json.loads(segments_path.read_text())
+    if not segments:
+        return None, None
+
+    # SRT file
+    srt_path = run_dir / "captions.srt"
+    srt_lines: list[str] = []
+    t = 0.0
+    for i, seg in enumerate(segments, 1):
+        start = _format_srt_time(t)
+        t += seg["actual_duration_sec"]
+        end = _format_srt_time(t)
+        srt_lines.append(f"{i}\n{start} --> {end}\n{seg['text']}\n")
+    srt_path.write_text("\n".join(srt_lines), encoding="utf-8")
+
+    # FFMETADATA1 chapter file
+    chapters_path = run_dir / "chapters.txt"
+    meta_lines = [";FFMETADATA1\n"]
+    t_ms = 0
+    for seg in segments:
+        dur_ms = int(seg["actual_duration_sec"] * 1000)
+        raw = seg["text"]
+        title = (raw[:60].rstrip() + "...") if len(raw) > 60 else raw
+        meta_lines.append(
+            f"\n[CHAPTER]\nTIMEBASE=1/1000\n"
+            f"START={t_ms}\nEND={t_ms + dur_ms}\ntitle={title}\n"
+        )
+        t_ms += dur_ms
+    chapters_path.write_text("".join(meta_lines), encoding="utf-8")
+
+    # Print YouTube-compatible chapter list
+    print("\n  Chapters:")
+    t = 0.0
+    for seg in segments:
+        m = int(t // 60)
+        s = int(t % 60)
+        raw = seg["text"]
+        title = (raw[:60].rstrip() + "...") if len(raw) > 60 else raw
+        print(f"    {m}:{s:02d}  {title}")
+        t += seg["actual_duration_sec"]
+
+    return srt_path, chapters_path
+
+
 def _parse_manim_line(line: str) -> int | None:
     """Return animation number if line is a Manim CE progress line, else None."""
     m = re.match(r'Animation (\d+) :', line)
@@ -181,7 +245,7 @@ def _docker_render_cmd(run_id: str, output_dir: Path, preview: bool = False) -> 
     return cmd
 
 
-def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float) -> Path:
+def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, burn_captions: bool = False) -> Path:
     """Single render attempt. Raises RenderFailed on timeout or non-zero exit."""
     docker_cmd = _docker_render_cmd(run_id, output_dir)
 
@@ -232,20 +296,36 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float) -
     if not video_path.exists():
         raise RenderFailed(f"rendered video not found at {video_path}")
 
-    final_mp4 = output_dir / run_id / "final.mp4"
-    wav_path = output_dir / run_id / "voiceover.wav"
+    run_dir = output_dir / run_id
+    final_mp4 = run_dir / "final.mp4"
+    wav_path = run_dir / "voiceover.wav"
+
+    srt_path, chapters_path = _generate_caption_files(run_dir)
+
+    extra: list[str] = []
+    if chapters_path:
+        extra = ["-f", "ffmetadata", "-i", str(chapters_path), "-map_metadata", "2"]
+
+    if burn_captions and srt_path:
+        srt_esc = str(srt_path).replace("\\", "/").replace(":", "\\:")
+        cmd = ["ffmpeg", "-y",
+               "-i", str(video_path), "-i", str(wav_path), *extra,
+               "-vf", f"subtitles={srt_esc}",
+               "-c:v", "libx264", "-preset", "fast",
+               "-c:a", "aac", "-b:a", "128k", str(final_mp4)]
+    else:
+        cmd = ["ffmpeg", "-y",
+               "-i", str(video_path), "-i", str(wav_path), *extra,
+               "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", str(final_mp4)]
+
     try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(video_path), "-i", str(wav_path),
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", str(final_mp4)],
-            check=True, capture_output=True, timeout=120,
-        )
+        subprocess.run(cmd, check=True, capture_output=True, timeout=120)
     except subprocess.TimeoutExpired:
         raise RenderFailed("ffmpeg merge timed out after 120s")
     return final_mp4
 
 
-def _render(run_id: str, verbose: bool = False) -> Path:
+def _render(run_id: str, verbose: bool = False, burn_captions: bool = False) -> Path:
     output_dir = Path(OUTPUT_DIR).resolve()
     final_mp4 = output_dir / run_id / "final.mp4"
 
@@ -259,7 +339,7 @@ def _render(run_id: str, verbose: bool = False) -> Path:
 
     for attempt in range(1, 4):
         try:
-            return _render_once(run_id, output_dir, verbose, timeout)
+            return _render_once(run_id, output_dir, verbose, timeout, burn_captions=burn_captions)
         except RenderFailed as e:
             for d in ["media", "media_preview"]:
                 shutil.rmtree(output_dir / run_id / d, ignore_errors=True)
@@ -492,6 +572,10 @@ def main():
         "--qa-density", choices=["zero", "normal", "high"], default="normal",
         help="Visual QA frame sampling density: zero=skip, normal=1/30s (default), high=1/15s",
     )
+    parser.add_argument(
+        "--burn-captions", action="store_true",
+        help="Burn subtitles into video (re-encodes video; captions.srt is always written)",
+    )
     args = parser.parse_args()
 
     if args.verbose and args.preview:
@@ -538,7 +622,7 @@ def main():
         else:
             while True:
                 try:
-                    final = _render(thread_id, verbose=args.verbose)
+                    final = _render(thread_id, verbose=args.verbose, burn_captions=args.burn_captions)
                     print(f"\nDone → {final}")
                     _run_qa_loop(
                         thread_id, final,
