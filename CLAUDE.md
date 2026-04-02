@@ -324,7 +324,7 @@ pytest                    # run all tests
 pytest tests/test_graph.py  # specific file
 ```
 
-Tests mock the Anthropic client at the graph node level (`pipeline.graph.script_agent`, etc.), not at `anthropic.Anthropic`. Patching `anthropic.Anthropic` fails because the module reference is shared across imports.
+Graph-level tests mock the Anthropic client at the node level (`pipeline.graph.script_agent`, etc.), not at `anthropic.Anthropic`. Patching `anthropic.Anthropic` fails for graph nodes because the module reference is shared across imports. Exception: `_generate_quiz` in `main.py` imports `anthropic` inside the function body, so its tests can patch `anthropic.Anthropic` directly (see `tests/test_quiz.py`).
 
 Graph integration tests (`test_graph.py`) use `MemorySaver` (in-memory checkpointer) so they don't touch the filesystem.
 

@@ -119,13 +119,13 @@ Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
 
 If context exceeds 10k tokens you'll be prompted to confirm — pass `--yes` to skip this prompt for scripted or non-interactive runs. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
 
-**Resuming with context:** `--context` and `--url` are not stored in the checkpoint. Pass them again on resume to re-inject source material:
+**Resuming with context:** `--context`, `--url`, and `--github` are not stored in the checkpoint. Pass them again on resume to re-inject source material:
 
 ```bash
 python main.py --topic "..." --run-id <id> --context ./src
 ```
 
-**Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only for `.docx`. `pip install httpx beautifulsoup4` only for `--url`.
+**Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only for `.docx`. `pip install httpx beautifulsoup4` for `--url` and `--github`.
 
 ---
 
