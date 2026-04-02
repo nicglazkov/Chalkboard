@@ -59,6 +59,7 @@ That's it. The pipeline runs, renders the animation in Docker, and merges the vo
 | `--audience` | No | `intermediate` | Target audience: `beginner`, `intermediate`, `expert` |
 | `--tone` | No | `casual` | Narration tone: `casual`, `formal`, `socratic` |
 | `--theme` | No | `chalkboard` | Visual color theme: `chalkboard`, `light`, `colorful` |
+| `--template` | No | — | Animation template: `algorithm`, `code`, `compare` |
 | `--speed` | No | `1.0` | Narration speed multiplier (e.g. `1.25` for 25% faster). OpenAI: native (0.25–4.0). Kokoro/ElevenLabs: ffmpeg atempo. |
 | `--run-id` | No | auto | Resume a previous run using its ID |
 | `--preview` | No | off | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render |
@@ -126,6 +127,26 @@ python main.py --topic "..." --run-id <id> --context ./src
 ```
 
 **Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only for `.docx`. `pip install httpx beautifulsoup4` for `--url` and `--github`.
+
+---
+
+## Animation templates
+
+`--template` injects layout and visual convention guidance into the Manim code generator, producing more structured and appropriate animations for specific content types.
+
+| Template | Best for | Key visual pattern |
+|----------|----------|--------------------|
+| `algorithm` | Sorting, searching, graph traversal | Array cells + pointer arrows + step counter + explicit swap animations |
+| `code` | Code walkthroughs, implementation explainers | Manim `Code` object, incremental line reveal, callout annotations |
+| `compare` | A vs B trade-offs, technology comparisons | Two labeled columns, consistent color per side, summary row at end |
+
+```bash
+python main.py --topic "explain merge sort" --template algorithm
+python main.py --topic "walk through a binary search implementation" --template code
+python main.py --topic "SQL vs NoSQL trade-offs" --template compare
+```
+
+Templates compose freely with `--theme`, `--tone`, `--audience`, and `--speed`.
 
 ---
 

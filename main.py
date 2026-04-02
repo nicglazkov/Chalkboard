@@ -22,6 +22,7 @@ EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
 TONE_CHOICES = ["casual", "formal", "socratic"]
 THEME_CHOICES = ["chalkboard", "light", "colorful"]
+TEMPLATE_CHOICES = ["algorithm", "code", "compare"]
 DOCKER_IMAGE = "chalkboard-render"
 QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 
@@ -520,13 +521,14 @@ def _print_progress(event: dict) -> None:
 
 async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate",
               tone: str = "casual", theme: str = "chalkboard",
-              context_blocks=None, context_file_paths=None, speed: float = 1.0) -> None:
+              context_blocks=None, context_file_paths=None, speed: float = 1.0,
+              template: str | None = None) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
         graph = build_graph(checkpointer=checkpointer, context_blocks=context_blocks)
         config = {"configurable": {"thread_id": thread_id}}
-        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [], "speed": speed}
+        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [], "speed": speed, "template": template}
 
         while True:
             try:
@@ -657,6 +659,8 @@ def main():
                         help="Narration tone")
     parser.add_argument("--theme", choices=THEME_CHOICES, default=DEFAULT_THEME,
                         help="Visual color theme for the animation")
+    parser.add_argument("--template", choices=TEMPLATE_CHOICES, default=None,
+                        help="Animation template: algorithm, code, compare")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
@@ -748,7 +752,7 @@ def main():
         args.topic, args.effort, thread_id,
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
-        speed=args.speed,
+        speed=args.speed, template=args.template,
     ))
 
     if not args.no_render:

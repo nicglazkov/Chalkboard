@@ -25,6 +25,7 @@ def base_state() -> PipelineState:
         status="drafting",
         context_file_paths=[],
         speed=1.0,
+        template=None,
     )
 
 

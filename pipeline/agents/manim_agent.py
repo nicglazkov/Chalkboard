@@ -41,6 +41,54 @@ KNOWN API PITFALLS (v0.20.1):
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
+TEMPLATE_SPECS = {
+    "algorithm": (
+        "ANIMATION TEMPLATE — algorithm step-through:\n"
+        "Structure the scene as a series of named algorithm steps, one per narration segment.\n"
+        "Required visual elements:\n"
+        "- Array/list: represent elements as a row of RoundedRectangle cells (fill_color=\"#2E2E2E\",\n"
+        "  stroke_color=primary), each with a centered Text value label.\n"
+        "- Index pointers: use downward-pointing Triangle objects below the relevant cell, with a\n"
+        "  Text label (i, j, lo, hi, pivot, etc.) below the triangle. Keep buff ≥ 0.85 between\n"
+        "  pointer labels and any descriptive text below the array.\n"
+        "- Active/pivot element: fill with accent color; restore to primary when no longer active.\n"
+        "- Step counter: Text(\"Step N\") anchored to the top-right corner, updated each step with\n"
+        "  FadeOut/FadeIn or Transform.\n"
+        "- Swaps: animate both elements moving simultaneously — do not teleport.\n"
+        "Each narration segment corresponds to one discrete algorithm state shown visually."
+    ),
+    "code": (
+        "ANIMATION TEMPLATE — code walkthrough:\n"
+        "Structure the scene to reveal and annotate source code incrementally.\n"
+        "Required visual elements:\n"
+        "- Use Manim's Code object for syntax-highlighted source:\n"
+        "    Code(code=\"...\", language=\"python\", font_size=20, background=\"window\")\n"
+        "  Place it left-center or center of the frame.\n"
+        "- Reveal lines progressively: FadeIn on code.code[i] for individual lines\n"
+        "  (code.code is a VGroup of line objects, zero-indexed).\n"
+        "- Highlight the active line: code.code[i].animate.set_color(accent).\n"
+        "  Restore inactive lines to primary color when moving on.\n"
+        "- Callout: a short Text label (font_size ≤ 26) placed to the right of the highlighted\n"
+        "  line, FadeIn when the line is discussed, FadeOut before moving on.\n"
+        "- Animate complete line objects only — never animate individual characters within a line.\n"
+        "- Do NOT use Code.highlight_lines() — not a valid v0.20.1 API. Use set_color() instead."
+    ),
+    "compare": (
+        "ANIMATION TEMPLATE — side-by-side comparison (A vs B):\n"
+        "Structure the scene as two clearly labeled columns with a visual divider.\n"
+        "Required visual elements:\n"
+        "- Vertical divider: DashedLine from (ORIGIN + UP*3) to (ORIGIN + DOWN*3) at x=0.\n"
+        "- Left column (x center ≈ -3.5): option A — color all its elements with secondary.\n"
+        "- Right column (x center ≈ +3.5): option B — color all its elements with accent.\n"
+        "- Column headers: bold Text objects near the top of each column (y ≈ 2.8).\n"
+        "- Introduce paired traits together: animate left item then right item in the same step\n"
+        "  (LaggedStart or simultaneous FadeIn), so the viewer sees both sides of each point.\n"
+        "- End with a summary row or small table at the bottom highlighting the key trade-off.\n"
+        "- Hard constraint: left content must stay within x < -0.2; right content within x > 0.2.\n"
+        "  Never let elements from one column overlap the other or the divider."
+    ),
+}
+
 THEME_SPECS = {
     "chalkboard": (
         "COLOR THEME — chalkboard (dark background):\n"
@@ -89,6 +137,10 @@ async def manim_agent(state: PipelineState, client=None, context_blocks=None) ->
         f"Full script for context:\n{state['script']}\n\n"
         f"{THEME_SPECS[state.get('theme', 'chalkboard')]}"
     )
+
+    template = state.get("template")
+    if template and template in TEMPLATE_SPECS:
+        user_msg += f"\n\n{TEMPLATE_SPECS[template]}"
 
     if state.get("code_feedback"):
         user_msg += f"\n\nPrevious attempt had issues. Rewrite the scene fully, addressing:\n{state['code_feedback']}"
