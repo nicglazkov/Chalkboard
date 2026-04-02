@@ -40,6 +40,35 @@ KNOWN API PITFALLS (v0.20.1):
 - Never animate a label's position relative to a pointer using j_ptr.copy().next_to(...) inside .animate — .animate captures positions before the frame; instead pass the destination coordinate directly: j_label.animate.move_to(lom_boxes[j_pos].get_top() + UP * 0.55)
 - Code object (v0.20.1): use `code_string=` NOT `code=`, and `paragraph_config={"font_size": N}` NOT `font_size=N` — both wrong kwargs raise TypeError. Use `Code(code_string="...", language="python", background="window", paragraph_config={"font_size": 22})`. Access lines via `code_obj.code_lines[i]` NOT `code_obj.code[i]` — the `.code` attribute does not exist in v0.20.1.
 
+LAYOUT RULES — required for every scene:
+
+Canvas: x ∈ [−7.1, +7.1], y ∈ [−4.0, +4.0]. Use these named anchor points:
+  title_anchor  = UP * 3.5               # persistent title — full width
+  left_anchor   = LEFT * 3.5 + UP * 0.5  # code, arrays, diagrams (left half)
+  right_anchor  = RIGHT * 3.5 + UP * 0.5 # callouts, annotations (right half)
+  center_anchor = ORIGIN                  # full-width single element
+  bottom_anchor = DOWN * 3.5             # step counter, status, one-line warnings
+
+Placement rules:
+1. Anchor primary elements with move_to(zone_anchor) or to_edge(). Avoid chaining
+   next_to() through more than 2 elements from a fixed point — coordinate drift
+   accumulates and causes elements to land in unexpected positions.
+2. When LEFT and RIGHT zones are both populated, keep left content within x < −0.5
+   and right content within x > +0.5. Never let the two zones overlap.
+
+CLEAN SLATE rule — mandatory at every segment boundary:
+3. Track all mobjects added in a segment by appending them to a list as you create them:
+     seg_items = []
+     elem = Text(...); self.play(FadeIn(elem)); seg_items.append(elem)
+4. At the start of every segment after the first, BEFORE introducing any new content:
+     self.play(*[FadeOut(m) for m in seg_items], run_time=0.5)
+     seg_items = []
+5. The persistent title is NEVER added to seg_items.
+6. A multi-segment element (e.g. a code block spanning segments 1–3) is excluded from
+   seg_items; FadeOut it explicitly at the segment where it is no longer needed.
+7. Leaving mobjects from a prior segment on screen while starting a new segment is the
+   primary cause of visual overlap — treat this rule as strictly as the self.wait(0) guard.
+
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
 TEMPLATE_SPECS = {

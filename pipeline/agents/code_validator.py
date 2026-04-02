@@ -46,7 +46,12 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"- Code(code_string=\"...\", language=\"python\", background=\"window\", paragraph_config={{\"font_size\": N}}) — correct constructor\n"
         f"- code_obj.code_lines[i] — correct way to access the i-th line (VGroup); .code attribute does not exist\n"
         f"- VGroup(*self.mobjects) is invalid if non-VMobjects present; *[FadeOut(m) for m in self.mobjects] is correct\n"
-        f"- self.wait(0) is invalid; guard with: _r = max(0.0, x); if _r > 0: self.wait(_r)"
+        f"- self.wait(0) is invalid; guard with: _r = max(0.0, x); if _r > 0: self.wait(_r)\n\n"
+        f"Cleanup check: For each segment block after the first (marked by '# ── Segment N:' "
+        f"comments where N > 0), verify the code clears the previous segment's tracked mobjects "
+        f"via self.play(*[FadeOut(m) for m in seg_items], ...) BEFORE introducing any new content. "
+        f"If any segment N > 0 introduces new animations without first fading out the prior "
+        f"segment's elements, return needs_revision."
     )
 
     def _call():

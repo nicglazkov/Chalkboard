@@ -167,6 +167,44 @@ When Manim rendering fails, read the traceback from `docker run` output. Most fa
 
 ---
 
+## Layout discipline (overlap prevention)
+
+`manim_agent`'s system prompt includes a **LAYOUT RULES** section with two complementary requirements. These address the two root causes of element overlap in generated scenes:
+
+### Fix A — Coordinate zones
+
+The canvas is 14.22 wide × 8.0 tall. Four named anchor points are defined in the prompt:
+
+| Zone | Anchor | Purpose |
+|------|--------|---------|
+| `title_anchor` | `(0, +3.5)` | Persistent scene title, full width |
+| `left_anchor` | `(−3.5, +0.5)` | Code blocks, arrays, diagrams |
+| `right_anchor` | `(+3.5, +0.5)` | Callouts, annotations, right column |
+| `center_anchor` | `(0, 0)` | Full-width single element |
+| `bottom_anchor` | `(0, −3.5)` | Step counter, warnings, one-liners |
+
+Rules in prompt: place primary elements with `move_to(zone_anchor)`. Limit `next_to()` chains to ≤ 2 levels from a fixed anchor (drift compounds). LEFT and RIGHT zones must not occupy the same y-range simultaneously.
+
+### Fix B — Clean slate between segments
+
+The prompt requires `seg_items` tracking and mandatory cleanup at every segment boundary:
+
+```python
+seg_items = []
+elem = Text(...); self.play(FadeIn(elem)); seg_items.append(elem)
+# ... end of segment N ...
+
+# At start of segment N+1, BEFORE any new content:
+self.play(*[FadeOut(m) for m in seg_items], run_time=0.5)
+seg_items = []
+```
+
+The persistent title is never added to `seg_items`. Multi-segment elements (e.g. a code block spanning segments 1–3) are excluded and FadeOut-ed manually when no longer needed.
+
+`code_validator` also checks: for each `# ── Segment N:` block (N > 0), the code must perform a FadeOut of prior segment elements before introducing new content. Missing cleanup triggers `needs_revision`.
+
+---
+
 ## Timeout & retry infrastructure
 
 All indefinite hang points are protected. Two mechanisms:
