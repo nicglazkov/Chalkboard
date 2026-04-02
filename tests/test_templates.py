@@ -65,7 +65,8 @@ def test_code_template_injected(base_state):
     base_state["template"] = "code"
     content = _run_agent(base_state)
     assert "Code" in content
-    assert "code.code" in content
+    assert "code_lines" in content   # correct v0.20.1 API
+    assert "code_string" in content  # correct constructor kwarg
 
 
 def test_compare_template_injected(base_state):

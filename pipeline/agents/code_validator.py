@@ -41,7 +41,12 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"Is the class named ChalkboardScene?\n\n"
         f"Sync check: The scene must load _seg_data from (Path(__file__).parent / \"segments.json\") "
         f"and use _d[i] (not hardcoded float literals) for all self.wait() calls. "
-        f"If any self.wait() call uses a hardcoded float literal, return needs_revision."
+        f"If any self.wait() call uses a hardcoded float literal, return needs_revision.\n\n"
+        f"CONFIRMED CORRECT v0.20.1 APIs (do NOT flag these as errors):\n"
+        f"- Code(code_string=\"...\", language=\"python\", background=\"window\", paragraph_config={{\"font_size\": N}}) — correct constructor\n"
+        f"- code_obj.code_lines[i] — correct way to access the i-th line (VGroup); .code attribute does not exist\n"
+        f"- VGroup(*self.mobjects) is invalid if non-VMobjects present; *[FadeOut(m) for m in self.mobjects] is correct\n"
+        f"- self.wait(0) is invalid; guard with: _r = max(0.0, x); if _r > 0: self.wait(_r)"
     )
 
     def _call():

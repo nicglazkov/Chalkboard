@@ -38,6 +38,7 @@ KNOWN API PITFALLS (v0.20.1):
 - Segment numbers and _d indices are both 0-based — Segment 0 → _d[0], Segment 1 → _d[1]
 - When pointer labels (i, j, L, R triangles + text) AND a descriptive text line both appear below an array, use at least buff=0.8 between the array and the descriptive text so pointers don't overlap it — e.g. desc.next_to(arr, DOWN, buff=0.85)
 - Never animate a label's position relative to a pointer using j_ptr.copy().next_to(...) inside .animate — .animate captures positions before the frame; instead pass the destination coordinate directly: j_label.animate.move_to(lom_boxes[j_pos].get_top() + UP * 0.55)
+- Code object (v0.20.1): use `code_string=` NOT `code=`, and `paragraph_config={"font_size": N}` NOT `font_size=N` — both wrong kwargs raise TypeError. Use `Code(code_string="...", language="python", background="window", paragraph_config={"font_size": 22})`. Access lines via `code_obj.code_lines[i]` NOT `code_obj.code[i]` — the `.code` attribute does not exist in v0.20.1.
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
@@ -61,12 +62,16 @@ TEMPLATE_SPECS = {
         "ANIMATION TEMPLATE — code walkthrough:\n"
         "Structure the scene to reveal and annotate source code incrementally.\n"
         "Required visual elements:\n"
-        "- Use Manim's Code object for syntax-highlighted source:\n"
-        "    Code(code=\"...\", language=\"python\", font_size=20, background=\"window\")\n"
+        "- Use Manim's Code object for syntax-highlighted source (v0.20.1 API):\n"
+        "    Code(code_string=\"...\", language=\"python\", background=\"window\",\n"
+        "         paragraph_config={\"font_size\": 22})\n"
+        "  CRITICAL: use code_string= NOT code=, and paragraph_config={\"font_size\":N} NOT font_size=N.\n"
+        "  Both wrong kwargs raise TypeError.\n"
         "  Place it left-center or center of the frame.\n"
-        "- Reveal lines progressively: FadeIn on code.code[i] for individual lines\n"
-        "  (code.code is a VGroup of line objects, zero-indexed).\n"
-        "- Highlight the active line: code.code[i].animate.set_color(accent).\n"
+        "- Access individual lines via code_obj.code_lines[i] (zero-indexed VGroup per line).\n"
+        "  CRITICAL: the attribute is code_lines, NOT code. code_obj.code does not exist.\n"
+        "- Reveal lines progressively: FadeIn(code_obj.code_lines[i]) for individual lines.\n"
+        "- Highlight the active line: code_obj.code_lines[i].animate.set_color(accent).\n"
         "  Restore inactive lines to primary color when moving on.\n"
         "- Callout: a short Text label (font_size ≤ 26) placed to the right of the highlighted\n"
         "  line, FadeIn when the line is discussed, FadeOut before moving on.\n"

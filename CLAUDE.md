@@ -160,6 +160,7 @@ These are baked into `manim_agent`'s system prompt. When Claude generates code t
 - Always pass `run_time` as a keyword arg: `self.play(anim, run_time=1.0)`
 - **Pointer labels + descriptive text below an array**: use `buff=0.85` or more so pointer triangles/labels don't overlap the description line
 - **Animating a label to track a pointer**: never use `obj.copy().next_to(...)` inside `.animate` — `.animate` captures positions before the frame; use `boxes[i].get_top() + UP * 0.55` or similar absolute offsets instead
+- **`Code` object (v0.20.1)**: kwarg is `code_string=` not `code=`, and font size goes in `paragraph_config={"font_size": N}` not `font_size=N` — both wrong kwargs raise `TypeError`. Correct form: `Code(code_string="...", language="python", background="window", paragraph_config={"font_size": 22})`. Access individual lines via `code_obj.code_lines[i]` (zero-indexed `VGroup`) — `code_obj.code` does not exist in v0.20.1.
 - **`self.wait(0)` crashes** — Manim requires `duration > 0`. Never call `self.wait(max(0.0, ...))` directly. Instead: `_r = max(0.0, _d[i] - X); if _r > 0: self.wait(_r)`. This matters especially when `--speed > 1.0` shortens segment durations below the animation time budget.
 
 When Manim rendering fails, read the traceback from `docker run` output. Most failures are API misuse in the generated code. Patch `output/<run_id>/scene.py` to verify the fix, then add the pattern to `manim_agent.py`'s system prompt.
