@@ -55,6 +55,16 @@ Placement rules:
    accumulates and causes elements to land in unexpected positions.
 2. When LEFT and RIGHT zones are both populated, keep left content within x < −0.5
    and right content within x > +0.5. Never let the two zones overlap.
+   BOUNDING BOX CHECK — required before placing any horizontal group:
+   For N elements of width W placed side by side with leftmost center at x_0:
+     right_edge = x_0 + (N − 1) × W + W/2  (or equivalently x_0 + (N − 0.5) × W)
+   This right_edge must be < −0.5 for LEFT zone content.
+   Example: 3 columns, W=1.9, leftmost center x_0=−3.5 → right_edge = −3.5 + 2.5×1.9 = 1.25 — WRONG.
+   Fix: reduce W to ≤ 1.3 (right_edge = −3.5 + 2.5×1.3 = −0.25, still marginal) or
+   shift center left to x_0 = −4.5 (right_edge = −4.5 + 2.5×1.9 = 0.25 — still too wide),
+   or use at most 2 columns in the left zone.
+   Rule of thumb: with center x_0 = −3.5, max total width for left zone = 3.0 units
+   (e.g. 3 cols × W=0.9, or 2 cols × W=1.4).
 
 CLEAN SLATE rule — mandatory at every segment boundary:
 3. Track all mobjects added in a segment by appending them to a list as you create them:
@@ -118,8 +128,10 @@ TEMPLATE_SPECS = {
         "- Introduce paired traits together: animate left item then right item in the same step\n"
         "  (LaggedStart or simultaneous FadeIn), so the viewer sees both sides of each point.\n"
         "- End with a summary row or small table at the bottom highlighting the key trade-off.\n"
-        "- Hard constraint: left content must stay within x < -0.2; right content within x > 0.2.\n"
-        "  Never let elements from one column overlap the other or the divider."
+        "- Hard constraint: left content must stay within x < -0.5; right content within x > +0.5.\n"
+        "  Never let elements from one column overlap the other or the divider.\n"
+        "  For tables/grids in the left column: verify right_edge = x_0 + (N − 0.5) × W < −0.5\n"
+        "  before committing to column count and width (see BOUNDING BOX CHECK in LAYOUT RULES)."
     ),
 }
 

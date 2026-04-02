@@ -185,6 +185,8 @@ The canvas is 14.22 wide × 8.0 tall. Four named anchor points are defined in th
 
 Rules in prompt: place primary elements with `move_to(zone_anchor)`. Limit `next_to()` chains to ≤ 2 levels from a fixed anchor (drift compounds). LEFT and RIGHT zones must not occupy the same y-range simultaneously.
 
+**Bounding box rule for horizontal groups:** For N elements of width W with leftmost center at x_0: `right_edge = x_0 + (N − 0.5) × W`. LEFT zone requires `right_edge < −0.5`. Example: 3-column table, W=1.9, x_0=−3.5 → right_edge=1.25 — wrong. At x_0=−3.5, max total table width is 3.0 units (e.g. 2 cols × W=1.4). `code_validator` checks this whenever both left- and right-zone elements appear in the same segment.
+
 ### Fix B — Clean slate between segments
 
 The prompt requires `seg_items` tracking and mandatory cleanup at every segment boundary:

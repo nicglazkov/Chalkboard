@@ -51,7 +51,12 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"comments where N > 0), verify the code clears the previous segment's tracked mobjects "
         f"via self.play(*[FadeOut(m) for m in seg_items], ...) BEFORE introducing any new content. "
         f"If any segment N > 0 introduces new animations without first fading out the prior "
-        f"segment's elements, return needs_revision."
+        f"segment's elements, return needs_revision.\n\n"
+        f"Bounding box check: for any multi-column table or horizontal row of N rectangles/cards "
+        f"with individual width W, where the leftmost element center is at x_0: "
+        f"right_edge = x_0 + (N − 0.5) × W. If this right_edge > −0.5 and both left-zone and "
+        f"right-zone elements are present in the same segment, the left-zone element overflows "
+        f"into the right zone and causes overlap — return needs_revision."
     )
 
     def _call():
