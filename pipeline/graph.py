@@ -4,6 +4,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from config import CHECKPOINT_DB
 from pipeline.state import PipelineState
+from pipeline.agents.research_agent import research_agent
 from pipeline.agents.script_agent import script_agent
 from pipeline.agents.fact_validator import fact_validator
 from pipeline.agents.manim_agent import manim_agent
@@ -26,6 +27,12 @@ def _after_code_validator(state: PipelineState) -> str:
     if state["code_attempts"] >= 3:
         return "escalate_to_user"
     return "manim_agent"
+
+
+def _after_init(state: PipelineState) -> str:
+    if state.get("effort_level") == "high":
+        return "research_agent"
+    return "script_agent"
 
 
 def _after_escalate(state: PipelineState) -> str:
@@ -61,6 +68,8 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "context_file_paths": state.get("context_file_paths", []),
         "speed": state.get("speed", 1.0),
         "template": state.get("template"),
+        "research_brief": state.get("research_brief"),
+        "research_sources": state.get("research_sources", []),
     }
 
 
@@ -78,6 +87,7 @@ def build_graph(checkpointer=None, context_blocks=None) -> StateGraph:
     builder = StateGraph(PipelineState)
 
     builder.add_node("init", _init_state)
+    builder.add_node("research_agent", research_agent)
     builder.add_node("script_agent", _script_agent)
     builder.add_node("fact_validator", fact_validator)
     builder.add_node("manim_agent", _manim_agent)
@@ -86,7 +96,8 @@ def build_graph(checkpointer=None, context_blocks=None) -> StateGraph:
     builder.add_node("render_trigger", render_trigger)
 
     builder.add_edge(START, "init")
-    builder.add_edge("init", "script_agent")
+    builder.add_conditional_edges("init", _after_init, ["research_agent", "script_agent"])
+    builder.add_edge("research_agent", "script_agent")
     builder.add_edge("script_agent", "fact_validator")
     builder.add_conditional_edges("fact_validator", _after_fact_validator,
         ["script_agent", "manim_agent", "escalate_to_user"])

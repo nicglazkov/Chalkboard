@@ -144,3 +144,93 @@ def test_graph_escalates_after_max_retries(tmp_path):
 
     assert result["status"] == "failed"
     assert call_counts["fact"] == 3  # ran exactly 3 times before escalation
+
+
+def test_high_effort_routes_through_research_agent(tmp_path):
+    """With effort_level=high, graph must pass through research_agent before script_agent."""
+    visited = []
+
+    async def mock_research_agent(state, **kw):
+        visited.append("research_agent")
+        return {"research_brief": "Facts about B-trees.", "research_sources": []}
+
+    async def mock_script_agent(state, **kw):
+        visited.append("script_agent")
+        return _make_script_state()
+
+    async def mock_fact_validator(state, **kw):
+        return _make_approved_state()
+
+    async def mock_manim_agent(state, **kw):
+        return _make_manim_state()
+
+    async def mock_code_validator(state, **kw):
+        return _make_code_approved_state()
+
+    async def mock_tts(segments, path, speed=1.0):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+        return path, [2.0]
+
+    with patch("pipeline.graph.research_agent", new=mock_research_agent), \
+         patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-research-routing"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "explain B-trees", "effort_level": "high"},
+            config=config,
+        ))
+
+    assert result["status"] == "approved"
+    assert visited.index("research_agent") < visited.index("script_agent")
+
+
+def test_medium_effort_skips_research_agent(tmp_path):
+    """With effort_level=medium, graph goes directly to script_agent."""
+    visited = []
+
+    async def mock_research_agent(state, **kw):
+        visited.append("research_agent")
+        return {"research_brief": "should not be called", "research_sources": []}
+
+    async def mock_script_agent(state, **kw):
+        visited.append("script_agent")
+        return _make_script_state()
+
+    async def mock_fact_validator(state, **kw):
+        return _make_approved_state()
+
+    async def mock_manim_agent(state, **kw):
+        return _make_manim_state()
+
+    async def mock_code_validator(state, **kw):
+        return _make_code_approved_state()
+
+    async def mock_tts(segments, path, speed=1.0):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+        return path, [2.0]
+
+    with patch("pipeline.graph.research_agent", new=mock_research_agent), \
+         patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-skip-research"}}
+        asyncio.run(graph.ainvoke(
+            {"topic": "explain B-trees", "effort_level": "medium"},
+            config=config,
+        ))
+
+    assert "research_agent" not in visited
+    assert "script_agent" in visited
