@@ -85,3 +85,30 @@ def test_run_job_sets_status_failed_on_exception(tmp_path):
 
     assert job.status == "failed"
     assert "pipeline exploded" in job.error
+
+
+def test_job_store_create_accepts_new_fields():
+    store = JobStore()
+    job = store.create(
+        topic="test", effort="low", audience="intermediate",
+        tone="casual", theme="chalkboard", template=None, speed=1.0,
+        burn_captions=True, quiz=True,
+        urls=["https://example.com"], github=["owner/repo"],
+        qa_density="high",
+    )
+    assert job.burn_captions is True
+    assert job.quiz is True
+    assert job.urls == ["https://example.com"]
+    assert job.github == ["owner/repo"]
+    assert job.qa_density == "high"
+
+
+def test_job_store_create_new_fields_default():
+    store = JobStore()
+    job = store.create(topic="test", effort="low", audience="intermediate",
+                       tone="casual", theme="chalkboard", template=None, speed=1.0)
+    assert job.burn_captions is False
+    assert job.quiz is False
+    assert job.urls == []
+    assert job.github == []
+    assert job.qa_density == "normal"

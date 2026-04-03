@@ -12,6 +12,11 @@ class CreateJobRequest(BaseModel):
     theme: Literal["chalkboard", "light", "colorful"] = "chalkboard"
     template: str | None = None
     speed: float = 1.0
+    burn_captions: bool = False
+    quiz: bool = False
+    urls: list[str] = []
+    github: list[str] = []
+    qa_density: Literal["zero", "normal", "high"] = "normal"
 
 
 class JobResponse(BaseModel):

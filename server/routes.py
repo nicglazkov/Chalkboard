@@ -29,6 +29,8 @@ def make_router(store: JobStore) -> APIRouter:
         job = store.create(
             topic=req.topic, effort=req.effort, audience=req.audience,
             tone=req.tone, theme=req.theme, template=req.template, speed=req.speed,
+            burn_captions=req.burn_captions, quiz=req.quiz,
+            urls=req.urls, github=req.github, qa_density=req.qa_density,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         asyncio.create_task(run_job(job, output_dir))

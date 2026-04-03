@@ -20,6 +20,11 @@ class Job:
     theme: str
     template: str | None
     speed: float
+    burn_captions: bool = False
+    quiz: bool = False
+    urls: list[str] = field(default_factory=list)
+    github: list[str] = field(default_factory=list)
+    qa_density: str = "normal"
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
     error: str | None = None
@@ -46,10 +51,16 @@ class JobStore:
         self._jobs: dict[str, Job] = {}
 
     def create(self, topic: str, effort: str, audience: str, tone: str,
-               theme: str, template: str | None, speed: float) -> Job:
+               theme: str, template: str | None, speed: float,
+               burn_captions: bool = False, quiz: bool = False,
+               urls: list[str] | None = None, github: list[str] | None = None,
+               qa_density: str = "normal") -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
-                  tone=tone, theme=theme, template=template, speed=speed)
+                  tone=tone, theme=theme, template=template, speed=speed,
+                  burn_captions=burn_captions, quiz=quiz,
+                  urls=urls or [], github=github or [],
+                  qa_density=qa_density)
         self._jobs[job_id] = job
         return job
 
