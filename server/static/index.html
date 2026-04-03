@@ -105,7 +105,7 @@
 
     textarea, input[type="text"], select {
       width: 100%;
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
       font-family: 'Lora', Georgia, serif;
@@ -119,6 +119,7 @@
     }
 
     textarea {
+      background: var(--bg);
       resize: vertical;
       min-height: 80px;
       line-height: 1.5;
@@ -436,6 +437,10 @@
       stagesList.innerHTML = '';
       downloadsList.innerHTML = '';
       resultVideo.src = '';
+      resultVideo.style.display = 'block';
+      // Remove any no-video note from a prior run
+      const prevNote = resultPanel.querySelector('.no-video-note');
+      if (prevNote) prevNote.remove();
       stageEls = {};
       seenStages = [];
     }
@@ -518,7 +523,19 @@
 
       // Show video + downloads
       const outputFiles = job.output_files || [];
-      resultVideo.src = `/api/jobs/${jobId}/files/final.mp4`;
+
+      if (outputFiles.includes('final.mp4')) {
+        resultVideo.src = `/api/jobs/${jobId}/files/final.mp4`;
+        resultVideo.style.display = 'block';
+      } else {
+        resultVideo.src = '';
+        resultVideo.style.display = 'none';
+        const note = document.createElement('p');
+        note.className = 'no-video-note';
+        note.style.cssText = 'font-family: "DM Mono", monospace; font-size: 0.8rem; color: var(--muted); margin-bottom: 1.25rem;';
+        note.textContent = 'Job completed (no video \u2014 pipeline output preserved)';
+        resultPanel.insertBefore(note, downloadsList);
+      }
 
       downloadsList.innerHTML = '';
       for (const fname of DOWNLOADABLE) {
@@ -555,8 +572,7 @@
 
       es.onerror = () => {
         es.close();
-        showError('Lost connection to the server. The job may still be running.');
-        submitBtn.disabled = false;
+        finalizeJob(jobId);
       };
     }
 
