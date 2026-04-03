@@ -5,7 +5,7 @@
 Turn any topic into a narrated, animated explainer video — fully automated.
 
 ```
-topic → script → fact-check → Manim animation → code review → voiceover → final.mp4
+topic → [research] → script → fact-check → Manim animation → code review → voiceover → final.mp4
 ```
 
 Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic; when it gets stuck it asks you for guidance.
@@ -242,7 +242,7 @@ Set `TTS_BACKEND` in your `.env` file. Default is `kokoro`.
 | ------------------ | --------------------------- | -------------- | -------- |
 | `low`              | Light — obvious errors only | Never          | 3–4      |
 | `medium` (default) | Spot-check key claims       | With approval  | 4–6      |
-| `high`             | Thorough                    | Always enabled | 5–8      |
+| `high`             | Thorough                    | Via research_agent (pre-script web research) | 5–8      |
 
 ---
 
@@ -299,7 +299,7 @@ pytest
 
 ```
 pipeline/
-  agents/         # script_agent, fact_validator, manim_agent, code_validator, orchestrator
+  agents/         # research_agent, script_agent, fact_validator, manim_agent, code_validator, orchestrator
   tts/            # kokoro, openai, elevenlabs backends
   context.py      # collect_files, load_context_blocks, fetch_url_blocks, measure_context
   graph.py        # LangGraph state machine
