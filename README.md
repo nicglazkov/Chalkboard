@@ -40,11 +40,18 @@ OPENAI_API_KEY=sk-...       # if using TTS_BACKEND=openai
 
 ### 3. Run
 
+**CLI:**
 ```bash
 python main.py --topic "explain how B-trees work" --effort medium
 ```
 
-That's it. The pipeline runs, renders the animation in Docker, and merges the voiceover — outputting `output/<run-id>/final.mp4`.
+**Web UI:**
+```bash
+python run_server.py
+# Open http://localhost:8000
+```
+
+Either way, the pipeline runs, renders the animation in Docker, and merges the voiceover — outputting `output/<run-id>/final.mp4`.
 
 > **First run only:** Docker will build the render image automatically (~30s). Subsequent runs use the cached image.
 
