@@ -1,9 +1,13 @@
 # server/jobs.py
 from __future__ import annotations
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
+
+from main import run as _pipeline_run
 
 
 @dataclass
@@ -54,3 +58,58 @@ class JobStore:
 
     def list(self) -> list[Job]:
         return list(self._jobs.values())
+
+
+# Re-export for mocking in tests
+run = _pipeline_run
+
+
+async def _do_render(run_id: str, output_dir: Path, verbose: bool = False) -> Path | None:
+    """Run Docker render. Returns path to final.mp4 or None on failure."""
+    from main import _ensure_docker_image, _render, RenderFailed
+    try:
+        await asyncio.to_thread(_ensure_docker_image)
+        final_mp4 = await asyncio.to_thread(_render, run_id, verbose)
+        return final_mp4 if final_mp4.exists() else None
+    except RenderFailed:
+        return None
+
+
+async def run_job(job: Job, output_dir: Path) -> None:
+    """Execute the full pipeline + render for a job. Updates job.status in place."""
+    job.status = "running"
+
+    def _on_progress(event: dict) -> None:
+        for node_name, updates in event.items():
+            if node_name == "__end__":
+                continue
+            job.append_event({"node": node_name, "updates": updates})
+
+    try:
+        await run(
+            topic=job.topic,
+            effort=job.effort,
+            thread_id=job.id,
+            audience=job.audience,
+            tone=job.tone,
+            theme=job.theme,
+            speed=job.speed,
+            template=job.template,
+            on_progress=_on_progress,
+            interactive=False,
+        )
+
+        await _do_render(job.id, output_dir / job.id)
+
+        # Collect output files
+        run_dir = output_dir / job.id
+        if run_dir.exists():
+            job.output_files = [
+                f.name for f in run_dir.iterdir()
+                if f.is_file() and f.suffix in (".mp4", ".srt", ".json", ".txt", ".py")
+            ]
+
+        job.status = "completed"
+    except Exception as e:
+        job.status = "failed"
+        job.error = str(e)
