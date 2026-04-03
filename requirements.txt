@@ -13,6 +13,9 @@ pathspec
 python-docx
 httpx
 beautifulsoup4
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+sse-starlette>=1.8.0
 # Optional TTS backends (uncomment as needed):
 openai
 # elevenlabs
