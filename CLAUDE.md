@@ -12,6 +12,7 @@ Chalkboard takes a topic string and produces a narrated Manim animation. The pip
 main.py
   └─ LangGraph pipeline (pipeline/graph.py)
        ├─ init              — normalize state, set run_id
+       ├─ research_agent    — (effort=high only) web research brief
        ├─ script_agent      — Claude writes narration script
        ├─ fact_validator    — Claude fact-checks the script
        ├─ manim_agent       — Claude writes Manim scene code
@@ -78,6 +79,8 @@ main.py               CLI entry point, async graph runner
 | `context_file_paths` | list[str] | Paths of loaded context files; empty list if none. Informational only — never read by agents. |
 | `speed` | float | Narration speed multiplier (default `1.0`). Passed to TTS backend. |
 | `template` | str \| None | Animation template (`"algorithm"`, `"code"`, `"compare"`); `None` = no template. |
+| `research_brief` | str \| None | Research brief from `research_agent`; `None` if not yet run or effort ≠ high |
+| `research_sources` | list[str] | URLs/citations from `research_agent`; empty list if not yet run |
 | `status` | str | `"drafting"` / `"validating"` / `"approved"` / `"failed"` |
 
 ### Critical invariant: None = approved
@@ -115,6 +118,15 @@ def _after_code_validator(state):
 All agents use Claude with `output_config` JSON schema (structured outputs). The schema must have `"additionalProperties": false` on **every nested object**, not just the top level — the API rejects schemas that omit this on nested objects.
 
 All four agents are `async def` and wrap their `messages.create()` call with `api_call_with_retry` from `pipeline/retry.py`. LangGraph awaits async nodes directly.
+
+### research_agent
+- Model: `CLAUDE_MODEL`
+- `max_tokens`: 2048
+- Timeout: `TIMEOUT_RESEARCH_AGENT` = 120s
+- Output: `{"research_brief": str, "sources": list[str]}`
+- Only runs when `effort_level == "high"` — routed via `_after_init` conditional edge
+- Uses `web_search_20250305` tool to gather facts before scripting
+- When present, `research_brief` is injected into `script_agent`'s user message and `script_agent`'s own web search is disabled
 
 ### script_agent
 - Model: `CLAUDE_MODEL` (claude-sonnet-4-6)
@@ -224,6 +236,7 @@ Uses `threading.Timer` to call `process.kill()` after `timeout` seconds. The std
 | Constant | Value | Used by |
 |----------|-------|---------|
 | `TIMEOUT_SCRIPT_AGENT` | 120s | script_agent |
+| `TIMEOUT_RESEARCH_AGENT` | 120s | research_agent |
 | `TIMEOUT_FACT_VALIDATOR` | 60s | fact_validator |
 | `TIMEOUT_MANIM_AGENT` | 180s | manim_agent |
 | `TIMEOUT_CODE_VALIDATOR` | 60s | code_validator |
