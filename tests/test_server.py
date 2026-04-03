@@ -58,3 +58,12 @@ def test_get_file_returns_404_for_missing_file(client, tmp_path):
     with patch("server.routes.OUTPUT_DIR", str(tmp_path)):
         resp = tc.get(f"/api/jobs/{job.id}/files/final.mp4")
     assert resp.status_code == 404
+
+
+def test_get_file_rejects_path_traversal(client, tmp_path):
+    tc, store = client
+    job = store.create(topic="test", effort="low", audience="intermediate",
+                       tone="casual", theme="chalkboard", template=None, speed=1.0)
+    with patch("server.routes.OUTPUT_DIR", str(tmp_path)):
+        resp = tc.get(f"/api/jobs/{job.id}/files/../../etc/passwd")
+    assert resp.status_code == 404

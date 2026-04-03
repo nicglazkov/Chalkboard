@@ -98,7 +98,9 @@ async def run_job(job: Job, output_dir: Path) -> None:
             interactive=False,
         )
 
-        await _do_render(job.id)
+        final_mp4 = await _do_render(job.id)
+        if final_mp4 is None:
+            job.error = "render failed; pipeline output preserved"
 
         # Collect output files
         run_dir = output_dir / job.id
