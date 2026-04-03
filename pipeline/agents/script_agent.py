@@ -41,6 +41,13 @@ def _build_user_message(state: PipelineState) -> str:
     msg = f"Topic: {topic}\nEffort level: {effort}"
     msg += f"\n{AUDIENCE_INSTRUCTIONS[state.get('audience', 'intermediate')]}"
     msg += f"\n{TONE_INSTRUCTIONS[state.get('tone', 'casual')]}"
+
+    if state.get("research_brief"):
+        msg += f"\n\nResearch brief (ground your script in these facts):\n{state['research_brief']}"
+        if state.get("research_sources"):
+            sources = "\n".join(f"  - {s}" for s in state["research_sources"])
+            msg += f"\n\nSources consulted:\n{sources}"
+
     if feedback:
         msg += f"\n\nPrevious attempt had issues. Please rewrite the script fully, addressing this feedback:\n{feedback}"
     if web_approved:
@@ -57,7 +64,8 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
         client = anthropic.Anthropic(**kwargs)
 
     tools = []
-    if state.get("user_approved_search") or state["effort_level"] == "high":
+    # Skip web_search if research_agent already provided a brief (effort=high path)
+    if (state.get("user_approved_search") or state["effort_level"] == "high") and not state.get("research_brief"):
         tools = [{"type": "web_search_20250305", "name": "web_search"}]
 
     if context_blocks:

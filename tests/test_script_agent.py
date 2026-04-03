@@ -157,3 +157,55 @@ def test_script_agent_without_context_blocks_sends_string_content(base_state):
     call_args = client_instance.messages.create.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, str)
+
+
+def _mock_response():
+    content = json.dumps({
+        "script": "Test script.",
+        "segments": [{"text": "Test script.", "estimated_duration_sec": 1.0}],
+        "needs_web_search": False,
+    })
+    msg = MagicMock()
+    msg.content = [MagicMock(text=content)]
+    return msg
+
+
+def test_research_brief_injected_into_message(base_state):
+    """When research_brief is set, it appears in the user message."""
+    import anthropic as _anthropic
+    base_state["research_brief"] = "B-trees store multiple keys per node."
+    base_state["research_sources"] = ["https://example.com"]
+    base_state["script"] = ""
+    base_state["script_segments"] = []
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        instance = MockClient.return_value
+        instance.messages.create.return_value = _mock_response()
+        from pipeline.agents.script_agent import script_agent
+        asyncio.run(script_agent(base_state))
+
+    messages = instance.messages.create.call_args.kwargs["messages"]
+    # content may be a string or a list; convert to string for assertion
+    content = messages[0]["content"]
+    if not isinstance(content, str):
+        content = str(content)
+    assert "B-trees store multiple keys per node." in content
+
+
+def test_web_search_disabled_when_brief_present(base_state):
+    """When research_brief is set, script_agent must not enable web_search (research already done)."""
+    import anthropic as _anthropic
+    base_state["effort_level"] = "high"
+    base_state["research_brief"] = "Some research."
+    base_state["research_sources"] = []
+
+    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+        instance = MockClient.return_value
+        instance.messages.create.return_value = _mock_response()
+        from pipeline.agents.script_agent import script_agent
+        asyncio.run(script_agent(base_state))
+
+    call_kwargs = instance.messages.create.call_args.kwargs
+    tools = call_kwargs.get("tools", _anthropic.NOT_GIVEN)
+    if tools is not _anthropic.NOT_GIVEN:
+        assert not any(t.get("type") == "web_search_20250305" for t in (tools or []))
