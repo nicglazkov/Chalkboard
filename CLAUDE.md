@@ -385,9 +385,9 @@ python run_server.py --reload # dev (auto-reload; kills in-flight jobs on reload
 ### Architecture
 
 - **`server/app.py`** — `create_app(store=None) -> FastAPI` factory. Injects `store` into the router. Mounts `server/static/` at `/` when present (for the frontend). Module-level `app = create_app()` for uvicorn.
-- **`server/jobs.py`** — `Job` dataclass (status, events, output_files, async queue), `JobStore` (in-memory dict), `run_job(job, output_dir)` (drives full pipeline + render), `_do_render(run_id)` (wraps `_render` from main.py).
+- **`server/jobs.py`** — `Job` dataclass (status, events, output_files, async queue, plus all 12 pipeline params), `JobStore` (in-memory dict), `run_job(job, output_dir)` (drives full pipeline + render + QA + quiz), `_do_render(run_id, burn_captions)` (wraps `_render` from main.py).
 - **`server/routes.py`** — all routes registered via `make_router(store)`.
-- **`server/models.py`** — `CreateJobRequest` (topic, effort, audience, tone, theme, template, speed), `JobResponse` (id, status, topic, events, error, output_files).
+- **`server/models.py`** — `CreateJobRequest` (topic, effort, audience, tone, theme, template, speed, burn_captions, quiz, urls, github, qa_density), `JobResponse` (id, status, topic, events, error, output_files).
 
 ### Endpoints
 
@@ -410,7 +410,13 @@ pending → running → completed   (render succeeded or failed gracefully)
 
 ### Integration with run()
 
-`run_job` calls `run()` with `interactive=False` and an `on_progress` callback that forwards each graph event to `job.append_event()`. This is the clean API path added in the pre-frontend cleanup. The `interactive=False` flag prevents `escalate_to_user` from blocking on stdin.
+`run_job` calls `run()` with `interactive=False` and an `on_progress` callback that forwards each graph event to `job.append_event()`. The `interactive=False` flag prevents `escalate_to_user` from blocking on stdin.
+
+Additional wiring in `run_job`:
+- **URLs/GitHub**: fetches context blocks via `fetch_url_blocks` (wrapped in `asyncio.to_thread`); resolves GitHub repos via `_github_to_raw_url`; passes combined `context_blocks` to `run()`
+- **burn_captions**: forwarded to `_do_render(run_id, burn_captions=job.burn_captions)`
+- **qa_density**: controls whether `_run_qa_loop` is called after render (skipped when `"zero"` or render failed)
+- **quiz**: calls `_generate_quiz` in a thread after render (independent of render success — only needs `script.txt`)
 
 ### Design notes (SaaS path)
 
