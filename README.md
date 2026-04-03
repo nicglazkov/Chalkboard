@@ -287,6 +287,60 @@ All settings can be overridden via `.env` or environment variables:
 
 ---
 
+## API server
+
+Chalkboard includes a FastAPI server that exposes the pipeline over HTTP with SSE streaming for live progress. Useful for building a frontend or scripting jobs programmatically.
+
+### Start
+
+```bash
+python run_server.py          # http://localhost:8000
+python run_server.py --reload # dev mode (auto-reload)
+python run_server.py --port 9000
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST /api/jobs` | Create job | Start the pipeline for a topic |
+| `GET /api/jobs` | List jobs | All jobs in this server session |
+| `GET /api/jobs/{id}` | Get job | Poll status and output file list |
+| `GET /api/jobs/{id}/events` | SSE stream | Live pipeline progress events |
+| `GET /api/jobs/{id}/files/{filename}` | Download | Serve `final.mp4`, `captions.srt`, etc. |
+
+### Example
+
+```bash
+# Start a job
+curl -s -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "explain recursion", "effort": "low"}' | python3 -m json.tool
+
+# Stream progress (SSE)
+curl -s http://localhost:8000/api/jobs/<id>/events
+
+# Download the video
+curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
+```
+
+### Job response shape
+
+```json
+{
+  "id": "uuid",
+  "status": "pending | running | completed | failed",
+  "topic": "explain recursion",
+  "events": [{"node": "script_agent", "updates": {...}}],
+  "error": null,
+  "output_files": ["final.mp4", "captions.srt", "script.txt"]
+}
+```
+
+The frontend (if present) is served from `server/static/` — place your built assets there and they will be served at `/`.
+
+---
+
 ## Development
 
 ### Run tests
@@ -309,9 +363,11 @@ pipeline/
 docker/
   Dockerfile      # extends manimcommunity/manim:v0.20.1
   render.sh       # renders scene.py inside Docker
+server/         # FastAPI app, job store, routes
 tests/            # one test file per module
 config.py         # env var loading
 main.py           # CLI entry point
+run_server.py   # API server entrypoint
 ```
 
 See [CLAUDE.md](CLAUDE.md) for full architecture documentation, design decisions, and contribution guidelines.
