@@ -105,12 +105,20 @@ async def run_job(job: Job, output_dir: Path) -> None:
         # Build context_blocks from URLs and GitHub repos
         context_blocks = None
         for url in job.urls:
+            print(f"  [server] fetching URL: {url}")
             blocks = await asyncio.to_thread(fetch_url_blocks, url)
             context_blocks = (context_blocks or []) + blocks
+            print(f"  [server] fetched {len(blocks)} block(s) from URL")
         for repo in job.github:
             raw_url = _github_to_raw_url(repo)
+            print(f"  [server] fetching GitHub repo: {repo} → {raw_url}")
             blocks = await asyncio.to_thread(fetch_url_blocks, raw_url)
             context_blocks = (context_blocks or []) + blocks
+            print(f"  [server] fetched {len(blocks)} block(s) from GitHub")
+        if context_blocks:
+            print(f"  [server] total context: {len(context_blocks)} block(s) → passing to pipeline")
+        else:
+            print(f"  [server] no context blocks (urls={job.urls!r}, github={job.github!r})")
 
         await run(
             topic=job.topic,

@@ -6,7 +6,7 @@ from pipeline.state import PipelineState, ValidationResult
 
 EFFORT_INSTRUCTIONS = {
     "low": "Do a light check only. Flag only obvious factual errors. Approve if generally correct.",
-    "medium": "Spot-check the key claims. Flag anything that seems clearly wrong.",
+    "medium": "Spot-check the key claims. Only flag claims that are clearly and definitively incorrect. If a claim is plausible, uncertain, or merely worth double-checking, approve the script — reserve needs_revision for clear factual errors, not uncertainty.",
     "high": "Thorough fact-check. Flag anything uncertain, unverified, or potentially misleading.",
 }
 
