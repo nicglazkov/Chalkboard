@@ -51,6 +51,14 @@ docker/
 tests/                One test file per module
 config.py             Env var loading + CLAUDE_MODEL constant
 main.py               CLI entry point, async graph runner
+run_server.py         uvicorn entrypoint (python run_server.py [--reload] [--port N])
+server/
+  __init__.py
+  app.py              FastAPI app factory (create_app)
+  jobs.py             Job dataclass, JobStore, run_job, _do_render
+  models.py           Pydantic CreateJobRequest / JobResponse
+  routes.py           All API routes (/api/jobs, /api/jobs/{id}/events, etc.)
+  static/             Frontend static files (served at / if directory exists)
 ```
 
 ---
@@ -361,6 +369,51 @@ Minimum is always 5 frames regardless of density. Formula: `n_frames = max(5, mi
 LangGraph uses `AsyncSqliteSaver` (stored in `pipeline_state.db`) to checkpoint after every node. On resume (`--run-id`), execution resumes from the last successful checkpoint.
 
 **Important:** If a node raises an unhandled exception, LangGraph does not save that node's output — the checkpoint stays at the pre-node state. The next resume re-runs the failed node from scratch. This means retrying after a Python-level bug (not a validation failure) does not increment attempt counters.
+
+---
+
+## API server
+
+`server/` is a FastAPI app that wraps `run()` for programmatic use. Start it with:
+
+```bash
+python run_server.py          # production (port 8000)
+python run_server.py --reload # dev (auto-reload; kills in-flight jobs on reload)
+```
+
+### Architecture
+
+- **`server/app.py`** — `create_app(store=None) -> FastAPI` factory. Injects `store` into the router. Mounts `server/static/` at `/` when present (for the frontend). Module-level `app = create_app()` for uvicorn.
+- **`server/jobs.py`** — `Job` dataclass (status, events, output_files, async queue), `JobStore` (in-memory dict), `run_job(job, output_dir)` (drives full pipeline + render), `_do_render(run_id)` (wraps `_render` from main.py).
+- **`server/routes.py`** — all routes registered via `make_router(store)`.
+- **`server/models.py`** — `CreateJobRequest` (topic, effort, audience, tone, theme, template, speed), `JobResponse` (id, status, topic, events, error, output_files).
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/jobs` | Create job, fire background task, return 202 + `JobResponse` |
+| `GET` | `/api/jobs` | List all jobs |
+| `GET` | `/api/jobs/{id}` | Get job by ID (404 if missing) |
+| `GET` | `/api/jobs/{id}/events` | SSE stream — one event per pipeline node update, then `{"done": true}` |
+| `GET` | `/api/jobs/{id}/files/{filename}` | Serve output file (path-traversal-safe) |
+
+### Job lifecycle
+
+```
+pending → running → completed   (render succeeded or failed gracefully)
+                  → failed      (pipeline exception)
+```
+
+`job.error` is set when the pipeline raises, or when Docker render fails (`"render failed; pipeline output preserved"`). `job.output_files` lists filenames in `output/<run_id>/` that were written.
+
+### Integration with run()
+
+`run_job` calls `run()` with `interactive=False` and an `on_progress` callback that forwards each graph event to `job.append_event()`. This is the clean API path added in the pre-frontend cleanup. The `interactive=False` flag prevents `escalate_to_user` from blocking on stdin.
+
+### Design notes (SaaS path)
+
+Current `JobStore` is in-memory — jobs are lost on restart. For SaaS: swap for a Postgres/Redis-backed store. `_do_render` calls `_render` from `main.py` which writes to the local `output/` dir — for SaaS: upload to S3 after render. Auth (API keys / OAuth) is not yet implemented — add as FastAPI middleware.
 
 ---
 
