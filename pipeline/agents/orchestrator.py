@@ -24,6 +24,10 @@ async def escalate_to_user(state: PipelineState) -> dict:
     message = _build_escalation_message(state)
     print(message)
 
+    if not state.get("interactive", True):
+        print("  [non-interactive mode — auto-aborting]")
+        return {"status": "failed"}
+
     print("\nEnter action (retry_script / retry_code / abort):")
     try:
         action = (await asyncio.to_thread(input, "  action: ")).strip()

@@ -54,3 +54,17 @@ def test_escalate_retry_code_resets_code_attempts(base_state):
     assert result["code_feedback"] == "Use MathTex for equations."
     assert result.get("fact_feedback") is None
     assert result["status"] == "validating"
+
+
+def test_escalate_non_interactive_returns_failed_immediately(base_state):
+    """When interactive=False, escalate_to_user must not read stdin and must return failed."""
+    base_state["script_attempts"] = 3
+    base_state["code_attempts"] = 0
+    base_state["fact_feedback"] = "Wrong claim."
+    base_state["code_feedback"] = None
+    base_state["interactive"] = False
+
+    # If stdin were read, asyncio.to_thread(input, ...) would block forever.
+    # This must return immediately.
+    result = asyncio.run(escalate_to_user(base_state))
+    assert result["status"] == "failed"
