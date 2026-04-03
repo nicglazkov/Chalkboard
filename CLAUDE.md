@@ -81,6 +81,7 @@ main.py               CLI entry point, async graph runner
 | `template` | str \| None | Animation template (`"algorithm"`, `"code"`, `"compare"`); `None` = no template. |
 | `research_brief` | str \| None | Research brief from `research_agent`; `None` if not yet run or effort ≠ high |
 | `research_sources` | list[str] | URLs/citations from `research_agent`; empty list if not yet run |
+| `interactive` | `bool` | When `False`, `escalate_to_user` auto-aborts and `TimeoutExhausted` in `run()` returns immediately (default `True` for CLI) |
 | `status` | str | `"drafting"` / `"validating"` / `"approved"` / `"failed"` |
 
 ### Critical invariant: None = approved
@@ -365,7 +366,7 @@ LangGraph uses `AsyncSqliteSaver` (stored in `pipeline_state.db`) to checkpoint 
 
 ## escalate_to_user
 
-`escalate_to_user` is an `async def` LangGraph node that prompts the user when max retries are hit. It uses `asyncio.to_thread(input, prompt)` (not LangGraph's `interrupt()`) to read from stdin without blocking the event loop. On `EOFError` (non-interactive stdin), it defaults to `"abort"`.
+`escalate_to_user` is an `async def` LangGraph node that prompts the user when max retries are hit. It uses `asyncio.to_thread(input, prompt)` (not LangGraph's `interrupt()`) to read from stdin without blocking the event loop. On `EOFError` (non-interactive stdin), it defaults to `"abort"`. When `state["interactive"]` is `False`, the node skips stdin and immediately returns `{"status": "failed"}`.
 
 **Why not `interrupt()`:** LangGraph 1.1.3's `interrupt()` calls `get_config()` which requires Python 3.11+ in async nodes — on Python 3.10 `var_child_runnable_config.get()` returns `None`, causing `RuntimeError: Called get_config outside of a runnable context`. The `asyncio.to_thread` approach works on 3.10+.
 

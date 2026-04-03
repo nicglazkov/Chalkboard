@@ -530,7 +530,7 @@ async def run(
     context_file_paths=None,
     speed: float = 1.0,
     template: str | None = None,
-    on_progress=None,
+    on_progress: "Callable[[dict], None] | None" = None,
     interactive: bool = True,
 ) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")

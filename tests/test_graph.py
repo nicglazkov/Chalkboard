@@ -234,3 +234,32 @@ def test_medium_effort_skips_research_agent(tmp_path):
 
     assert "research_agent" not in visited
     assert "script_agent" in visited
+
+
+def test_non_interactive_escalates_to_failed(tmp_path):
+    """With interactive=False, escalation auto-aborts instead of prompting stdin."""
+    call_counts = {"fact": 0, "script": 0}
+
+    async def mock_script_agent(state, **kw):
+        call_counts["script"] += 1
+        return _make_script_state()
+
+    async def mock_fact_validator(state, **kw):
+        call_counts["fact"] += 1
+        attempts = state.get("script_attempts", 0) + 1
+        return {"fact_feedback": "Wrong claim.", "script_attempts": attempts}
+
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.render_trigger.get_backend"), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-non-interactive-escalate"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "explain B-trees", "effort_level": "low", "interactive": False},
+            config=config,
+        ))
+
+    assert result["status"] == "failed"
+    assert call_counts["fact"] == 3  # ran 3 times before escalation
