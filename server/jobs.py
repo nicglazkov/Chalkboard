@@ -64,11 +64,10 @@ class JobStore:
 run = _pipeline_run
 
 
-async def _do_render(run_id: str, output_dir: Path, verbose: bool = False) -> Path | None:
+async def _do_render(run_id: str, verbose: bool = False) -> Path | None:
     """Run Docker render. Returns path to final.mp4 or None on failure."""
-    from main import _ensure_docker_image, _render, RenderFailed
+    from main import _render, RenderFailed
     try:
-        await asyncio.to_thread(_ensure_docker_image)
         final_mp4 = await asyncio.to_thread(_render, run_id, verbose)
         return final_mp4 if final_mp4.exists() else None
     except RenderFailed:
@@ -99,7 +98,7 @@ async def run_job(job: Job, output_dir: Path) -> None:
             interactive=False,
         )
 
-        await _do_render(job.id, output_dir / job.id)
+        await _do_render(job.id)
 
         # Collect output files
         run_dir = output_dir / job.id

@@ -54,7 +54,7 @@ def test_run_job_sets_status_completed(tmp_path):
     async def fake_run(**kwargs):
         pass  # pipeline succeeds immediately
 
-    async def fake_render(run_id, output_dir, **kwargs):
+    async def fake_render(run_id, **kwargs):
         return tmp_path / "final.mp4"
 
     with patch("server.jobs.run", new=fake_run), \
