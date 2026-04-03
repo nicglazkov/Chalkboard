@@ -13,13 +13,7 @@ Focus on:
 - Core factual claims with specific numbers, dates, or names where relevant
 - Common misconceptions to address or avoid
 - Current state of knowledge (recent developments)
-- 2–5 credible sources
-
-Respond with valid JSON only:
-{
-  "research_brief": "<compiled research as a readable summary, 150-300 words>",
-  "sources": ["<url or citation>"]
-}"""
+- 2–5 credible sources"""
 
 
 async def research_agent(state: PipelineState, client=None) -> dict:
@@ -32,6 +26,7 @@ async def research_agent(state: PipelineState, client=None) -> dict:
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"Topic: {state['topic']}"}],
+            # Always enabled: research_agent is only invoked on effort_level="high" (graph routing guarantees this)
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             output_config={
                 "format": {
