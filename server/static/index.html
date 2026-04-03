@@ -14,7 +14,6 @@
       --text: #e8e4db;
       --muted: #7a7570;
       --accent: #c8b97a;
-      --accent-dim: rgba(200, 185, 122, 0.12);
       --chalk: #f0ebe0;
     }
 
@@ -420,6 +419,8 @@
     // State
     let stageEls = {};    // node name → { item, dot }
     let seenStages = [];  // ordered list
+    let finalized = false;
+    let activeES = null;
 
     function showError(msg) {
       errorPanel.textContent = msg;
@@ -436,13 +437,14 @@
       resultPanel.style.display = 'none';
       stagesList.innerHTML = '';
       downloadsList.innerHTML = '';
-      resultVideo.src = '';
+      resultVideo.removeAttribute('src');
       resultVideo.style.display = 'block';
       // Remove any no-video note from a prior run
       const prevNote = resultPanel.querySelector('.no-video-note');
       if (prevNote) prevNote.remove();
       stageEls = {};
       seenStages = [];
+      finalized = false;
     }
 
     function ensureStage(node) {
@@ -495,6 +497,9 @@
     }
 
     async function finalizeJob(jobId) {
+      if (finalized) return;
+      finalized = true;
+
       // Mark all running stages as done
       for (const n of seenStages) {
         const el = stageEls[n];
@@ -528,7 +533,7 @@
         resultVideo.src = `/api/jobs/${jobId}/files/final.mp4`;
         resultVideo.style.display = 'block';
       } else {
-        resultVideo.src = '';
+        resultVideo.removeAttribute('src');
         resultVideo.style.display = 'none';
         const note = document.createElement('p');
         note.className = 'no-video-note';
@@ -554,9 +559,15 @@
     }
 
     function startSSE(jobId) {
+      if (activeES) {
+        activeES.close();
+        activeES = null;
+      }
+
       progressPanel.style.display = 'block';
 
       const es = new EventSource(`/api/jobs/${jobId}/events`);
+      activeES = es;
 
       es.onmessage = (evt) => {
         let data;
@@ -564,6 +575,7 @@
 
         if (data.done) {
           es.close();
+          activeES = null;
           finalizeJob(jobId);
           return;
         }
@@ -572,6 +584,7 @@
 
       es.onerror = () => {
         es.close();
+        activeES = null;
         finalizeJob(jobId);
       };
     }
