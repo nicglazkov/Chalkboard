@@ -58,7 +58,8 @@ server/
   jobs.py             Job dataclass, JobStore, run_job, _do_render
   models.py           Pydantic CreateJobRequest / JobResponse
   routes.py           All API routes (/api/jobs, /api/jobs/{id}/events, etc.)
-  static/             Frontend static files (served at / if directory exists)
+  static/
+    index.html        Single-page UI (form → SSE progress → video player + downloads)
 ```
 
 ---

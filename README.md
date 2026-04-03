@@ -337,7 +337,11 @@ curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
 }
 ```
 
-The frontend (if present) is served from `server/static/` — place your built assets there and they will be served at `/`.
+### Web UI
+
+The server includes a built-in single-page UI. Start the server and open `http://localhost:8000` in your browser — you'll see a form to enter a topic and all pipeline options, a live stage-by-stage progress view as the pipeline runs, and a video player with download links when the job completes.
+
+No build step required. The UI lives in `server/static/index.html`.
 
 ---
 
@@ -363,7 +367,7 @@ pipeline/
 docker/
   Dockerfile      # extends manimcommunity/manim:v0.20.1
   render.sh       # renders scene.py inside Docker
-server/         # FastAPI app, job store, routes
+server/         # FastAPI app, job store, routes, static frontend
 tests/            # one test file per module
 config.py         # env var loading
 main.py           # CLI entry point
