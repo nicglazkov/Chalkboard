@@ -519,24 +519,43 @@ def _print_progress(event: dict) -> None:
         print(f"  [{node_name}]{attempts_info} → {status or 'done'}")
 
 
-async def run(topic: str, effort: str, thread_id: str, audience: str = "intermediate",
-              tone: str = "casual", theme: str = "chalkboard",
-              context_blocks=None, context_file_paths=None, speed: float = 1.0,
-              template: str | None = None) -> None:
+async def run(
+    topic: str,
+    effort: str,
+    thread_id: str,
+    audience: str = "intermediate",
+    tone: str = "casual",
+    theme: str = "chalkboard",
+    context_blocks=None,
+    context_file_paths=None,
+    speed: float = 1.0,
+    template: str | None = None,
+    on_progress=None,
+    interactive: bool = True,
+) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
     async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
         graph = build_graph(checkpointer=checkpointer, context_blocks=context_blocks)
         config = {"configurable": {"thread_id": thread_id}}
-        input_state = {"topic": topic, "effort_level": effort, "audience": audience, "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [], "speed": speed, "template": template}
+        input_state = {
+            "topic": topic, "effort_level": effort, "audience": audience,
+            "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [],
+            "speed": speed, "template": template,
+        }
 
         while True:
             try:
                 async for event in graph.astream(input_state, config=config, stream_mode="updates"):
-                    _print_progress(event)
+                    if on_progress is not None:
+                        on_progress(event)
+                    else:
+                        _print_progress(event)
                 break
             except TimeoutExhausted as e:
                 print(f"\n  [pipeline] {e}")
+                if not interactive:
+                    return
                 print("\nEnter action (retry / abort):")
                 action = (await asyncio.to_thread(input, "  action: ")).strip()
                 if action != "retry":
