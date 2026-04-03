@@ -63,7 +63,10 @@ def make_router(store: JobStore) -> APIRouter:
         job = store.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
-        file_path = Path(OUTPUT_DIR).resolve() / job_id / filename
+        base_dir = Path(OUTPUT_DIR).resolve() / job_id
+        file_path = (base_dir / filename).resolve()
+        if not file_path.is_relative_to(base_dir):
+            raise HTTPException(status_code=404, detail="File not found")
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
         return FileResponse(str(file_path))
