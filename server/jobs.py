@@ -9,7 +9,12 @@ from typing import Literal
 
 _QADensity = Literal["zero", "normal", "high"]
 
-from main import run as _pipeline_run
+from pipeline.context import fetch_url_blocks
+from main import (
+    run as _pipeline_run,
+    _render, RenderFailed,
+    _run_qa_loop, _generate_quiz, _github_to_raw_url,
+)
 
 
 @dataclass
@@ -77,11 +82,10 @@ class JobStore:
 run = _pipeline_run
 
 
-async def _do_render(run_id: str, verbose: bool = False) -> Path | None:
+async def _do_render(run_id: str, verbose: bool = False, burn_captions: bool = False) -> Path | None:
     """Run Docker render. Returns path to final.mp4 or None on failure."""
-    from main import _render, RenderFailed
     try:
-        final_mp4 = await asyncio.to_thread(_render, run_id, verbose)
+        final_mp4 = await asyncio.to_thread(_render, run_id, verbose, burn_captions)
         return final_mp4 if final_mp4.exists() else None
     except RenderFailed:
         return None
@@ -98,7 +102,16 @@ async def run_job(job: Job, output_dir: Path) -> None:
             job.append_event({"node": node_name, "updates": updates})
 
     try:
-        # TODO Task 2: forward burn_captions, quiz, urls, github, qa_density
+        # Build context_blocks from URLs and GitHub repos
+        context_blocks = None
+        for url in job.urls:
+            blocks = await asyncio.to_thread(fetch_url_blocks, url)
+            context_blocks = (context_blocks or []) + blocks
+        for repo in job.github:
+            raw_url = _github_to_raw_url(repo)
+            blocks = await asyncio.to_thread(fetch_url_blocks, raw_url)
+            context_blocks = (context_blocks or []) + blocks
+
         await run(
             topic=job.topic,
             effort=job.effort,
@@ -108,6 +121,7 @@ async def run_job(job: Job, output_dir: Path) -> None:
             theme=job.theme,
             speed=job.speed,
             template=job.template,
+            context_blocks=context_blocks,
             on_progress=_on_progress,
             interactive=False,
         )
@@ -118,9 +132,24 @@ async def run_job(job: Job, output_dir: Path) -> None:
         if not (output_dir / job.id / "manifest.json").exists():
             raise RuntimeError("pipeline did not complete — no output was written")
 
-        final_mp4 = await _do_render(job.id)
+        final_mp4 = await _do_render(job.id, burn_captions=job.burn_captions)
         if final_mp4 is None:
             job.error = "render failed; pipeline output preserved"
+
+        # Visual QA (runs in a thread — _run_qa_loop is a sync function)
+        if final_mp4 is not None and job.qa_density != "zero":
+            await asyncio.to_thread(
+                _run_qa_loop,
+                job.id, final_mp4,
+                theme=job.theme, audience=job.audience,
+                tone=job.tone, effort_level=job.effort,
+                context_blocks=context_blocks,
+                qa_density=job.qa_density,
+            )
+
+        # Quiz generation (sync function — run in thread)
+        if job.quiz:
+            await asyncio.to_thread(_generate_quiz, job.id)
 
         # Collect output files
         run_dir = output_dir / job.id
