@@ -541,7 +541,7 @@ async def run(
         input_state = {
             "topic": topic, "effort_level": effort, "audience": audience,
             "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [],
-            "speed": speed, "template": template,
+            "speed": speed, "template": template, "interactive": interactive,
         }
 
         while True:
