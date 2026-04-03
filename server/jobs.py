@@ -147,7 +147,9 @@ async def run_job(job: Job, output_dir: Path) -> None:
                 qa_density=job.qa_density,
             )
 
-        # Quiz generation (sync function — run in thread)
+        # Quiz generation (sync function — run in thread).
+        # No final_mp4 guard: quiz only needs script.txt, so it works even when
+        # render failed or --no-render was used.
         if job.quiz:
             await asyncio.to_thread(_generate_quiz, job.id)
 
