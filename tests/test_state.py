@@ -34,3 +34,8 @@ def test_research_fields_in_pipeline_state():
     hints = get_type_hints(PipelineState)
     assert "research_brief" in hints
     assert "research_sources" in hints
+
+
+def test_interactive_field_in_pipeline_state():
+    hints = get_type_hints(PipelineState)
+    assert "interactive" in hints

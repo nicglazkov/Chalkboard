@@ -30,3 +30,4 @@ class PipelineState(TypedDict):
     template: str | None
     research_brief: str | None
     research_sources: list[str]
+    interactive: bool

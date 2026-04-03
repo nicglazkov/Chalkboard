@@ -70,6 +70,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "template": state.get("template"),
         "research_brief": state.get("research_brief"),
         "research_sources": state.get("research_sources", []),
+        "interactive": state.get("interactive", True),
     }
 
 

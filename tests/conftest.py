@@ -28,6 +28,7 @@ def base_state() -> PipelineState:
         template=None,
         research_brief=None,
         research_sources=[],
+        interactive=True,
     )
 
 
