@@ -185,10 +185,7 @@ def test_research_brief_injected_into_message(base_state):
         asyncio.run(script_agent(base_state))
 
     messages = instance.messages.create.call_args.kwargs["messages"]
-    # content may be a string or a list; convert to string for assertion
-    content = messages[0]["content"]
-    if not isinstance(content, str):
-        content = str(content)
+    content = messages[0]["content"]  # no context_blocks passed, so always a str
     assert "B-trees store multiple keys per node." in content
 
 
