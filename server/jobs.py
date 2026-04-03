@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+_QADensity = Literal["zero", "normal", "high"]
+
 from main import run as _pipeline_run
 
 
@@ -24,7 +26,7 @@ class Job:
     quiz: bool = False
     urls: list[str] = field(default_factory=list)
     github: list[str] = field(default_factory=list)
-    qa_density: str = "normal"
+    qa_density: _QADensity = "normal"
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
     error: str | None = None
@@ -54,7 +56,7 @@ class JobStore:
                theme: str, template: str | None, speed: float,
                burn_captions: bool = False, quiz: bool = False,
                urls: list[str] | None = None, github: list[str] | None = None,
-               qa_density: str = "normal") -> Job:
+               qa_density: _QADensity = "normal") -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
                   tone=tone, theme=theme, template=template, speed=speed,
@@ -96,6 +98,7 @@ async def run_job(job: Job, output_dir: Path) -> None:
             job.append_event({"node": node_name, "updates": updates})
 
     try:
+        # TODO Task 2: forward burn_captions, quiz, urls, github, qa_density
         await run(
             topic=job.topic,
             effort=job.effort,
