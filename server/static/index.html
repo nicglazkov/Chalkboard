@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chalkboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #111110;
+      --surface: #1a1918;
+      --border: rgba(255, 255, 255, 0.07);
+      --text: #e8e4db;
+      --muted: #7a7570;
+      --accent: #c8b97a;
+      --accent-dim: rgba(200, 185, 122, 0.12);
+      --chalk: #f0ebe0;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.025;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      text-align: center;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      color: var(--chalk);
+      font-size: 2.5rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.4rem;
+    }
+
+    .tagline {
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* Form */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.75rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group:last-of-type {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+    }
+
+    textarea, input[type="text"], select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Lora', Georgia, serif;
+      font-size: 0.95rem;
+      border-radius: 6px;
+      padding: 0.55rem 0.75rem;
+      outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    input[type="text"] {
+      font-family: 'DM Mono', monospace;
+    }
+
+    select {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7570' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      padding-right: 2rem;
+    }
+
+    textarea:focus, input:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem 1.25rem;
+    }
+
+    .form-grid .form-group {
+      margin-bottom: 0;
+    }
+
+    .btn-submit {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 0.7rem 1.75rem;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 1.5rem;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      opacity: 0.88;
+    }
+
+    .btn-submit:disabled {
+      background: var(--muted);
+      color: var(--bg);
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    /* Progress panel */
+    #progress-panel {
+      display: none;
+      margin-bottom: 2rem;
+    }
+
+    .panel-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .stages {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .stage-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stage-item:last-child {
+      border-bottom: none;
+    }
+
+    .stage-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--muted);
+      transition: background 0.2s;
+    }
+
+    .stage-dot.running {
+      background: var(--accent);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    .stage-dot.done {
+      background: var(--accent);
+    }
+
+    .stage-dot.failed {
+      background: #c0392b;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.75); }
+    }
+
+    .stage-name {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .stage-item.pending .stage-name {
+      color: var(--muted);
+    }
+
+    .stage-item.running .stage-name {
+      color: var(--chalk);
+    }
+
+    /* Error panel */
+    #error-panel {
+      display: none;
+      background: rgba(192, 57, 43, 0.1);
+      border: 1px solid rgba(192, 57, 43, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: #e07070;
+    }
+
+    /* Result panel */
+    #result-panel {
+      display: none;
+      margin-bottom: 2rem;
+    }
+
+    #result-panel video {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+      display: block;
+      background: #000;
+    }
+
+    .downloads {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .download-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.4rem 0.8rem;
+      text-decoration: none;
+      transition: border-color 0.15s;
+    }
+
+    .download-link:hover {
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Chalkboard</h1>
+      <p class="tagline">Turn any topic into a narrated animation</p>
+    </header>
+
+    <div class="form-card">
+      <form id="job-form">
+        <div class="form-group">
+          <label for="topic">Topic</label>
+          <textarea id="topic" name="topic" placeholder="e.g. How merge sort works" required></textarea>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="effort">Effort</label>
+            <select id="effort" name="effort">
+              <option value="low">low</option>
+              <option value="medium" selected>medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="audience">Audience</label>
+            <select id="audience" name="audience">
+              <option value="beginner">beginner</option>
+              <option value="intermediate" selected>intermediate</option>
+              <option value="expert">expert</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="tone">Tone</label>
+            <select id="tone" name="tone">
+              <option value="casual" selected>casual</option>
+              <option value="formal">formal</option>
+              <option value="socratic">socratic</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="theme">Theme</label>
+            <select id="theme" name="theme">
+              <option value="chalkboard" selected>chalkboard</option>
+              <option value="light">light</option>
+              <option value="colorful">colorful</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="template">Template</label>
+            <select id="template" name="template">
+              <option value="">none</option>
+              <option value="algorithm">algorithm</option>
+              <option value="code">code</option>
+              <option value="compare">compare</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="speed">Speed</label>
+            <input type="text" id="speed" name="speed" value="1.0" />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submit-btn">Generate Video</button>
+      </form>
+    </div>
+
+    <div id="error-panel"></div>
+
+    <div id="progress-panel">
+      <p class="panel-title">Pipeline progress</p>
+      <div class="stages" id="stages-list"></div>
+    </div>
+
+    <div id="result-panel">
+      <p class="panel-title">Your video</p>
+      <video id="result-video" controls></video>
+      <div class="downloads" id="downloads-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const STAGE_LABELS = {
+      init:            'Initializing',
+      research_agent:  'Researching topic',
+      script_agent:    'Writing script',
+      fact_validator:  'Fact-checking',
+      manim_agent:     'Generating animation code',
+      code_validator:  'Validating code',
+      render_trigger:  'Synthesizing voiceover',
+      render:          'Rendering animation',
+      qa:              'Visual QA',
+    };
+
+    const DOWNLOADABLE = ['final.mp4', 'captions.srt', 'quiz.json', 'script.txt'];
+
+    const form        = document.getElementById('job-form');
+    const submitBtn   = document.getElementById('submit-btn');
+    const errorPanel  = document.getElementById('error-panel');
+    const progressPanel = document.getElementById('progress-panel');
+    const stagesList  = document.getElementById('stages-list');
+    const resultPanel = document.getElementById('result-panel');
+    const resultVideo = document.getElementById('result-video');
+    const downloadsList = document.getElementById('downloads-list');
+
+    // State
+    let stageEls = {};    // node name → { item, dot }
+    let seenStages = [];  // ordered list
+
+    function showError(msg) {
+      errorPanel.textContent = msg;
+      errorPanel.style.display = 'block';
+    }
+
+    function hideError() {
+      errorPanel.style.display = 'none';
+    }
+
+    function resetUI() {
+      hideError();
+      progressPanel.style.display = 'none';
+      resultPanel.style.display = 'none';
+      stagesList.innerHTML = '';
+      downloadsList.innerHTML = '';
+      resultVideo.src = '';
+      stageEls = {};
+      seenStages = [];
+    }
+
+    function ensureStage(node) {
+      if (stageEls[node]) return stageEls[node];
+      const label = STAGE_LABELS[node] || node;
+      const item = document.createElement('div');
+      item.className = 'stage-item pending';
+      item.innerHTML = `<span class="stage-dot"></span><span class="stage-name">${label}</span>`;
+      stagesList.appendChild(item);
+      const dot = item.querySelector('.stage-dot');
+      stageEls[node] = { item, dot };
+      seenStages.push(node);
+      return stageEls[node];
+    }
+
+    function setStageStatus(node, status) {
+      const el = ensureStage(node);
+      el.item.className = `stage-item ${status}`;
+      el.dot.className = `stage-dot ${status}`;
+    }
+
+    function markAllPriorDone(currentNode) {
+      // Mark any previously running stage as done
+      for (const n of seenStages) {
+        if (n === currentNode) break;
+        const el = stageEls[n];
+        if (el && el.item.classList.contains('running')) {
+          setStageStatus(n, 'done');
+        }
+      }
+    }
+
+    function handleEvent(data) {
+      if (data.done) return;  // terminal event handled in onmessage
+
+      const node = data.node;
+      if (!node) return;
+
+      const updates = data.updates || {};
+      const status = updates.status;
+
+      ensureStage(node);
+      markAllPriorDone(node);
+
+      if (status === 'failed') {
+        setStageStatus(node, 'failed');
+      } else {
+        setStageStatus(node, 'running');
+      }
+    }
+
+    async function finalizeJob(jobId) {
+      // Mark all running stages as done
+      for (const n of seenStages) {
+        const el = stageEls[n];
+        if (el && el.item.classList.contains('running')) {
+          setStageStatus(n, 'done');
+        }
+      }
+
+      // Fetch final job state
+      let job;
+      try {
+        const r = await fetch(`/api/jobs/${jobId}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        job = await r.json();
+      } catch (e) {
+        showError(`Could not fetch job result: ${e.message}`);
+        submitBtn.disabled = false;
+        return;
+      }
+
+      if (job.status === 'failed') {
+        showError(job.error || 'Job failed for an unknown reason.');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      // Show video + downloads
+      const outputFiles = job.output_files || [];
+      resultVideo.src = `/api/jobs/${jobId}/files/final.mp4`;
+
+      downloadsList.innerHTML = '';
+      for (const fname of DOWNLOADABLE) {
+        if (outputFiles.includes(fname)) {
+          const a = document.createElement('a');
+          a.href = `/api/jobs/${jobId}/files/${fname}`;
+          a.textContent = fname;
+          a.className = 'download-link';
+          a.download = fname;
+          downloadsList.appendChild(a);
+        }
+      }
+
+      resultPanel.style.display = 'block';
+      submitBtn.disabled = false;
+    }
+
+    function startSSE(jobId) {
+      progressPanel.style.display = 'block';
+
+      const es = new EventSource(`/api/jobs/${jobId}/events`);
+
+      es.onmessage = (evt) => {
+        let data;
+        try { data = JSON.parse(evt.data); } catch { return; }
+
+        if (data.done) {
+          es.close();
+          finalizeJob(jobId);
+          return;
+        }
+        handleEvent(data);
+      };
+
+      es.onerror = () => {
+        es.close();
+        showError('Lost connection to the server. The job may still be running.');
+        submitBtn.disabled = false;
+      };
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      resetUI();
+      submitBtn.disabled = true;
+
+      const topic   = document.getElementById('topic').value.trim();
+      const effort  = document.getElementById('effort').value;
+      const audience = document.getElementById('audience').value;
+      const tone    = document.getElementById('tone').value;
+      const theme   = document.getElementById('theme').value;
+      const template = document.getElementById('template').value || null;
+      const speed   = parseFloat(document.getElementById('speed').value) || 1.0;
+
+      let resp, job;
+      try {
+        resp = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, effort, audience, tone, theme, template, speed }),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${text}`);
+        }
+        job = await resp.json();
+      } catch (err) {
+        showError(`Failed to start job: ${err.message}`);
+        submitBtn.disabled = false;
+        return;
+      }
+
+      startSSE(job.id);
+    });
+  </script>
+</body>
+</html>

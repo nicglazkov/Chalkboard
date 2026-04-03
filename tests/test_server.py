@@ -67,3 +67,11 @@ def test_get_file_rejects_path_traversal(client, tmp_path):
     with patch("server.routes.OUTPUT_DIR", str(tmp_path)):
         resp = tc.get(f"/api/jobs/{job.id}/files/../../etc/passwd")
     assert resp.status_code == 404
+
+
+def test_static_index_served(client):
+    """GET / must return the index.html page."""
+    tc, store = client
+    resp = tc.get("/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
