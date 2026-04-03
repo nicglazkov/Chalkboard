@@ -1,9 +1,12 @@
 # tests/test_server.py
+import asyncio
 import pytest
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from server.app import create_app
-from server.jobs import JobStore
+from server.jobs import JobStore, Job, run_job
+from pipeline.retry import TimeoutExhausted
 
 
 @pytest.fixture
@@ -75,3 +78,37 @@ def test_static_index_served(client):
     resp = tc.get("/")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_run_job_fails_when_pipeline_raises(tmp_path):
+    """TimeoutExhausted from run() must mark the job as failed with a real error message."""
+    store = JobStore()
+    job = store.create(topic="test", effort="low", audience="intermediate",
+                       tone="casual", theme="chalkboard", template=None, speed=1.0)
+
+    async def fake_run(**kwargs):
+        raise TimeoutExhausted("kokoro_tts failed after 3 attempts: PyTorch not found")
+
+    with patch("server.jobs.run", new=fake_run):
+        await run_job(job, tmp_path)
+
+    assert job.status == "failed"
+    assert "kokoro_tts" in job.error
+
+
+@pytest.mark.asyncio
+async def test_run_job_fails_when_manifest_missing(tmp_path):
+    """If run() returns normally but manifest.json is absent, job must fail (not attempt render)."""
+    store = JobStore()
+    job = store.create(topic="test", effort="low", audience="intermediate",
+                       tone="casual", theme="chalkboard", template=None, speed=1.0)
+
+    async def fake_run(**kwargs):
+        pass  # run() completes but writes nothing (e.g. escalate_to_user auto-aborted)
+
+    with patch("server.jobs.run", new=fake_run):
+        await run_job(job, tmp_path)
+
+    assert job.status == "failed"
+    assert "pipeline did not complete" in job.error

@@ -98,6 +98,12 @@ async def run_job(job: Job, output_dir: Path) -> None:
             interactive=False,
         )
 
+        # render_trigger writes manifest.json as its final step.
+        # If it's absent, the pipeline ended before completing (e.g. max retries
+        # hit escalate_to_user which auto-aborted in non-interactive mode).
+        if not (output_dir / job.id / "manifest.json").exists():
+            raise RuntimeError("pipeline did not complete — no output was written")
+
         final_mp4 = await _do_render(job.id)
         if final_mp4 is None:
             job.error = "render failed; pipeline output preserved"

@@ -555,7 +555,7 @@ async def run(
             except TimeoutExhausted as e:
                 print(f"\n  [pipeline] {e}")
                 if not interactive:
-                    return
+                    raise
                 print("\nEnter action (retry / abort):")
                 action = (await asyncio.to_thread(input, "  action: ")).strip()
                 if action != "retry":

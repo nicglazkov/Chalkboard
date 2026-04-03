@@ -46,13 +46,17 @@ def test_run_job_sets_status_completed(tmp_path):
     """run_job must mark the job completed after the pipeline finishes."""
     from server.jobs import JobStore, run_job
     from unittest.mock import patch, AsyncMock
+    import json
 
     store = JobStore()
     job = store.create(topic="test", effort="low", audience="intermediate",
                        tone="casual", theme="chalkboard", template=None, speed=1.0)
 
     async def fake_run(**kwargs):
-        pass  # pipeline succeeds immediately
+        # Simulate render_trigger writing manifest.json
+        run_dir = tmp_path / job.id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "manifest.json").write_text(json.dumps({"run_id": job.id}))
 
     async def fake_render(run_id, **kwargs):
         return tmp_path / "final.mp4"
