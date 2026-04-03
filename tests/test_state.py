@@ -28,3 +28,9 @@ def test_validation_result_rejects_bad_verdict():
     import pytest
     with pytest.raises(Exception):
         ValidationResult(verdict="unknown", feedback="")
+
+
+def test_research_fields_in_pipeline_state():
+    hints = get_type_hints(PipelineState)
+    assert "research_brief" in hints
+    assert "research_sources" in hints

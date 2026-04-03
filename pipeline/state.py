@@ -28,3 +28,5 @@ class PipelineState(TypedDict):
     context_file_paths: list[str]
     speed: float
     template: str | None
+    research_brief: str | None
+    research_sources: list[str]

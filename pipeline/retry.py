@@ -14,6 +14,7 @@ class TimeoutExhausted(Exception):
 # ---------------------------------------------------------------------------
 
 TIMEOUT_SCRIPT_AGENT   = 120.0   # script_agent (may use web search tool)
+TIMEOUT_RESEARCH_AGENT = 120.0   # research_agent (web search, may take multiple queries)
 TIMEOUT_FACT_VALIDATOR =  60.0   # fact_validator
 TIMEOUT_MANIM_AGENT    = 180.0   # manim_agent (max_tokens=16384)
 TIMEOUT_CODE_VALIDATOR =  60.0   # code_validator

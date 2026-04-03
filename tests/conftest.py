@@ -26,6 +26,8 @@ def base_state() -> PipelineState:
         context_file_paths=[],
         speed=1.0,
         template=None,
+        research_brief=None,
+        research_sources=[],
     )
 
 
