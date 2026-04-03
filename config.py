@@ -8,5 +8,6 @@ DEFAULT_TONE    = os.getenv("DEFAULT_TONE", "casual")
 DEFAULT_THEME   = os.getenv("DEFAULT_THEME", "chalkboard")
 OUTPUT_DIR     = os.getenv("OUTPUT_DIR", "./output")
 CHECKPOINT_DB  = os.getenv("CHECKPOINT_DB", "pipeline_state.db")
+SERVER_PORT    = int(os.getenv("SERVER_PORT", "8000"))
 CLAUDE_MODEL   = "claude-sonnet-4-6"
 

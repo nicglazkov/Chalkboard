@@ -284,6 +284,7 @@ All settings can be overridden via `.env` or environment variables:
 | `DEFAULT_THEME`    | `chalkboard`        | `chalkboard`, `light`, `colorful`    |
 | `OUTPUT_DIR`       | `./output`          | any path                             |
 | `CHECKPOINT_DB`    | `pipeline_state.db` | any path                             |
+| `SERVER_PORT`      | `8000`              | API server port (overridden by `--port`) |
 
 ---
 
