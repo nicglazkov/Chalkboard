@@ -180,6 +180,123 @@
       opacity: 0.7;
     }
 
+    /* Advanced section */
+    details.advanced {
+      margin-top: 1.25rem;
+    }
+
+    details.advanced summary {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      user-select: none;
+      padding: 0.2rem 0;
+    }
+
+    details.advanced summary::-webkit-details-marker { display: none; }
+
+    details.advanced summary::before {
+      content: '▶';
+      font-size: 0.55rem;
+      transition: transform 0.15s;
+      display: inline-block;
+    }
+
+    details[open].advanced summary::before {
+      transform: rotate(90deg);
+    }
+
+    details.advanced .advanced-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem 1.25rem;
+      margin-top: 1rem;
+    }
+
+    details.advanced .advanced-grid .form-group {
+      margin-bottom: 0;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding-top: 0.3rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .checkbox-group span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text);
+    }
+
+    /* Repeatable input rows */
+    .repeatable-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .repeatable-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .repeatable-row input {
+      flex: 1;
+    }
+
+    .btn-remove {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 0.3rem 0.5rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .btn-remove:hover { border-color: #c0392b; color: #c0392b; }
+
+    .btn-add {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 0.3rem 0.65rem;
+      cursor: pointer;
+      align-self: flex-start;
+    }
+
+    .btn-add:hover { border-color: var(--accent); color: var(--accent); }
+
+    .repeatable-full {
+      grid-column: 1 / -1;
+    }
+
     /* Progress panel */
     #progress-panel {
       display: none;
@@ -339,40 +456,80 @@
               <option value="expert">expert</option>
             </select>
           </div>
-
-          <div class="form-group">
-            <label for="tone">Tone</label>
-            <select id="tone" name="tone">
-              <option value="casual" selected>casual</option>
-              <option value="formal">formal</option>
-              <option value="socratic">socratic</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="theme">Theme</label>
-            <select id="theme" name="theme">
-              <option value="chalkboard" selected>chalkboard</option>
-              <option value="light">light</option>
-              <option value="colorful">colorful</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="template">Template</label>
-            <select id="template" name="template">
-              <option value="">none</option>
-              <option value="algorithm">algorithm</option>
-              <option value="code">code</option>
-              <option value="compare">compare</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="speed">Speed</label>
-            <input type="text" id="speed" name="speed" value="1.0" />
-          </div>
         </div>
+
+        <details class="advanced">
+          <summary>Advanced options</summary>
+          <div class="advanced-grid">
+
+            <div class="form-group">
+              <label for="tone">Tone</label>
+              <select id="tone" name="tone">
+                <option value="casual" selected>casual</option>
+                <option value="formal">formal</option>
+                <option value="socratic">socratic</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="theme">Theme</label>
+              <select id="theme" name="theme">
+                <option value="chalkboard" selected>chalkboard</option>
+                <option value="light">light</option>
+                <option value="colorful">colorful</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="template">Template</label>
+              <select id="template" name="template">
+                <option value="">none</option>
+                <option value="algorithm">algorithm</option>
+                <option value="code">code</option>
+                <option value="compare">compare</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="speed">Speed</label>
+              <input type="text" id="speed" name="speed" value="1.0" />
+            </div>
+
+            <div class="form-group">
+              <label for="qa-density">Visual QA</label>
+              <select id="qa-density" name="qa_density">
+                <option value="zero">off</option>
+                <option value="normal" selected>normal</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>&nbsp;</label>
+              <div class="checkbox-group">
+                <input type="checkbox" id="burn-captions" name="burn_captions" />
+                <span>Burn captions</span>
+              </div>
+              <div class="checkbox-group" style="margin-top: 0.5rem;">
+                <input type="checkbox" id="quiz" name="quiz" />
+                <span>Generate quiz</span>
+              </div>
+            </div>
+
+            <div class="form-group repeatable-full">
+              <label>URLs (source material)</label>
+              <div class="repeatable-list" id="url-list"></div>
+              <button type="button" class="btn-add" id="add-url">+ Add URL</button>
+            </div>
+
+            <div class="form-group repeatable-full">
+              <label>GitHub repos (owner/repo)</label>
+              <div class="repeatable-list" id="github-list"></div>
+              <button type="button" class="btn-add" id="add-github">+ Add repo</button>
+            </div>
+
+          </div>
+        </details>
 
         <button type="submit" class="btn-submit" id="submit-btn">Generate Video</button>
       </form>
@@ -406,6 +563,29 @@
     };
 
     const DOWNLOADABLE = ['final.mp4', 'captions.srt', 'quiz.json', 'script.txt'];
+
+    function addRepeatableRow(listId, placeholder) {
+      const list = document.getElementById(listId);
+      const row = document.createElement('div');
+      row.className = 'repeatable-row';
+      row.innerHTML = `<input type="text" placeholder="${placeholder}" />
+                       <button type="button" class="btn-remove">✕</button>`;
+      row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+      list.appendChild(row);
+      row.querySelector('input').focus();
+    }
+
+    function getRepeatableValues(listId) {
+      return Array.from(document.querySelectorAll(`#${listId} input`))
+        .map(el => el.value.trim())
+        .filter(Boolean);
+    }
+
+    document.getElementById('add-url').addEventListener('click', () =>
+      addRepeatableRow('url-list', 'https://example.com/article'));
+
+    document.getElementById('add-github').addEventListener('click', () =>
+      addRepeatableRow('github-list', 'owner/repo'));
 
     const form        = document.getElementById('job-form');
     const submitBtn   = document.getElementById('submit-btn');
@@ -595,19 +775,28 @@
       submitBtn.disabled = true;
 
       const topic   = document.getElementById('topic').value.trim();
-      const effort  = document.getElementById('effort').value;
-      const audience = document.getElementById('audience').value;
-      const tone    = document.getElementById('tone').value;
-      const theme   = document.getElementById('theme').value;
-      const template = document.getElementById('template').value || null;
-      const speed   = parseFloat(document.getElementById('speed').value) || 1.0;
+
+      const body = {
+        topic,
+        effort:         document.getElementById('effort').value,
+        audience:       document.getElementById('audience').value,
+        tone:           document.getElementById('tone').value,
+        theme:          document.getElementById('theme').value,
+        template:       document.getElementById('template').value || null,
+        speed:          parseFloat(document.getElementById('speed').value) || 1.0,
+        burn_captions:  document.getElementById('burn-captions').checked,
+        quiz:           document.getElementById('quiz').checked,
+        qa_density:     document.getElementById('qa-density').value,
+        urls:           getRepeatableValues('url-list'),
+        github:         getRepeatableValues('github-list'),
+      };
 
       let resp, job;
       try {
         resp = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, effort, audience, tone, theme, template, speed }),
+          body: JSON.stringify(body),
         });
         if (!resp.ok) {
           const text = await resp.text();
