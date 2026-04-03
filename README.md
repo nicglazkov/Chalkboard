@@ -128,7 +128,7 @@ If context exceeds 10k tokens you'll be prompted to confirm — pass `--yes` to 
 python main.py --topic "..." --run-id <id> --context ./src
 ```
 
-**Prerequisites:** `pip install pathspec` (required). `pip install python-docx` only for `.docx`. `pip install httpx beautifulsoup4` for `--url` and `--github`.
+All required packages (`pathspec`, `python-docx`, `httpx`, `beautifulsoup4`) are included in `requirements.txt` and installed by `pip install -r requirements.txt`.
 
 ---
 
@@ -241,7 +241,7 @@ Set `TTS_BACKEND` in your `.env` file. Default is `kokoro`.
 | Level              | Fact-check                  | Web search     | Segments |
 | ------------------ | --------------------------- | -------------- | -------- |
 | `low`              | Light — obvious errors only | Never          | 3–4      |
-| `medium` (default) | Spot-check key claims       | With approval  | 4–6      |
+| `medium` (default) | Spot-check key claims       | No             | 4–6      |
 | `high`             | Thorough                    | Via research_agent (pre-script web research) | 5–8      |
 
 ---
