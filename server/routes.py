@@ -60,22 +60,19 @@ def make_router(store: JobStore) -> APIRouter:
     ):
         """Create a job from multipart form data, optionally with file uploads."""
         tmp_dir = Path(tempfile.mkdtemp(prefix="chalkboard_upload_"))
+        upload_dir: Path | None = None
         try:
             saved_paths = await validate_and_save(files, tmp_dir)
+            upload_dir = tmp_dir if saved_paths else None
         except FileSizeError as e:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
             raise HTTPException(status_code=413, detail=str(e))
         except TotalSizeError as e:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
             raise HTTPException(status_code=413, detail=str(e))
         except UnsupportedFileTypeError as e:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
             raise HTTPException(status_code=400, detail=str(e))
-
-        # Only keep upload_dir if files were actually saved
-        upload_dir: Path | None = tmp_dir if saved_paths else None
-        if upload_dir is None:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        finally:
+            if upload_dir is None:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
         job = store.create(
             topic=topic, effort=effort, audience=audience,

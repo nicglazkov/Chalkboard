@@ -109,7 +109,6 @@ async def run_job(job: Job, output_dir: Path) -> None:
         context_blocks = None
 
         if job.upload_dir is not None and job.upload_dir.exists():
-            print(f"  [server] loading {len(list(job.upload_dir.iterdir()))} uploaded file(s)")
             file_paths = await asyncio.to_thread(
                 collect_files, [str(job.upload_dir)]
             )

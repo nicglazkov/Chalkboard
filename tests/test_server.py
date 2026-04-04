@@ -176,3 +176,39 @@ def test_upload_endpoint_returns_400_on_unsupported_type(client):
 
     assert resp.status_code == 400
     assert "archive.zip" in resp.json()["detail"]
+
+
+def test_upload_endpoint_cleans_up_tmp_dir_on_unexpected_error(tmp_path, monkeypatch):
+    """temp dir must be deleted even when validate_and_save raises an unexpected exception."""
+    from server.routes import make_router
+    from server.jobs import JobStore
+
+    created_dirs = []
+
+    def fake_mkdtemp(prefix=""):
+        d = str(tmp_path / "upload_tmp")
+        import os
+        os.makedirs(d, exist_ok=True)
+        created_dirs.append(d)
+        return d
+
+    async def exploding_validate(files, tmp_dir):
+        raise OSError("disk full")
+
+    store = JobStore()
+    app = create_app(store)
+    monkeypatch.setattr("server.routes.tempfile.mkdtemp", fake_mkdtemp)
+    monkeypatch.setattr("server.routes.validate_and_save", exploding_validate)
+
+    from fastapi.testclient import TestClient
+    with TestClient(app, raise_server_exceptions=False) as tc:
+        resp = tc.post(
+            "/api/jobs/upload",
+            data={"topic": "test"},
+            files={"files": ("notes.txt", b"hello", "text/plain")},
+        )
+
+    assert resp.status_code == 500
+    from pathlib import Path
+    for d in created_dirs:
+        assert not Path(d).exists(), f"temp dir {d} was not cleaned up"
