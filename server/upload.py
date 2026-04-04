@@ -61,7 +61,7 @@ async def validate_and_save(files: list[UploadFile], tmp_dir: Path) -> list[Path
     saved: list[Path] = []
 
     for upload in files:
-        filename = upload.filename or f"file_{len(saved)}"
+        filename = Path(upload.filename or "").name or f"file_{len(saved)}"
         category = file_category(filename)
 
         if category == "unsupported":

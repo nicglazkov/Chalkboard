@@ -3,10 +3,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-# Raise per-part upload limit from the 1 MB default to 20 MB so the upload
+# Raise per-part upload limit from the 1 MB default to 21 MB so the upload
 # endpoint can accept PDF and image files up to their per-type size limits.
+# Set 1 MB above the 20 MB PDF limit to ensure Starlette doesn't reject valid files.
 from starlette.formparsers import MultiPartParser
-MultiPartParser.max_part_size = 20 * 1024 * 1024
+MultiPartParser.max_part_size = 21 * 1024 * 1024
 
 from server.jobs import JobStore
 from server.routes import make_router
