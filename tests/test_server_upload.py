@@ -32,6 +32,7 @@ def test_file_category_text():
 def test_file_category_image():
     assert file_category("photo.png") == "image"
     assert file_category("banner.jpg") == "image"
+    assert file_category("scan.jpeg") == "image"
     assert file_category("anim.gif") == "image"
     assert file_category("img.webp") == "image"
 
