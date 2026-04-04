@@ -1,7 +1,8 @@
 # tests/test_server_jobs.py
 import asyncio
 import pytest
-from server.jobs import JobStore, Job
+from unittest.mock import patch
+from server.jobs import JobStore, Job, run_job
 
 
 def test_create_job_returns_id():
@@ -307,3 +308,112 @@ async def test_run_job_fetches_github_context(tmp_path):
 
     assert run_kwargs.get("context_blocks") is not None
     assert "raw.githubusercontent.com" in run_kwargs["context_blocks"][0]["text"]
+
+
+# ── upload_dir tests ────────────────────────────────────────────────────────
+
+def test_job_store_create_accepts_upload_dir(tmp_path):
+    store = JobStore()
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    job = store.create(
+        topic="test", effort="low", audience="intermediate",
+        tone="casual", theme="chalkboard", template=None, speed=1.0,
+        upload_dir=upload_dir,
+    )
+    assert job.upload_dir == upload_dir
+
+
+def test_job_store_create_upload_dir_defaults_none():
+    store = JobStore()
+    job = store.create(topic="test", effort="low", audience="intermediate",
+                       tone="casual", theme="chalkboard", template=None, speed=1.0)
+    assert job.upload_dir is None
+
+
+@pytest.mark.asyncio
+async def test_run_job_loads_file_context(tmp_path):
+    """Files in upload_dir must be loaded into context_blocks passed to run()."""
+    import json
+    store = JobStore()
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    (upload_dir / "notes.txt").write_text("important context")
+
+    job = store.create(
+        topic="test", effort="low", audience="intermediate",
+        tone="casual", theme="chalkboard", template=None, speed=1.0,
+        upload_dir=upload_dir,
+    )
+    run_kwargs = {}
+
+    async def fake_run(**kwargs):
+        run_kwargs.update(kwargs)
+        run_dir = tmp_path / job.id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "manifest.json").write_text(json.dumps({"run_id": job.id}))
+
+    async def fake_render(run_id, **kwargs):
+        return tmp_path / "final.mp4"
+
+    with patch("server.jobs.run", new=fake_run), \
+         patch("server.jobs._do_render", new=fake_render):
+        await run_job(job, tmp_path)
+
+    blocks = run_kwargs.get("context_blocks") or []
+    text_values = [b["text"] for b in blocks if b.get("type") == "text"]
+    assert any("important context" in t for t in text_values)
+
+
+@pytest.mark.asyncio
+async def test_run_job_cleans_up_upload_dir_on_success(tmp_path):
+    """upload_dir must be deleted after a successful run."""
+    import json
+    store = JobStore()
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    (upload_dir / "notes.txt").write_text("context")
+
+    job = store.create(
+        topic="test", effort="low", audience="intermediate",
+        tone="casual", theme="chalkboard", template=None, speed=1.0,
+        upload_dir=upload_dir,
+    )
+
+    async def fake_run(**kwargs):
+        run_dir = tmp_path / job.id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "manifest.json").write_text(json.dumps({"run_id": job.id}))
+
+    async def fake_render(run_id, **kwargs):
+        return tmp_path / "final.mp4"
+
+    with patch("server.jobs.run", new=fake_run), \
+         patch("server.jobs._do_render", new=fake_render):
+        await run_job(job, tmp_path)
+
+    assert not upload_dir.exists()
+
+
+@pytest.mark.asyncio
+async def test_run_job_cleans_up_upload_dir_on_failure(tmp_path):
+    """upload_dir must be deleted even when the pipeline raises."""
+    store = JobStore()
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    (upload_dir / "notes.txt").write_text("context")
+
+    job = store.create(
+        topic="test", effort="low", audience="intermediate",
+        tone="casual", theme="chalkboard", template=None, speed=1.0,
+        upload_dir=upload_dir,
+    )
+
+    async def fake_run(**kwargs):
+        raise RuntimeError("pipeline blew up")
+
+    with patch("server.jobs.run", new=fake_run):
+        await run_job(job, tmp_path)
+
+    assert job.status == "failed"
+    assert not upload_dir.exists()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import os
+import shutil
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Literal
 
 _QADensity = Literal["zero", "normal", "high"]
 
-from pipeline.context import fetch_url_blocks
+from pipeline.context import fetch_url_blocks, collect_files, load_context_blocks
 from main import (
     run as _pipeline_run,
     _render, RenderFailed,
@@ -32,6 +33,7 @@ class Job:
     urls: list[str] = field(default_factory=list)
     github: list[str] = field(default_factory=list)
     qa_density: _QADensity = "normal"
+    upload_dir: Path | None = None          # temp dir for uploaded files; deleted after run
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
     error: str | None = None
@@ -61,13 +63,14 @@ class JobStore:
                theme: str, template: str | None, speed: float,
                burn_captions: bool = False, quiz: bool = False,
                urls: list[str] | None = None, github: list[str] | None = None,
-               qa_density: _QADensity = "normal") -> Job:
+               qa_density: _QADensity = "normal",
+               upload_dir: Path | None = None) -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
                   tone=tone, theme=theme, template=template, speed=speed,
                   burn_captions=burn_captions, quiz=quiz,
                   urls=urls or [], github=github or [],
-                  qa_density=qa_density)
+                  qa_density=qa_density, upload_dir=upload_dir)
         self._jobs[job_id] = job
         return job
 
@@ -102,8 +105,18 @@ async def run_job(job: Job, output_dir: Path) -> None:
             job.append_event({"node": node_name, "updates": updates})
 
     try:
-        # Build context_blocks from URLs and GitHub repos
+        # Build context_blocks from uploaded files, URLs, and GitHub repos
         context_blocks = None
+
+        if job.upload_dir is not None and job.upload_dir.exists():
+            print(f"  [server] loading {len(list(job.upload_dir.iterdir()))} uploaded file(s)")
+            file_paths = await asyncio.to_thread(
+                collect_files, [str(job.upload_dir)]
+            )
+            file_blocks = await asyncio.to_thread(load_context_blocks, file_paths)
+            context_blocks = (context_blocks or []) + file_blocks
+            print(f"  [server] loaded {len(file_blocks)} block(s) from uploaded files")
+
         for url in job.urls:
             print(f"  [server] fetching URL: {url}")
             blocks = await asyncio.to_thread(fetch_url_blocks, url)
@@ -173,3 +186,7 @@ async def run_job(job: Job, output_dir: Path) -> None:
     except Exception as e:
         job.status = "failed"
         job.error = str(e)
+    finally:
+        # Delete temp upload dir regardless of outcome
+        if job.upload_dir is not None and job.upload_dir.exists():
+            shutil.rmtree(job.upload_dir, ignore_errors=True)

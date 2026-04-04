@@ -112,3 +112,67 @@ async def test_run_job_fails_when_manifest_missing(tmp_path):
 
     assert job.status == "failed"
     assert "pipeline did not complete" in job.error
+
+
+def test_upload_endpoint_returns_202(client, tmp_path):
+    """POST /api/jobs/upload with a valid file must return 202."""
+    tc, store = client
+    from server.upload import validate_and_save
+
+    saved_path = tmp_path / "script.py"
+    saved_path.write_bytes(b"print('hello')")
+
+    async def fake_validate(files, tmp_dir):
+        return [saved_path]
+
+    with patch("server.routes.asyncio.create_task"), \
+         patch("server.routes.validate_and_save", new=fake_validate):
+        resp = tc.post(
+            "/api/jobs/upload",
+            data={"topic": "explain B-trees", "effort": "low"},
+            files={"files": ("script.py", b"print('hello')", "text/plain")},
+        )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert "id" in body
+    assert body["status"] == "pending"
+    assert body["topic"] == "explain B-trees"
+
+
+def test_upload_endpoint_returns_413_on_file_size_error(client):
+    """POST /api/jobs/upload must return 413 when a file exceeds its size limit."""
+    tc, store = client
+    from server.upload import FileSizeError
+
+    async def fake_validate(files, tmp_dir):
+        raise FileSizeError("big.pdf: 21.0 MB exceeds the 20 MB limit for pdf files")
+
+    with patch("server.routes.validate_and_save", new=fake_validate):
+        resp = tc.post(
+            "/api/jobs/upload",
+            data={"topic": "test"},
+            files={"files": ("big.pdf", b"x" * 100, "application/pdf")},
+        )
+
+    assert resp.status_code == 413
+    assert "big.pdf" in resp.json()["detail"]
+
+
+def test_upload_endpoint_returns_400_on_unsupported_type(client):
+    """POST /api/jobs/upload must return 400 for unsupported file types."""
+    tc, store = client
+    from server.upload import UnsupportedFileTypeError
+
+    async def fake_validate(files, tmp_dir):
+        raise UnsupportedFileTypeError("archive.zip: unsupported file type")
+
+    with patch("server.routes.validate_and_save", new=fake_validate):
+        resp = tc.post(
+            "/api/jobs/upload",
+            data={"topic": "test"},
+            files={"files": ("archive.zip", b"data", "application/zip")},
+        )
+
+    assert resp.status_code == 400
+    assert "archive.zip" in resp.json()["detail"]
