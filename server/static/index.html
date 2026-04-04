@@ -762,7 +762,7 @@
 
       // Disable submit if any per-file error or total exceeded
       const hasErrors = overTotal || selectedFiles.some(({error}) => error);
-      submitBtn.disabled = hasErrors;
+      document.getElementById('submit-btn').disabled = hasErrors;
     }
 
     function addFiles(newFiles) {
