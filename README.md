@@ -235,7 +235,7 @@ OpenAI TTS uses its native speed parameter (0.25–4.0). Kokoro and ElevenLabs a
 | `elevenlabs` | Great   | API          | `pip install elevenlabs`, `ELEVENLABS_API_KEY`               |
 | `kokoro`     | Best    | Free (local) | PyTorch ≥ 2.4, `espeak-ng` — **not available on Intel Macs** |
 
-Set `TTS_BACKEND` in your `.env` file. Default is `kokoro`.
+Set `TTS_BACKEND` in your `.env` file. The `.env.example` ships with `openai` (works on all platforms). The code default when unset is `kokoro`.
 
 > **Intel Mac users:** PyTorch ≥ 2.4 has no x86_64 macOS wheels. Use `openai` or `elevenlabs`.
 >

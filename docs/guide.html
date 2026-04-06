@@ -43,7 +43,7 @@
         <div class="code-block"><pre><span class="cmd">git clone https://github.com/nicglazkov/Chalkboard.git</span>
 <span class="cmd">cd Chalkboard</span>
 <span class="cmd">pip install -r requirements.txt</span>
-<span class="cmd">cp .env.example .env</span>  <span class="comment"># add your ANTHROPIC_API_KEY</span></pre></div>
+<span class="cmd">cp .env.example .env</span>  <span class="comment"># add ANTHROPIC_API_KEY + OPENAI_API_KEY (default TTS)</span></pre></div>
 
         <p class="code-label">Run (CLI)</p>
         <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain how B-trees work"</span> <span class="flag">--effort</span> medium</pre></div>
@@ -324,7 +324,7 @@
       <section class="section" id="tts">
         <p class="section-label">Voiceover</p>
         <h2>TTS backends</h2>
-        <p class="prose">Set <code>TTS_BACKEND</code> in your <code>.env</code> file. Default is <code>kokoro</code>.</p>
+        <p class="prose">Set <code>TTS_BACKEND</code> in your <code>.env</code> file. The <code>.env.example</code> ships with <code>openai</code> — it works on all platforms. The code default when unset is <code>kokoro</code>.</p>
 
         <table class="ref-table">
           <thead>
