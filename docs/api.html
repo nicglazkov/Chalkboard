@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — Chalkboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+
+  <nav>
+    <div class="container--nav">
+      <a href="index.html" class="nav-logo">Chalkboard</a>
+      <div class="nav-links">
+        <a href="guide.html">Guide</a>
+        <a href="api.html" class="active">API</a>
+        <a href="https://github.com/nicglazkov/Chalkboard" target="_blank" class="nav-github">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+
+      <!-- Hero -->
+      <section class="page-hero">
+        <p class="page-label">Documentation</p>
+        <h1>API Reference</h1>
+        <p>HTTP API for integrating Chalkboard into your stack. Includes SSE streaming for live pipeline progress.</p>
+      </section>
+
+      <!-- Starting the server -->
+      <section class="section" id="start">
+        <p class="section-label">Setup</p>
+        <h2>Starting the server</h2>
+
+        <div class="code-block"><pre><span class="cmd">python run_server.py</span>            <span class="comment"># http://localhost:8000</span>
+<span class="cmd">python run_server.py</span> <span class="flag">--reload</span>   <span class="comment"># dev mode (auto-reload on file changes)</span>
+<span class="cmd">python run_server.py</span> <span class="flag">--port</span> 9000 <span class="comment"># custom port</span></pre></div>
+
+        <p class="prose">The server holds jobs in memory — they are lost on restart. Each job runs the full pipeline (script → Manim → render → QA) in a background task. The <code>SERVER_PORT</code> env var sets the default port; <code>--port</code> overrides it at runtime.</p>
+      </section>
+
+      <!-- Endpoints -->
+      <section class="section" id="endpoints">
+        <p class="section-label">Reference</p>
+        <h2>Endpoints</h2>
+
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:60px">Method</th>
+              <th style="width:260px">Path</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="method method-post">POST</span></td>
+              <td><span class="flag-name">/api/jobs</span></td>
+              <td>Create a job from a JSON body (no file uploads)</td>
+            </tr>
+            <tr>
+              <td><span class="method method-post">POST</span></td>
+              <td><span class="flag-name">/api/jobs/upload</span></td>
+              <td>Create a job with file uploads (multipart form)</td>
+            </tr>
+            <tr>
+              <td><span class="method method-get">GET</span></td>
+              <td><span class="flag-name">/api/jobs</span></td>
+              <td>List all jobs in this server session</td>
+            </tr>
+            <tr>
+              <td><span class="method method-get">GET</span></td>
+              <td><span class="flag-name">/api/jobs/{id}</span></td>
+              <td>Get a job by ID — poll for status and output file list</td>
+            </tr>
+            <tr>
+              <td><span class="method method-get">GET</span></td>
+              <td><span class="flag-name">/api/jobs/{id}/events</span></td>
+              <td>SSE stream — one event per pipeline node update, then <code>{"done": true}</code></td>
+            </tr>
+            <tr>
+              <td><span class="method method-get">GET</span></td>
+              <td><span class="flag-name">/api/jobs/{id}/files/{filename}</span></td>
+              <td>Download an output file (<code>final.mp4</code>, <code>captions.srt</code>, etc.)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Creating a job -->
+      <section class="section" id="create">
+        <p class="section-label">Jobs</p>
+        <h2>Creating a job</h2>
+
+        <h3>JSON — no files</h3>
+        <p class="prose">Send a JSON body to <code>POST /api/jobs</code>. Returns 202 immediately; the pipeline runs in the background.</p>
+
+        <p class="code-label">Minimal</p>
+        <div class="code-block"><pre><span class="cmd">curl</span> -s -X POST http://localhost:8000/api/jobs \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"topic": "explain recursion", "effort": "low"}'</span> | python3 -m json.tool</pre></div>
+
+        <p class="code-label">All options</p>
+        <div class="code-block"><pre><span class="cmd">curl</span> -s -X POST http://localhost:8000/api/jobs \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "topic":         "explain recursion",
+    "effort":        "high",
+    "audience":      "beginner",
+    "tone":          "casual",
+    "theme":         "chalkboard",
+    "template":      "algorithm",
+    "speed":         1.25,
+    "burn_captions": true,
+    "quiz":          true,
+    "qa_density":    "normal",
+    "urls":          ["https://en.wikipedia.org/wiki/Recursion"],
+    "github":        ["nicglazkov/Chalkboard"]
+  }'</span> | python3 -m json.tool</pre></div>
+
+        <h3>Multipart — with file uploads</h3>
+        <p class="prose">Send a multipart form to <code>POST /api/jobs/upload</code> to include local files as source material. All the same fields are available as form fields. Per-file size limits: text/code 2 MB · images 5 MB · PDFs 20 MB · DOCX 10 MB · 24 MB total.</p>
+
+        <div class="code-block"><pre><span class="cmd">curl</span> -s -X POST http://localhost:8000/api/jobs/upload \
+  -F <span class="str">"topic=explain this codebase"</span> \
+  -F <span class="str">"effort=medium"</span> \
+  -F <span class="str">"files=@./README.md"</span> \
+  -F <span class="str">"files=@./main.py"</span> | python3 -m json.tool</pre></div>
+      </section>
+
+      <!-- SSE -->
+      <section class="section" id="events">
+        <p class="section-label">Streaming</p>
+        <h2>Live progress (SSE)</h2>
+        <p class="prose">Connect to <code>GET /api/jobs/{id}/events</code> to receive a server-sent event stream. One event is emitted per pipeline node update. The stream ends with <code>{"done": true}</code> when the job reaches a terminal state.</p>
+
+        <div class="code-block"><pre><span class="cmd">curl</span> -s http://localhost:8000/api/jobs/&lt;id&gt;/events</pre></div>
+
+        <p class="code-label">Example event</p>
+        <div class="code-block"><pre><span class="str">data: {"node": "script_agent", "updates": {"script": "...", "script_segments": [...]}}</span>
+
+<span class="str">data: {"node": "fact_validator", "updates": {"fact_feedback": null}}</span>
+
+<span class="str">data: {"node": "manim_agent", "updates": {"manim_code": "..."}}</span>
+
+<span class="str">data: {"done": true}</span></pre></div>
+
+        <p class="prose">Pipeline stages in order: <code>init</code> → <code>research_agent</code> (high effort only) → <code>script_agent</code> → <code>fact_validator</code> → <code>manim_agent</code> → <code>code_validator</code> → <code>render_trigger</code>.</p>
+      </section>
+
+      <!-- Output files -->
+      <section class="section" id="output">
+        <p class="section-label">Output</p>
+        <h2>Downloading output</h2>
+        <p class="prose">After a job completes, <code>output_files</code> in the job response lists the filenames available for download.</p>
+
+        <div class="code-block"><pre><span class="comment"># Download the video</span>
+<span class="cmd">curl</span> -o final.mp4 http://localhost:8000/api/jobs/&lt;id&gt;/files/final.mp4
+
+<span class="comment"># Download captions</span>
+<span class="cmd">curl</span> -o captions.srt http://localhost:8000/api/jobs/&lt;id&gt;/files/captions.srt
+
+<span class="comment"># Download the quiz</span>
+<span class="cmd">curl</span> -o quiz.json http://localhost:8000/api/jobs/&lt;id&gt;/files/quiz.json</pre></div>
+
+        <h3>Output files</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">File</th>
+              <th>Contents</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">final.mp4</span></td>
+              <td>Full HD video with embedded chapter atoms</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">captions.srt</span></td>
+              <td>SRT subtitle file (one entry per script segment)</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">script.txt</span></td>
+              <td>Full narration script as plain text</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">scene.py</span></td>
+              <td>Generated Manim Python source</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">segments.json</span></td>
+              <td>Per-segment text and actual audio durations</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">quiz.json</span></td>
+              <td>Comprehension questions (only when <code>quiz: true</code>)</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">manifest.json</span></td>
+              <td>Run metadata — run ID, topic, quality, timestamp</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Response shape -->
+      <section class="section" id="response">
+        <p class="section-label">Schema</p>
+        <h2>Job response</h2>
+        <p class="prose">All job endpoints return this shape:</p>
+
+        <div class="code-block"><pre><span class="str">{
+  "id":           "uuid",
+  "status":       "pending | running | completed | failed",
+  "topic":        "explain recursion",
+  "events":       [{"node": "script_agent", "updates": {...}}, ...],
+  "error":        null,
+  "output_files": ["final.mp4", "captions.srt", "script.txt"]
+}</span></pre></div>
+
+        <p class="prose"><code>status</code> transitions: <code>pending</code> → <code>running</code> → <code>completed</code> or <code>failed</code>. When <code>failed</code>, <code>error</code> contains the exception message. When the render fails but the pipeline succeeded, <code>error</code> is <code>"render failed; pipeline output preserved"</code> and <code>status</code> is still <code>completed</code>.</p>
+      </section>
+
+      <!-- Web UI -->
+      <section class="section" id="webui">
+        <p class="section-label">Interface</p>
+        <h2>Web UI</h2>
+        <p class="prose">The server includes a built-in single-page UI. Start the server and open <code>http://localhost:8000</code> in your browser.</p>
+
+        <div class="cards" style="grid-template-columns:1fr 1fr;">
+          <div class="card">
+            <p class="card-name">Form</p>
+            <h4>Job creation</h4>
+            <p>Topic, Effort, and Audience always visible. Advanced options (collapsible): Tone, Theme, Template, Speed, Visual QA density, Burn Captions, Generate Quiz, URL inputs, GitHub repos, and a file upload zone with drag-and-drop folder support.</p>
+          </div>
+          <div class="card">
+            <p class="card-name">Progress</p>
+            <h4>Live pipeline view</h4>
+            <p>Stage-by-stage progress driven by the SSE stream. Each pipeline node lights up as it completes. Video player with download links appears when the job finishes.</p>
+          </div>
+        </div>
+
+        <p class="prose" style="margin-top:20px;">No build step required. The UI lives in <code>server/static/index.html</code> and is served automatically by the FastAPI app.</p>
+      </section>
+
+      <!-- Footer -->
+      <footer>
+        <span class="footer-left">Chalkboard — MIT License</span>
+        <div class="footer-right">
+          <a href="https://github.com/nicglazkov/Chalkboard" target="_blank">github.com/nicglazkov/Chalkboard ↗</a>
+        </div>
+      </footer>
+
+    </div>
+  </main>
+
+</body>
+</html>
