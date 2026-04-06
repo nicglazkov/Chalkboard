@@ -9,3 +9,4 @@ pipeline_state.db-shm
 pipeline_state.db-wal
 *.DS_Store*
 test_output.txt
+docs/superpowers/
