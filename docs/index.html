@@ -575,9 +575,15 @@
 <span class="cmd">cp .env.example .env</span>  <span class="comment"># add ANTHROPIC_API_KEY + OPENAI_API_KEY (default TTS)</span></pre>
         </div>
 
-        <p class="code-label">Run</p>
+        <p class="code-label">CLI</p>
         <div class="code-block">
           <pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"explain how B-trees work"</span> <span class="flag">--effort</span> medium</pre>
+        </div>
+
+        <p class="code-label">Web UI</p>
+        <div class="code-block">
+          <pre><span class="cmd">python run_server.py</span>
+<span class="comment"># Open http://localhost:8000</span></pre>
         </div>
 
         <p class="code-label">With context</p>
