@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guide — Chalkboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+
+  <nav>
+    <div class="container--nav">
+      <a href="index.html" class="nav-logo">Chalkboard</a>
+      <div class="nav-links">
+        <a href="guide.html" class="active">Guide</a>
+        <a href="api.html">API</a>
+        <a href="https://github.com/nicglazkov/Chalkboard" target="_blank" class="nav-github">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <div class="container">
+
+      <!-- Hero -->
+      <section class="page-hero">
+        <p class="page-label">Documentation</p>
+        <h1>CLI Guide</h1>
+        <p>Everything you need to run Chalkboard from the terminal — flags, context injection, templates, and configuration.</p>
+      </section>
+
+      <!-- Quick start -->
+      <section class="section" id="quickstart">
+        <p class="section-label">Getting started</p>
+        <h2>Quick start</h2>
+        <p class="prose">Prerequisites: Python 3.10+, <a href="https://docker.com" style="color:var(--text)">Docker</a>, and <a href="https://ffmpeg.org" style="color:var(--text)">ffmpeg</a>.</p>
+
+        <p class="code-label">Install</p>
+        <div class="code-block"><pre><span class="cmd">git clone https://github.com/nicglazkov/Chalkboard.git</span>
+<span class="cmd">cd Chalkboard</span>
+<span class="cmd">pip install -r requirements.txt</span>
+<span class="cmd">cp .env.example .env</span>  <span class="comment"># add your ANTHROPIC_API_KEY</span></pre></div>
+
+        <p class="code-label">Run (CLI)</p>
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain how B-trees work"</span> <span class="flag">--effort</span> medium</pre></div>
+
+        <p class="code-label">Run (Web UI)</p>
+        <div class="code-block"><pre><span class="cmd">python run_server.py</span>
+<span class="comment"># Open http://localhost:8000</span></pre></div>
+
+        <p class="prose" style="margin-top:20px;">Either way the pipeline runs, renders the animation in Docker, and merges the voiceover — outputting <code>output/&lt;run-id&gt;/final.mp4</code>.</p>
+        <p class="prose"><strong>First run only:</strong> Docker builds the render image automatically (~30 seconds). Subsequent runs use the cached image.</p>
+      </section>
+
+      <!-- Context injection -->
+      <section class="section" id="context">
+        <p class="section-label">Source material</p>
+        <h2>Context injection</h2>
+        <p class="prose">Pass local files, URLs, or GitHub repos as source material. The pipeline builds the animation from your content rather than Claude's training data alone.</p>
+
+        <p class="code-label">Local files and directories</p>
+        <div class="code-block"><pre><span class="comment"># Explain a codebase</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this codebase"</span> <span class="flag">--context</span> ./src <span class="flag">--context</span> ./docs
+
+<span class="comment"># Turn a paper into an animation</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"summarize this paper"</span> <span class="flag">--context</span> paper.pdf
+
+<span class="comment"># Exclude lock files and build output</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"visualize this"</span> <span class="flag">--context</span> ./repo <span class="flag">--context-ignore</span> <span class="str">"*.lock"</span> <span class="flag">--context-ignore</span> <span class="str">"dist/"</span>
+
+<span class="comment"># Obsidian vault page</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"visualize my notes"</span> <span class="flag">--context</span> ~/Documents/vault/page.md</pre></div>
+
+        <p class="code-label">URLs and GitHub repos</p>
+        <div class="code-block"><pre><span class="comment"># Web article</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this concept"</span> <span class="flag">--url</span> https://en.wikipedia.org/wiki/Binary_search_tree
+
+<span class="comment"># GitHub repo README</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this project"</span> <span class="flag">--github</span> nicglazkov/Chalkboard
+
+<span class="comment"># Combine files and URLs</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain my project"</span> <span class="flag">--context</span> ./README.md <span class="flag">--url</span> https://example.com/blog-post</pre></div>
+
+        <h3>Supported file types</h3>
+        <p class="prose">Text and code files (<code>.py</code>, <code>.js</code>, <code>.md</code>, <code>.yaml</code>, <code>.ps1</code>, <code>.bat</code>, and many more), images (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.gif</code>), PDFs, and Word docs (<code>.docx</code>). URLs are fetched with HTML stripped to plain text, truncated at 100k characters.</p>
+
+        <h3>Web UI file upload</h3>
+        <p class="prose">The web UI includes a file upload zone in the Advanced options section. Drag and drop individual files or entire folders. Per-file limits: text/code 2 MB · images 5 MB · PDFs 20 MB · DOCX 10 MB · 24 MB total. Errors are shown inline before submission.</p>
+
+        <h3>Token reporting</h3>
+        <p class="prose">Before the pipeline starts, Chalkboard reports how much of the context window your source material uses. If context exceeds 10k tokens you'll be prompted to confirm — pass <code>--yes</code> to skip this prompt for scripted runs. If context exceeds 90% of the model window, Chalkboard aborts.</p>
+
+        <h3>Resuming with context</h3>
+        <p class="prose"><code>--context</code>, <code>--url</code>, and <code>--github</code> are not stored in the checkpoint. Pass them again on resume:</p>
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"..."</span> <span class="flag">--run-id</span> &lt;id&gt; <span class="flag">--context</span> ./src</pre></div>
+      </section>
+
+      <!-- CLI flags -->
+      <section class="section" id="flags">
+        <p class="section-label">Reference</p>
+        <h2>CLI flags</h2>
+
+        <h3>Core</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--topic</span></td>
+              <td><span class="flag-required">required</span></td>
+              <td>Topic to explain, e.g. <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">"how B-trees work"</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--effort</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td>Validation thoroughness: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--audience</span></td>
+              <td><span class="flag-default">intermediate</span></td>
+              <td>Target audience: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">beginner</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">intermediate</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">expert</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--tone</span></td>
+              <td><span class="flag-default">casual</span></td>
+              <td>Narration tone: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">casual</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">formal</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">socratic</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--theme</span></td>
+              <td><span class="flag-default">chalkboard</span></td>
+              <td>Visual color theme: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">chalkboard</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">light</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">colorful</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--template</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Animation template: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">algorithm</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">code</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">compare</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--speed</span></td>
+              <td><span class="flag-default">1.0</span></td>
+              <td>Narration speed multiplier. OpenAI: native 0.25–4.0. Kokoro/ElevenLabs: ffmpeg atempo.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Context</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--context</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>File or directory to use as source material. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--context-ignore</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Glob pattern to exclude from context directories. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--url</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>URL to fetch as source material (HTML stripped to text). Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--github</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>GitHub repo (<code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">owner/repo</code> or full URL) — fetches its README as context. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--yes</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Skip the large-context confirmation prompt. Useful for scripted runs.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Output</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--quiz</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Generate comprehension questions as <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">quiz.json</code> after the pipeline.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--burn-captions</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Burn subtitles into the video (re-encodes). <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">captions.srt</code> is always written regardless.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--run-id</span></td>
+              <td><span class="flag-default">auto</span></td>
+              <td>Resume a previous run using its ID.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Render</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--preview</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Render a fast low-quality preview (480p15) to <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">preview.mp4</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--no-render</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Run the AI pipeline only — skip Docker render and ffmpeg merge.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--verbose</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Stream raw Docker/Manim output to the terminal while rendering. Cannot be combined with <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">--preview</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--qa-density</span></td>
+              <td><span class="flag-default">normal</span></td>
+              <td>Visual QA frame sampling: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">zero</code> (skip), <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">normal</code> (1 frame/30s, up to 10), <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code> (1 frame/15s, up to 20).</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Templates -->
+      <section class="section" id="templates">
+        <p class="section-label">Animation</p>
+        <h2>Templates</h2>
+        <p class="prose"><code>--template</code> injects layout and visual convention guidance into the Manim code generator, producing more structured animations for specific content types. Templates compose freely with <code>--theme</code>, <code>--tone</code>, <code>--audience</code>, and <code>--speed</code>.</p>
+
+        <div class="cards">
+          <div class="card">
+            <p class="card-name">algorithm</p>
+            <h4>Sorting &amp; searching</h4>
+            <p>Array cells + pointer arrows + step counter + explicit swap animations. Best for sorting, searching, and graph traversal.</p>
+          </div>
+          <div class="card">
+            <p class="card-name">code</p>
+            <h4>Code walkthroughs</h4>
+            <p>Manim Code object, incremental line reveal, callout annotations. Best for implementation explainers.</p>
+          </div>
+          <div class="card">
+            <p class="card-name">compare</p>
+            <h4>A vs B trade-offs</h4>
+            <p>Two labeled columns, consistent color per side, summary row at end. Best for technology comparisons.</p>
+          </div>
+        </div>
+
+        <p class="code-label" style="margin-top:24px">Examples</p>
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain merge sort"</span>                      <span class="flag">--template</span> algorithm
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"walk through a binary search implementation"</span> <span class="flag">--template</span> code
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"SQL vs NoSQL trade-offs"</span>                   <span class="flag">--template</span> compare</pre></div>
+      </section>
+
+      <!-- Effort levels -->
+      <section class="section" id="effort">
+        <p class="section-label">Quality</p>
+        <h2>Effort levels</h2>
+        <p class="prose"><code>--effort</code> controls how thorough the validation is and whether web search is used during script generation.</p>
+
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:100px">Level</th>
+              <th>Fact-check</th>
+              <th>Web search</th>
+              <th style="width:80px">Segments</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">low</span></td>
+              <td>Light — obvious errors only</td>
+              <td>Never</td>
+              <td>3–4</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">medium</span></td>
+              <td>Spot-check key claims</td>
+              <td>No</td>
+              <td>4–6</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">high</span></td>
+              <td>Thorough</td>
+              <td>Via research agent</td>
+              <td>5–8</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- TTS backends -->
+      <section class="section" id="tts">
+        <p class="section-label">Voiceover</p>
+        <h2>TTS backends</h2>
+        <p class="prose">Set <code>TTS_BACKEND</code> in your <code>.env</code> file. Default is <code>kokoro</code>.</p>
+
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:110px">Backend</th>
+              <th style="width:80px">Quality</th>
+              <th style="width:80px">Cost</th>
+              <th>Requires</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">kokoro</span></td>
+              <td>Best</td>
+              <td>Free</td>
+              <td>PyTorch ≥ 2.4, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">espeak-ng</code> — not available on Intel Macs</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">openai</span></td>
+              <td>Great</td>
+              <td>API</td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">OPENAI_API_KEY</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">elevenlabs</span></td>
+              <td>Great</td>
+              <td>API</td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">pip install elevenlabs</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">ELEVENLABS_API_KEY</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="prose" style="margin-top:20px;"><strong>Intel Mac users:</strong> PyTorch ≥ 2.4 has no x86_64 macOS wheels. Use <code>openai</code> or <code>elevenlabs</code>.</p>
+        <p class="prose">To install <code>espeak-ng</code> for Kokoro: <code>brew install espeak-ng</code> / <code>apt install espeak-ng</code></p>
+      </section>
+
+      <!-- Configuration -->
+      <section class="section" id="config">
+        <p class="section-label">Configuration</p>
+        <h2>Environment variables</h2>
+        <p class="prose">All settings can be overridden via <code>.env</code> or environment variables. Copy <code>.env.example</code> to get started.</p>
+
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:180px">Variable</th>
+              <th style="width:130px">Default</th>
+              <th>Options</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">TTS_BACKEND</span></td>
+              <td><span class="flag-default">kokoro</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">kokoro</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">openai</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">elevenlabs</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">ANTHROPIC_API_KEY</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Required. Get yours at console.anthropic.com</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">MANIM_QUALITY</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code> (1080p60)</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_EFFORT</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_AUDIENCE</span></td>
+              <td><span class="flag-default">intermediate</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">beginner</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">intermediate</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">expert</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_TONE</span></td>
+              <td><span class="flag-default">casual</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">casual</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">formal</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">socratic</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_THEME</span></td>
+              <td><span class="flag-default">chalkboard</span></td>
+              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">chalkboard</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">light</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">colorful</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">OUTPUT_DIR</span></td>
+              <td><span class="flag-default">./output</span></td>
+              <td>Any path</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">CHECKPOINT_DB</span></td>
+              <td><span class="flag-default">pipeline_state.db</span></td>
+              <td>Any path</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">SERVER_PORT</span></td>
+              <td><span class="flag-default">8000</span></td>
+              <td>Overridden by <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">--port</code> at runtime</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Resume -->
+      <section class="section" id="resume">
+        <p class="section-label">Checkpointing</p>
+        <h2>Resuming a crashed run</h2>
+        <p class="prose">Every run is checkpointed after each pipeline stage. If it crashes or you abort, resume with the same run ID:</p>
+
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"..."</span> <span class="flag">--run-id</span> &lt;previous-run-id&gt;</pre></div>
+
+        <h3>Preview → full render workflow</h3>
+        <p class="prose">Run <code>--preview</code> first to quickly check the visuals at low quality, then do the full HD render. The pipeline result is already checkpointed — it won't re-run:</p>
+
+        <div class="code-block"><pre><span class="comment"># Step 1: generate script + animation, render preview</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how B-trees work"</span> <span class="flag">--preview</span>
+<span class="comment"># → output/&lt;run-id&gt;/preview.mp4 (480p, fast)</span>
+
+<span class="comment"># Step 2: full HD render (pipeline skipped — uses checkpoint)</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how B-trees work"</span> <span class="flag">--run-id</span> &lt;run-id&gt;
+<span class="comment"># → output/&lt;run-id&gt;/final.mp4 (full quality + visual QA)</span></pre></div>
+      </section>
+
+      <!-- Footer -->
+      <footer>
+        <span class="footer-left">Chalkboard — MIT License</span>
+        <div class="footer-right">
+          <a href="https://github.com/nicglazkov/Chalkboard" target="_blank">github.com/nicglazkov/Chalkboard ↗</a>
+        </div>
+      </footer>
+
+    </div>
+  </main>
+
+</body>
+</html>
