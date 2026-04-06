@@ -610,10 +610,10 @@
             <div class="form-group repeatable-full">
               <label>Local files (source material)</label>
               <div class="upload-zone" id="upload-zone">
-                <p>Drop files here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
+                <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
                 <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
                 <input type="file" id="file-input" multiple
-                  accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
+                  accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
               </div>
               <div class="file-list" id="file-list"></div>
               <div class="upload-total" id="upload-total" style="display:none;"></div>
@@ -677,7 +677,7 @@
     const FILE_LIMITS = { text: 2*1024*1024, image: 5*1024*1024, pdf: 20*1024*1024, docx: 10*1024*1024 };
     const TOTAL_LIMIT = 24 * 1024 * 1024;
     const TEXT_EXTS = new Set(['.txt','.md','.py','.js','.ts','.jsx','.tsx','.go','.rs',
-      '.java','.c','.cpp','.h','.hpp','.rb','.swift','.kt','.sh','.bash','.zsh',
+      '.java','.c','.cpp','.h','.hpp','.rb','.swift','.kt','.sh','.bash','.zsh','.bat','.ps1',
       '.yaml','.yml','.json','.toml','.csv','.html','.css','.scss','.xml','.ini',
       '.env','.sql','.graphql','.proto','.tf','.hcl','.vue','.php','.scala','.dart','.elm']);
     const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp']);
@@ -794,10 +794,38 @@
       uploadZone.classList.add('drag-over');
     });
     uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-    uploadZone.addEventListener('drop', (e) => {
+    // Recursively collect all File objects from a FileSystemEntry (file or directory)
+    async function getAllFilesFromEntry(entry) {
+      if (entry.isFile) {
+        return new Promise((resolve, reject) => entry.file(resolve, reject));
+      }
+      // Directory: readEntries returns up to 100 at a time; loop until empty
+      const reader = entry.createReader();
+      const files = [];
+      let batch;
+      do {
+        batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        for (const child of batch) {
+          const result = await getAllFilesFromEntry(child);
+          if (Array.isArray(result)) files.push(...result);
+          else files.push(result);
+        }
+      } while (batch.length > 0);
+      return files;
+    }
+
+    uploadZone.addEventListener('drop', async (e) => {
       e.preventDefault();
       uploadZone.classList.remove('drag-over');
-      addFiles(Array.from(e.dataTransfer.files));
+      const newFiles = [];
+      for (const item of Array.from(e.dataTransfer.items)) {
+        const entry = item.webkitGetAsEntry();
+        if (!entry) continue;
+        const result = await getAllFilesFromEntry(entry);
+        if (Array.isArray(result)) newFiles.push(...result);
+        else newFiles.push(result);
+      }
+      addFiles(newFiles);
     });
 
     document.getElementById('add-url').addEventListener('click', () =>

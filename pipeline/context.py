@@ -27,7 +27,7 @@ except ImportError:
 TEXT_EXTENSIONS = {
     ".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
     ".java", ".c", ".cpp", ".c++", ".cc", ".cxx", ".h", ".hpp", ".hxx",
-    ".rb", ".swift", ".kt", ".sh", ".bash", ".zsh", ".fish",
+    ".rb", ".swift", ".kt", ".sh", ".bash", ".zsh", ".fish", ".bat", ".ps1",
     ".yaml", ".yml", ".json", ".toml", ".csv",
     ".html", ".css", ".scss", ".xml", ".ini", ".env", ".sql", ".graphql",
     ".proto", ".tf", ".hcl", ".vue", ".php", ".scala", ".clj", ".hs",

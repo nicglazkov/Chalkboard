@@ -119,7 +119,9 @@ python main.py --topic "explain this project" --github nicglazkov/Chalkboard
 python main.py --topic "explain this library" --github https://github.com/owner/repo
 ```
 
-Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
+Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, `.ps1`, `.bat`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
+
+The **web UI** also supports context injection via the file upload zone in Advanced options — drag and drop files or entire folders directly onto the zone. Per-file limits: text/code 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB, 24 MB total.
 
 Before the pipeline starts, Chalkboard reports how many tokens the context uses:
 
@@ -311,7 +313,8 @@ python run_server.py --port 9000
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST /api/jobs` | Create job | Start the pipeline for a topic |
+| `POST /api/jobs` | Create job | Start the pipeline for a topic (JSON body) |
+| `POST /api/jobs/upload` | Create job with files | Multipart form — same fields plus file uploads |
 | `GET /api/jobs` | List jobs | All jobs in this server session |
 | `GET /api/jobs/{id}` | Get job | Poll status and output file list |
 | `GET /api/jobs/{id}/events` | SSE stream | Live pipeline progress events |
@@ -343,6 +346,13 @@ curl -s -X POST http://localhost:8000/api/jobs \
     "github": ["nicglazkov/Chalkboard"]
   }' | python3 -m json.tool
 
+# Start a job with local file uploads (multipart)
+curl -s -X POST http://localhost:8000/api/jobs/upload \
+  -F "topic=explain this codebase" \
+  -F "effort=medium" \
+  -F "files=@./README.md" \
+  -F "files=@./main.py" | python3 -m json.tool
+
 # Stream progress (SSE)
 curl -s http://localhost:8000/api/jobs/<id>/events
 
@@ -367,7 +377,8 @@ curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
 
 The server includes a built-in single-page UI. Start the server and open `http://localhost:8000` in your browser — you'll see:
 
-- A form with **Topic**, **Effort**, and **Audience** always visible, plus an **Advanced options** section (collapsible) containing Tone, Theme, Template, Speed, Visual QA density, Burn Captions, Generate Quiz, URL inputs, and GitHub repo inputs
+- A form with **Topic**, **Effort**, and **Audience** always visible, plus an **Advanced options** section (collapsible) containing Tone, Theme, Template, Speed, Visual QA density, Burn Captions, Generate Quiz, URL inputs, GitHub repo inputs, and a **file upload zone**
+- File upload zone supports drag-and-drop of individual files or entire folders, with inline per-file and total-size error display (text/code: 2 MB, images: 5 MB, PDFs: 20 MB, DOCX: 10 MB, total: 24 MB)
 - A live stage-by-stage progress view as the pipeline runs
 - A video player with download links when the job completes
 
