@@ -35,7 +35,7 @@
       <section class="section" id="quickstart">
         <p class="section-label">Getting started</p>
         <h2>Quick start</h2>
-        <p class="prose">Prerequisites: Python 3.10+, <a href="https://docker.com" style="color:var(--text)">Docker</a>, and <a href="https://ffmpeg.org" style="color:var(--text)">ffmpeg</a>.</p>
+        <p class="prose">Prerequisites: Python 3.10+, <a href="https://docker.com" target="_blank">Docker</a>, and <a href="https://ffmpeg.org" target="_blank">ffmpeg</a>.</p>
 
         <p class="code-label">Install</p>
         <div class="code-block"><pre><span class="cmd">git clone https://github.com/nicglazkov/Chalkboard.git</span>
@@ -115,32 +115,32 @@
             <tr>
               <td><span class="flag-name">--topic</span></td>
               <td><span class="flag-required">required</span></td>
-              <td>Topic to explain, e.g. <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">"how B-trees work"</code></td>
+              <td>Topic to explain, e.g. <code>"how B-trees work"</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--effort</span></td>
               <td><span class="flag-default">medium</span></td>
-              <td>Validation thoroughness: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code></td>
+              <td>Validation thoroughness: <code>low</code>, <code>medium</code>, <code>high</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--audience</span></td>
               <td><span class="flag-default">intermediate</span></td>
-              <td>Target audience: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">beginner</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">intermediate</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">expert</code></td>
+              <td>Target audience: <code>beginner</code>, <code>intermediate</code>, <code>expert</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--tone</span></td>
               <td><span class="flag-default">casual</span></td>
-              <td>Narration tone: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">casual</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">formal</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">socratic</code></td>
+              <td>Narration tone: <code>casual</code>, <code>formal</code>, <code>socratic</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--theme</span></td>
               <td><span class="flag-default">chalkboard</span></td>
-              <td>Visual color theme: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">chalkboard</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">light</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">colorful</code></td>
+              <td>Visual color theme: <code>chalkboard</code>, <code>light</code>, <code>colorful</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--template</span></td>
               <td><span class="flag-default">—</span></td>
-              <td>Animation template: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">algorithm</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">code</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">compare</code></td>
+              <td>Animation template: <code>algorithm</code>, <code>code</code>, <code>compare</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--speed</span></td>
@@ -178,7 +178,7 @@
             <tr>
               <td><span class="flag-name">--github</span></td>
               <td><span class="flag-default">—</span></td>
-              <td>GitHub repo (<code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">owner/repo</code> or full URL) — fetches its README as context. Repeatable.</td>
+              <td>GitHub repo (<code>owner/repo</code> or full URL) — fetches its README as context. Repeatable.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--yes</span></td>
@@ -201,12 +201,12 @@
             <tr>
               <td><span class="flag-name">--quiz</span></td>
               <td><span class="flag-default">off</span></td>
-              <td>Generate comprehension questions as <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">quiz.json</code> after the pipeline.</td>
+              <td>Generate comprehension questions as <code>quiz.json</code> after the pipeline.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--burn-captions</span></td>
               <td><span class="flag-default">off</span></td>
-              <td>Burn subtitles into the video (re-encodes). <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">captions.srt</code> is always written regardless.</td>
+              <td>Burn subtitles into the video (re-encodes). <code>captions.srt</code> is always written regardless.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--run-id</span></td>
@@ -229,7 +229,7 @@
             <tr>
               <td><span class="flag-name">--preview</span></td>
               <td><span class="flag-default">off</span></td>
-              <td>Render a fast low-quality preview (480p15) to <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">preview.mp4</code>.</td>
+              <td>Render a fast low-quality preview (480p15) to <code>preview.mp4</code>.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--no-render</span></td>
@@ -239,12 +239,12 @@
             <tr>
               <td><span class="flag-name">--verbose</span></td>
               <td><span class="flag-default">off</span></td>
-              <td>Stream raw Docker/Manim output to the terminal while rendering. Cannot be combined with <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">--preview</code>.</td>
+              <td>Stream raw Docker/Manim output to the terminal while rendering. Cannot be combined with <code>--preview</code>.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--qa-density</span></td>
               <td><span class="flag-default">normal</span></td>
-              <td>Visual QA frame sampling: <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">zero</code> (skip), <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">normal</code> (1 frame/30s, up to 10), <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code> (1 frame/15s, up to 20).</td>
+              <td>Visual QA frame sampling: <code>zero</code> (skip), <code>normal</code> (1 frame/30s, up to 10), <code>high</code> (1 frame/15s, up to 20).</td>
             </tr>
           </tbody>
         </table>
@@ -338,19 +338,19 @@
               <td><span class="flag-name">kokoro</span></td>
               <td>Best</td>
               <td>Free</td>
-              <td>PyTorch ≥ 2.4, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">espeak-ng</code> — not available on Intel Macs</td>
+              <td>PyTorch ≥ 2.4, <code>espeak-ng</code> — not available on Intel Macs</td>
             </tr>
             <tr>
               <td><span class="flag-name">openai</span></td>
               <td>Great</td>
               <td>API</td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">OPENAI_API_KEY</code></td>
+              <td><code>OPENAI_API_KEY</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">elevenlabs</span></td>
               <td>Great</td>
               <td>API</td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">pip install elevenlabs</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">ELEVENLABS_API_KEY</code></td>
+              <td><code>pip install elevenlabs</code>, <code>ELEVENLABS_API_KEY</code></td>
             </tr>
           </tbody>
         </table>
@@ -377,37 +377,37 @@
             <tr>
               <td><span class="flag-name">TTS_BACKEND</span></td>
               <td><span class="flag-default">kokoro</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">kokoro</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">openai</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">elevenlabs</code></td>
+              <td><code>kokoro</code>, <code>openai</code>, <code>elevenlabs</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">ANTHROPIC_API_KEY</span></td>
               <td><span class="flag-default">—</span></td>
-              <td>Required. Get yours at console.anthropic.com</td>
+              <td>Required. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></td>
             </tr>
             <tr>
               <td><span class="flag-name">MANIM_QUALITY</span></td>
               <td><span class="flag-default">medium</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code> (1080p60)</td>
+              <td><code>low</code>, <code>medium</code>, <code>high</code> (1080p60)</td>
             </tr>
             <tr>
               <td><span class="flag-name">DEFAULT_EFFORT</span></td>
               <td><span class="flag-default">medium</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">low</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">medium</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">high</code></td>
+              <td><code>low</code>, <code>medium</code>, <code>high</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">DEFAULT_AUDIENCE</span></td>
               <td><span class="flag-default">intermediate</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">beginner</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">intermediate</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">expert</code></td>
+              <td><code>beginner</code>, <code>intermediate</code>, <code>expert</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">DEFAULT_TONE</span></td>
               <td><span class="flag-default">casual</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">casual</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">formal</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">socratic</code></td>
+              <td><code>casual</code>, <code>formal</code>, <code>socratic</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">DEFAULT_THEME</span></td>
               <td><span class="flag-default">chalkboard</span></td>
-              <td><code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">chalkboard</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">light</code>, <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">colorful</code></td>
+              <td><code>chalkboard</code>, <code>light</code>, <code>colorful</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">OUTPUT_DIR</span></td>
@@ -422,7 +422,7 @@
             <tr>
               <td><span class="flag-name">SERVER_PORT</span></td>
               <td><span class="flag-default">8000</span></td>
-              <td>Overridden by <code style="font-family:'DM Mono',monospace;font-size:0.82em;color:var(--text)">--port</code> at runtime</td>
+              <td>Overridden by <code>--port</code> at runtime</td>
             </tr>
           </tbody>
         </table>

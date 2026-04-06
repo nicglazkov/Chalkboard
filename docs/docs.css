@@ -303,6 +303,12 @@ nav {
   white-space: nowrap;
 }
 
+.ref-table td code {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.82em;
+  color: var(--text);
+}
+
 /* ── Method badges ── */
 .method {
   font-family: 'DM Mono', monospace;
