@@ -104,7 +104,7 @@
       margin-bottom: 0.4rem;
     }
 
-    textarea, input[type="text"], select {
+    textarea, input[type="text"], input[type="number"], select {
       width: 100%;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -233,6 +233,9 @@
 
     /* Section label within the form card */
     .form-section-label {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
       font-family: 'DM Mono', monospace;
       font-size: 0.65rem;
       letter-spacing: 0.18em;
@@ -516,6 +519,60 @@
     .download-link:hover {
       border-color: var(--accent);
     }
+
+    /* ── Help tooltips ────────────────────────────────────────── */
+    label.label-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .help-btn {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: none;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.58rem;
+      font-weight: 500;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      opacity: 0.65;
+      transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+      vertical-align: middle;
+    }
+
+    .help-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      opacity: 1;
+    }
+
+    #help-tip {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      max-width: 250px;
+      background: var(--surface);
+      border: 1px solid rgba(200, 185, 122, 0.2);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.74rem;
+      line-height: 1.55;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      text-transform: none;
+      letter-spacing: 0;
+    }
   </style>
 </head>
 <body>
@@ -530,14 +587,14 @@
 
         <!-- Topic -->
         <div class="form-group">
-          <label for="topic">Topic</label>
+          <label for="topic" class="label-row">Topic <button type="button" class="help-btn" data-tip="The subject of your video. Be specific — 'How merge sort works' gets better results than 'sorting'.">?</button></label>
           <textarea id="topic" name="topic" placeholder="e.g. How merge sort works" required></textarea>
         </div>
 
         <!-- Core -->
         <div class="form-grid">
           <div class="form-group">
-            <label for="effort">Effort</label>
+            <label for="effort" class="label-row">Effort <button type="button" class="help-btn" data-tip="Controls pipeline thoroughness. Low is fastest (no research). High adds web research and deeper fact-checking — expect several extra minutes.">?</button></label>
             <select id="effort" name="effort">
               <option value="low">low</option>
               <option value="medium" selected>medium</option>
@@ -545,7 +602,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="audience">Audience</label>
+            <label for="audience" class="label-row">Audience <button type="button" class="help-btn" data-tip="Adjusts vocabulary and depth. Beginner gets analogies and plain language. Expert skips fundamentals.">?</button></label>
             <select id="audience" name="audience">
               <option value="beginner">beginner</option>
               <option value="intermediate" selected>intermediate</option>
@@ -555,10 +612,10 @@
         </div>
 
         <!-- Source Material (always visible) -->
-        <p class="form-section-label">Source Material</p>
+        <p class="form-section-label">Source Material <button type="button" class="help-btn" data-tip="Optional context fed to the AI before it writes the script. Attach files, paste URLs, or add GitHub repos.">?</button></p>
 
         <div class="form-group">
-          <label>Local files</label>
+          <label class="label-row">Local files <button type="button" class="help-btn" data-tip="PDFs, DOCX, images, or code files the AI reads for context. Per-file limits: text 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB. 24 MB total.">?</button></label>
           <div class="upload-zone" id="upload-zone">
             <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
             <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
@@ -570,23 +627,23 @@
         </div>
 
         <div class="form-group">
-          <label>URLs</label>
+          <label class="label-row">URLs <button type="button" class="help-btn" data-tip="Public webpages the AI will fetch and read as source material. Useful for documentation, articles, or any reference page.">?</button></label>
           <div class="repeatable-list" id="url-list"></div>
           <button type="button" class="btn-add" id="add-url">+ Add URL</button>
         </div>
 
         <div class="form-group">
-          <label>GitHub repos</label>
+          <label class="label-row">GitHub repos <button type="button" class="help-btn" data-tip="Enter as owner/repo (e.g. nicglazkov/Chalkboard). Chalkboard fetches the README as context.">?</button></label>
           <div class="repeatable-list" id="github-list"></div>
           <button type="button" class="btn-add" id="add-github">+ Add repo</button>
         </div>
 
         <!-- Style -->
         <details class="advanced">
-          <summary>Style</summary>
+          <summary>Style <button type="button" class="help-btn" data-tip="Tone, visual theme, and animation template for the output video.">?</button></summary>
           <div class="advanced-grid advanced-grid--3">
             <div class="form-group">
-              <label for="tone">Tone</label>
+              <label for="tone" class="label-row">Tone <button type="button" class="help-btn" data-tip="How the narration sounds. Casual is conversational, Formal is structured, Socratic is question-driven.">?</button></label>
               <select id="tone" name="tone">
                 <option value="casual" selected>casual</option>
                 <option value="formal">formal</option>
@@ -594,7 +651,7 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="theme">Theme</label>
+              <label for="theme" class="label-row">Theme <button type="button" class="help-btn" data-tip="Color palette for the animation. Chalkboard is dark with chalk-white text, Light is bright, Colorful uses vibrant accents.">?</button></label>
               <select id="theme" name="theme">
                 <option value="chalkboard" selected>chalkboard</option>
                 <option value="light">light</option>
@@ -602,7 +659,7 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="template">Template</label>
+              <label for="template" class="label-row">Template <button type="button" class="help-btn" data-tip="Pre-built animation layout. Algorithm shows array cells and pointers, Code reveals lines step-by-step, Compare uses two side-by-side columns.">?</button></label>
               <select id="template" name="template">
                 <option value="">none</option>
                 <option value="algorithm">algorithm</option>
@@ -615,14 +672,14 @@
 
         <!-- Output -->
         <details class="advanced">
-          <summary>Output</summary>
+          <summary>Output <button type="button" class="help-btn" data-tip="Controls for the final rendered video file.">?</button></summary>
           <div class="advanced-grid">
             <div class="form-group">
-              <label for="speed">Speed</label>
+              <label for="speed" class="label-row">Speed <button type="button" class="help-btn" data-tip="Narration playback speed multiplier. 1.0 is normal, 1.25 talks slightly faster. Applies to the TTS audio output.">?</button></label>
               <input type="number" id="speed" name="speed" value="1.0" min="0.1" max="4.0" step="0.1" />
             </div>
             <div class="form-group">
-              <label for="qa-density">Visual QA</label>
+              <label for="qa-density" class="label-row">Visual QA <button type="button" class="help-btn" data-tip="After rendering, Claude reviews video frames for visual errors. Normal checks ~10 frames, High checks ~20. Off skips entirely and saves time.">?</button></label>
               <select id="qa-density" name="qa_density">
                 <option value="zero">off</option>
                 <option value="normal" selected>normal</option>
@@ -635,6 +692,7 @@
                 <label for="burn-captions" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
                   <input type="checkbox" id="burn-captions" name="burn_captions" />
                   <span>Burn captions</span>
+                  <button type="button" class="help-btn" data-tip="Bakes subtitle text into the video frames. Requires re-encoding so renders a bit slower.">?</button>
                 </label>
               </div>
             </div>
@@ -644,6 +702,7 @@
                 <label for="quiz" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
                   <input type="checkbox" id="quiz" name="quiz" />
                   <span>Generate quiz</span>
+                  <button type="button" class="help-btn" data-tip="After scripting, Claude generates comprehension questions saved as quiz.json alongside the video.">?</button>
                 </label>
               </div>
             </div>
@@ -667,6 +726,8 @@
       <div class="downloads" id="downloads-list"></div>
     </div>
   </div>
+
+  <div id="help-tip"></div>
 
   <script>
     const STAGE_LABELS = {
@@ -1120,6 +1181,36 @@
 
       startSSE(job.id);
     });
+
+    // ── Help tooltips ──────────────────────────────────────────
+    const helpTip = document.getElementById('help-tip');
+
+    function showTip(btn) {
+      const tip = btn.dataset.tip;
+      if (!tip) return;
+      helpTip.textContent = tip;
+      helpTip.style.display = 'block';
+      const rect = btn.getBoundingClientRect();
+      const tipW = helpTip.offsetWidth;
+      const tipH = helpTip.offsetHeight;
+      let top = rect.bottom + 6;
+      let left = rect.left;
+      if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 6;
+      if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+      helpTip.style.top = Math.max(8, top) + 'px';
+      helpTip.style.left = Math.max(8, left) + 'px';
+    }
+
+    function hideTip() { helpTip.style.display = 'none'; }
+
+    document.querySelectorAll('.help-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation(); // prevent <details> toggle when inside <summary>
+        showTip(btn);
+      });
+    });
+
+    document.addEventListener('click', hideTip);
   </script>
 </body>
 </html>
