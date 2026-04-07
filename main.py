@@ -274,6 +274,31 @@ def _docker_render_cmd(run_id: str, output_dir: Path, preview: bool = False) -> 
     return cmd
 
 
+def _extract_thumbnail(run_dir: Path) -> "Path | None":
+    """Extract a JPEG thumbnail from final.mp4 at 10% of video duration.
+    Returns path to thumb.jpg on success, None on any failure.
+    """
+    try:
+        seg_path = run_dir / "segments.json"
+        final_mp4 = run_dir / "final.mp4"
+        if not seg_path.exists() or not final_mp4.exists():
+            return None
+        segments = json.loads(seg_path.read_text())
+        duration = sum(s.get("actual_duration_sec", 0) for s in segments)
+        if duration <= 0:
+            return None
+        seek = round(duration * 0.1, 1)
+        thumb = run_dir / "thumb.jpg"
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(seek), "-i", str(final_mp4),
+             "-vframes", "1", "-q:v", "3", "-vf", "scale=640:360", str(thumb)],
+            check=True, capture_output=True, timeout=15,
+        )
+        return thumb if thumb.exists() else None
+    except Exception:
+        return None
+
+
 def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, burn_captions: bool = False) -> Path:
     """Single render attempt. Raises RenderFailed on timeout or non-zero exit."""
     docker_cmd = _docker_render_cmd(run_id, output_dir)
@@ -351,6 +376,7 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, b
         subprocess.run(cmd, check=True, capture_output=True, timeout=120)
     except subprocess.TimeoutExpired:
         raise RenderFailed("ffmpeg merge timed out after 120s")
+    _extract_thumbnail(run_dir)
     return final_mp4
 
 
