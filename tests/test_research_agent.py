@@ -11,9 +11,10 @@ DUMMY_SOURCES = ["https://en.wikipedia.org/wiki/B-tree"]
 
 def _mock_response(brief=DUMMY_BRIEF, sources=None):
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({
+    msg.content = [MagicMock(type="text", text=json.dumps({
         "research_brief": brief,
         "sources": sources or DUMMY_SOURCES,
+        "search_warning": None,
     }))]
     return msg
 

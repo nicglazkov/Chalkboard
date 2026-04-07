@@ -1,6 +1,8 @@
 # Chalkboard
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nicglazkov/Chalkboard)
+[![Docs](https://img.shields.io/badge/docs-guide-blue)](https://nicglazkov.github.io/Chalkboard/guide.html)
+[![API Reference](https://img.shields.io/badge/docs-API-blue)](https://nicglazkov.github.io/Chalkboard/api.html)
 
 Turn any topic into a narrated, animated explainer video — fully automated.
 

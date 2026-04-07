@@ -36,7 +36,7 @@ async def fact_validator(state: PipelineState, client=None) -> dict:
     def _call():
         return client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=1024,
+            max_tokens=2048,
             messages=[{"role": "user", "content": user_msg}],
             output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
         )

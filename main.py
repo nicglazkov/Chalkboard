@@ -518,6 +518,17 @@ def _print_progress(event: dict) -> None:
             attempts_info = f" (code attempt {updates['code_attempts']})"
         print(f"  [{node_name}]{attempts_info} → {status or 'done'}")
 
+        if node_name == "research_agent":
+            warning = updates.get("search_warning")
+            sources = updates.get("research_sources", [])
+            if warning:
+                print(f"\n  [research] WARNING: {warning}")
+            elif sources:
+                print(f"  [research] {len(sources)} source(s) found:")
+                for s in sources:
+                    label = s if len(s) <= 80 else s[:77] + "..."
+                    print(f"    · {label}")
+
 
 async def run(
     topic: str,

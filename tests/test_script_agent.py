@@ -10,7 +10,7 @@ from tests.conftest import base_state
 def _make_claude_response(script_text: str, segments: list[dict]) -> MagicMock:
     content = json.dumps({"script": script_text, "segments": segments, "needs_web_search": False})
     msg = MagicMock()
-    msg.content = [MagicMock(text=content)]
+    msg.content = [MagicMock(type="text", text=content)]
     return msg
 
 
@@ -35,7 +35,7 @@ def test_script_agent_sets_needs_web_search_when_flagged(base_state):
         "needs_web_search": True,
     })
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text=content)]
+    mock_response.content = [MagicMock(type="text", text=content)]
 
     with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_response
@@ -166,7 +166,7 @@ def _mock_response():
         "needs_web_search": False,
     })
     msg = MagicMock()
-    msg.content = [MagicMock(text=content)]
+    msg.content = [MagicMock(type="text", text=content)]
     return msg
 
 

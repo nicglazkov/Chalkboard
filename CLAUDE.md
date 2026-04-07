@@ -90,6 +90,7 @@ server/
 | `template` | str \| None | Animation template (`"algorithm"`, `"code"`, `"compare"`); `None` = no template. |
 | `research_brief` | str \| None | Research brief from `research_agent`; `None` if not yet run or effort ≠ high |
 | `research_sources` | list[str] | URLs/citations from `research_agent`; empty list if not yet run |
+| `search_warning` | str \| None | Set by `research_agent` when search failed, returned irrelevant results, or found very little. Printed to the terminal via `_print_progress`. `None` means no issues. |
 | `interactive` | `bool` | When `False`, `escalate_to_user` auto-aborts and `TimeoutExhausted` in `run()` returns immediately (default `True` for CLI) |
 | `status` | str | `"drafting"` / `"validating"` / `"approved"` / `"failed"` |
 
@@ -133,22 +134,26 @@ All four agents are `async def` and wrap their `messages.create()` call with `ap
 - Model: `CLAUDE_MODEL`
 - `max_tokens`: 2048
 - Timeout: `TIMEOUT_RESEARCH_AGENT` = 120s
-- Output: `{"research_brief": str, "sources": list[str]}`
+- Output: `{"research_brief": str, "sources": list[str], "search_warning": str|null}`
 - Only runs when `effort_level == "high"` — routed via `_after_init` conditional edge
 - Uses `web_search_20250305` tool to gather facts before scripting
 - When present, `research_brief` is injected into `script_agent`'s user message and `script_agent`'s own web search is disabled
+- **Content block extraction:** response.content may contain `ServerToolUseBlock` items before the text block — always find the text block by iterating `reversed(response.content)` looking for `b.type == "text"`. Never assume `content[0]` is the text.
+- **Graceful fallback:** if `TimeoutExhausted` or no text block found, returns `research_brief=None` and a `search_warning` string. `script_agent` then runs on training data only. Pipeline does not abort.
+- **`search_warning`** is also set (to a non-null string) when the LLM reports results are off-topic, contradictory to the premise, or very sparse.
 
 ### script_agent
 - Model: `CLAUDE_MODEL` (claude-sonnet-4-6)
 - `max_tokens`: 4096
 - Timeout: `TIMEOUT_SCRIPT_AGENT` = 120s (may use web search tool)
 - Output: `{"script": str, "segments": [{text, estimated_duration_sec}], "needs_web_search": bool}`
-- Web search tool enabled when `effort_level == "high"` or `user_approved_search == True`
+- Web search tool enabled when `effort_level == "high"` or `user_approved_search == True`, **but disabled when `research_brief` is already set** (research already done by `research_agent`)
 - Reads `audience` and `tone` from state to inject targeting instructions into user message via `AUDIENCE_INSTRUCTIONS` and `TONE_INSTRUCTIONS` dicts
+- **Content block extraction:** same as `research_agent` — iterate `reversed(response.content)` for `b.type == "text"`; raises `RuntimeError` if none found
 
 ### fact_validator
 - Model: `CLAUDE_MODEL`
-- `max_tokens`: 1024
+- `max_tokens`: 2048
 - Timeout: `TIMEOUT_FACT_VALIDATOR` = 60s
 - Output: `{"verdict": "approved"|"needs_revision", "feedback": str}`
 - Effort-based instructions: low = light check, medium = spot-check, high = thorough

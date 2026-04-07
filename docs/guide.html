@@ -313,11 +313,18 @@
             <tr>
               <td><span class="flag-name">high</span></td>
               <td>Thorough</td>
-              <td>Via research agent</td>
+              <td>Dedicated research step before scripting</td>
               <td>5–8</td>
             </tr>
           </tbody>
         </table>
+
+        <p class="prose">With <code>--effort high</code>, a dedicated <strong>research agent</strong> runs web searches before the script is written. Sources found are printed to the terminal:</p>
+        <div class="code-block"><pre>  [research] 7 source(s) found:
+    · Voynich manuscript — en.wikipedia.org
+    · The Strange Quest to Crack the Voynich Code — undark.org
+    · ...</pre></div>
+        <p class="prose">If the search fails or the results are clearly off-topic, Chalkboard prints a warning and continues on training data — the pipeline never aborts because of a search failure.</p>
       </section>
 
       <!-- TTS backends -->

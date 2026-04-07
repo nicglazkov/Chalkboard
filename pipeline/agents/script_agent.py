@@ -117,7 +117,13 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
 
     response = await api_call_with_retry(_call, timeout=TIMEOUT_SCRIPT_AGENT, label="script_agent")
 
-    data = json.loads(response.content[0].text)
+    text_block = next((b for b in reversed(response.content) if b.type == "text"), None)
+    if text_block is None:
+        raise RuntimeError(
+            f"script_agent: no text block in response. "
+            f"Content types: {[b.type for b in response.content]}"
+        )
+    data = json.loads(text_block.text)
     return {
         "script": data["script"],
         "script_segments": data["segments"],
