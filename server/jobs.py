@@ -178,7 +178,7 @@ async def run_job(job: Job, output_dir: Path) -> None:
         if run_dir.exists():
             job.output_files = [
                 f.name for f in run_dir.iterdir()
-                if f.is_file() and f.suffix in (".mp4", ".srt", ".json", ".txt", ".py")
+                if f.is_file() and f.suffix in (".mp4", ".srt", ".json", ".txt", ".py", ".jpg")
             ]
 
         job.status = "completed"
