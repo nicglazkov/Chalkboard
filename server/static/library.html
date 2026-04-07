@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Library — Chalkboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #111110;
+      --surface: #1a1918;
+      --border: rgba(255, 255, 255, 0.07);
+      --text: #e8e4db;
+      --muted: #7a7570;
+      --accent: #c8b97a;
+      --chalk: #f0ebe0;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.025;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ── */
+    .top-nav {
+      position: relative;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .nav-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      height: 52px;
+    }
+
+    .nav-brand {
+      font-family: 'DM Serif Display', serif;
+      color: var(--chalk);
+      font-size: 1.15rem;
+      font-weight: 400;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      flex-shrink: 0;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .nav-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0.35rem 0.75rem;
+      border-radius: 5px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .nav-link.active {
+      color: var(--accent);
+    }
+
+    /* ── Page layout ── */
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 0.7rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem 0.5rem 2.2rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-input::placeholder { color: var(--muted); }
+    .search-input:focus { border-color: var(--accent); }
+
+    .sort-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      border-radius: 6px;
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7570' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.6rem center;
+      flex-shrink: 0;
+    }
+
+    .sort-select:focus { border-color: var(--accent); }
+
+    .total-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 780px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px)  { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.15s, transform 0.12s;
+    }
+
+    .card:hover {
+      border-color: rgba(200,185,122,0.3);
+      transform: translateY(-2px);
+    }
+
+    /* ── Thumbnail ── */
+    .thumb-wrap {
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%; /* 16:9 */
+      overflow: hidden;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    .thumb-wrap img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* CSS fallback thumbnails keyed by theme */
+    .thumb-fallback {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem;
+    }
+
+    .thumb-fallback[data-theme="chalkboard"] {
+      background: linear-gradient(135deg, #1c2a1e 0%, #2d3b2e 100%);
+    }
+    .thumb-fallback[data-theme="light"] {
+      background: linear-gradient(135deg, #2a2830 0%, #3a3545 100%);
+    }
+    .thumb-fallback[data-theme="colorful"] {
+      background: linear-gradient(135deg, #1e1a2e 0%, #2a1a3e 50%, #1a2e2a 100%);
+    }
+    .thumb-fallback:not([data-theme]),
+    .thumb-fallback[data-theme=""] {
+      background: linear-gradient(135deg, #1c2a1e 0%, #2d3b2e 100%);
+    }
+
+    .thumb-fallback-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 0.75rem;
+      color: rgba(240,235,224,0.6);
+      text-align: center;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .duration-badge {
+      position: absolute;
+      bottom: 0.4rem;
+      right: 0.4rem;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+    }
+
+    /* ── Card body ── */
+    .card-body {
+      padding: 0.65rem 0.75rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      flex: 1;
+    }
+
+    .card-title {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--chalk);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: auto;
+      padding-top: 0.3rem;
+    }
+
+    .badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.15rem 0.45rem;
+      border-radius: 3px;
+    }
+
+    .badge-quality {
+      background: rgba(200,185,122,0.12);
+      color: var(--accent);
+    }
+
+    .badge-theme {
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+    }
+
+    .card-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    /* ── Load more ── */
+    .load-more-wrap {
+      text-align: center;
+      margin-top: 2rem;
+    }
+
+    .btn-load-more {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 1.75rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .btn-load-more:hover {
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .btn-load-more:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 5rem 2rem;
+      color: var(--muted);
+    }
+
+    .empty-state svg {
+      opacity: 0.3;
+      margin-bottom: 1rem;
+    }
+
+    .empty-state p {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+    }
+
+    .empty-state .empty-hint {
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      font-size: 0.85rem;
+      margin-top: 0.4rem;
+      color: rgba(122,117,112,0.7);
+    }
+
+    /* ── Loading skeleton ── */
+    .skeleton-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .skeleton-thumb {
+      width: 100%;
+      padding-bottom: 56.25%;
+      background: rgba(255,255,255,0.04);
+      position: relative;
+    }
+
+    .skeleton-body {
+      padding: 0.65rem 0.75rem 0.8rem;
+    }
+
+    .skeleton-line {
+      height: 0.7rem;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      margin-bottom: 0.45rem;
+    }
+
+    .skeleton-line:last-child { width: 55%; }
+
+    @keyframes shimmer {
+      0%   { opacity: 0.5; }
+      50%  { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    .skeleton-card { animation: shimmer 1.5s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+  <!-- Top nav -->
+  <nav class="top-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/">Chalkboard</a>
+      <div class="nav-links">
+        <a class="nav-link" href="/">Generate</a>
+        <a class="nav-link active" href="/library">Library</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <input class="search-input" type="search" id="search" placeholder="Search videos…" autocomplete="off" />
+      </div>
+      <select class="sort-select" id="sort">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="longest">Longest</option>
+        <option value="shortest">Shortest</option>
+      </select>
+      <span class="total-label" id="total-label"></span>
+    </div>
+
+    <!-- Video grid -->
+    <div class="grid" id="grid"></div>
+
+    <!-- Load more -->
+    <div class="load-more-wrap" id="load-more-wrap" style="display:none">
+      <button class="btn-load-more" id="load-more-btn">Load more</button>
+    </div>
+
+  </div>
+
+  <script>
+    const PAGE_SIZE = 20;
+    let offset = 0;
+    let total = 0;
+    let currentQuery = '';
+    let currentSort = 'newest';
+    let loading = false;
+
+    const grid = document.getElementById('grid');
+    const searchEl = document.getElementById('search');
+    const sortEl = document.getElementById('sort');
+    const totalLabel = document.getElementById('total-label');
+    const loadMoreWrap = document.getElementById('load-more-wrap');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+
+    function formatDuration(sec) {
+      if (!sec || sec < 1) return '';
+      const m = Math.floor(sec / 60);
+      const s = Math.round(sec % 60);
+      return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `0:${String(s).padStart(2, '0')}`;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function makeThumbFallback(topic, theme) {
+      return `<div class="thumb-fallback" data-theme="${theme || 'chalkboard'}">
+        <span class="thumb-fallback-text">${escHtml(topic)}</span>
+      </div>`;
+    }
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function makeCard(v) {
+      const dur = formatDuration(v.duration_sec);
+      const date = formatDate(v.created_at);
+      const thumbHtml = v.thumb_path
+        ? `<img src="/api/jobs/${v.run_id}/files/thumb.jpg" alt="${escHtml(v.topic)}" loading="lazy"
+               onerror="this.parentNode.innerHTML='${makeThumbFallback(v.topic, v.theme).replace(/'/g, "\\'").replace(/\n/g, '')}'"/>`
+        : makeThumbFallback(v.topic, v.theme);
+
+      return `<a class="card" href="/library/${v.run_id}">
+        <div class="thumb-wrap">
+          ${thumbHtml}
+          ${dur ? `<span class="duration-badge">${escHtml(dur)}</span>` : ''}
+        </div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(v.topic)}</div>
+          <div class="card-meta">
+            <span class="badge badge-quality">${escHtml(v.quality)}</span>
+            <span class="badge badge-theme">${escHtml(v.theme || 'chalkboard')}</span>
+            <span class="card-date">${escHtml(date)}</span>
+          </div>
+        </div>
+      </a>`;
+    }
+
+    function makeSkeletons(n) {
+      return Array.from({ length: n }, () => `
+        <div class="skeleton-card">
+          <div class="skeleton-thumb"></div>
+          <div class="skeleton-body">
+            <div class="skeleton-line" style="width:85%"></div>
+            <div class="skeleton-line" style="width:65%"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>`).join('');
+    }
+
+    async function fetchVideos(reset = false) {
+      if (loading) return;
+      loading = true;
+
+      if (reset) {
+        offset = 0;
+        grid.innerHTML = makeSkeletons(8);
+        loadMoreWrap.style.display = 'none';
+        totalLabel.textContent = '';
+      }
+
+      const params = new URLSearchParams({
+        q: currentQuery,
+        sort: currentSort,
+        limit: PAGE_SIZE,
+        offset,
+      });
+
+      try {
+        const res = await fetch(`/api/library?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (reset) grid.innerHTML = '';
+
+        total = data.total;
+        totalLabel.textContent = total === 1 ? '1 video' : `${total} videos`;
+
+        if (data.videos.length === 0 && reset) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="10" width="40" height="28" rx="3" stroke="currentColor" stroke-width="2"/>
+                <path d="M20 18l12 6-12 6V18z" fill="currentColor" opacity="0.5"/>
+              </svg>
+              ${currentQuery
+                ? `<p>No videos matching "<em>${escHtml(currentQuery)}</em>"</p>`
+                : `<p>No videos yet</p>
+                   <p class="empty-hint">Generate your first video to see it here.</p>`}
+            </div>`;
+        } else {
+          data.videos.forEach(v => {
+            grid.insertAdjacentHTML('beforeend', makeCard(v));
+          });
+          offset += data.videos.length;
+        }
+
+        const hasMore = offset < total;
+        loadMoreWrap.style.display = hasMore ? 'block' : 'none';
+        loadMoreBtn.disabled = false;
+
+      } catch (err) {
+        if (reset) {
+          grid.innerHTML = `<div class="empty-state"><p>Failed to load library.</p></div>`;
+        }
+        console.error(err);
+      }
+
+      loading = false;
+    }
+
+    // Search debounce
+    let searchTimer = null;
+    searchEl.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        currentQuery = searchEl.value.trim();
+        fetchVideos(true);
+      }, 300);
+    });
+
+    // Sort
+    sortEl.addEventListener('change', () => {
+      currentSort = sortEl.value;
+      fetchVideos(true);
+    });
+
+    // Load more
+    loadMoreBtn.addEventListener('click', () => {
+      loadMoreBtn.disabled = true;
+      fetchVideos(false);
+    });
+
+    // Initial load
+    fetchVideos(true);
+  </script>
+
+</body>
+</html>

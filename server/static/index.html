@@ -519,6 +519,52 @@
       border-color: var(--accent);
     }
 
+    /* ── Top nav ─────────────────────────────────────────────────── */
+    .top-nav {
+      position: relative;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      height: 52px;
+    }
+
+    .nav-brand {
+      font-family: 'DM Serif Display', serif;
+      color: var(--chalk);
+      font-size: 1.15rem;
+      font-weight: 400;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      flex-shrink: 0;
+    }
+
+    .nav-links { display: flex; gap: 0.25rem; }
+
+    .nav-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0.35rem 0.75rem;
+      border-radius: 5px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .nav-link.active { color: var(--accent); }
+
     /* ── App layout ──────────────────────────────────────────────── */
     .app-body {
       max-width: 640px;
@@ -619,6 +665,18 @@
   </style>
 </head>
 <body>
+
+  <!-- Top nav -->
+  <nav class="top-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/">Chalkboard</a>
+      <div class="nav-links">
+        <a class="nav-link active" href="/">Generate</a>
+        <a class="nav-link" href="/library">Library</a>
+      </div>
+    </div>
+  </nav>
+
   <div class="container">
     <header>
       <h1>Chalkboard</h1>
@@ -1271,6 +1329,32 @@
     });
 
     document.addEventListener('click', hideTip);
+
+    // ── Prefill from query params (re-generate from library) ──────
+    (function prefillFromQuery() {
+      const p = new URLSearchParams(location.search);
+      if (!p.has('topic')) return;
+
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val != null) el.value = val;
+      };
+
+      setVal('topic',    p.get('topic'));
+      setVal('effort',   p.get('effort'));
+      setVal('audience', p.get('audience'));
+      setVal('tone',     p.get('tone'));
+      setVal('theme',    p.get('theme'));
+      setVal('speed',    p.get('speed'));
+      setVal('template', p.get('template'));
+
+      // Open Style section so user can see the pre-filled settings
+      const styleDetails = document.querySelector('details.advanced');
+      if (styleDetails) styleDetails.open = true;
+
+      // Clean up the URL so it doesn't re-trigger on refresh
+      history.replaceState(null, '', '/');
+    })();
   </script>
 </body>
 </html>
