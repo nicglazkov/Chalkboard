@@ -294,6 +294,55 @@
 
 
     /* ── Script panel ── */
+    /* ── Transcript ── */
+    .transcript {
+      max-height: 420px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .transcript-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: baseline;
+      padding: 0.45rem 0.5rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .transcript-row:hover { background: rgba(255,255,255,0.05); }
+
+    .transcript-row.active {
+      background: rgba(200,185,122,0.1);
+    }
+
+    .transcript-ts {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      flex-shrink: 0;
+      min-width: 2.8rem;
+      padding-top: 0.1rem;
+    }
+
+    .transcript-text {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 0.86rem;
+      line-height: 1.65;
+      color: var(--text);
+    }
+
+    .transcript-row.active .transcript-text {
+      color: var(--chalk);
+    }
+
+    /* Fallback plain script (when no segments.json) */
     .script-text {
       font-family: 'Lora', Georgia, serif;
       font-size: 0.88rem;
@@ -454,9 +503,9 @@
 
         </div>
 
-        <!-- Script -->
+        <!-- Transcript / script -->
         <div class="panel" id="script-panel">
-          <div class="panel-title">Script</div>
+          <div class="panel-title">Transcript</div>
           <div class="script-text" id="script-text"></div>
         </div>
 
@@ -555,18 +604,28 @@
 
       // Video player
       const hasVideo = v.output_files && v.output_files.includes('final.mp4');
+      const hasSrt   = v.output_files && v.output_files.includes('captions.srt');
       const playerWrap = document.getElementById('player-wrap');
+      let videoEl = null;
       if (hasVideo) {
         document.getElementById('player-missing').remove();
-        const vid = document.createElement('video');
-        vid.controls = true;
-        vid.preload = 'metadata';
-        vid.style.cssText = 'width:100%;height:100%;display:block;';
+        videoEl = document.createElement('video');
+        videoEl.controls = true;
+        videoEl.preload = 'metadata';
+        videoEl.style.cssText = 'width:100%;height:100%;display:block;';
         const src = document.createElement('source');
         src.src = `/api/jobs/${v.run_id}/files/final.mp4`;
         src.type = 'video/mp4';
-        vid.appendChild(src);
-        playerWrap.appendChild(vid);
+        videoEl.appendChild(src);
+        if (hasSrt) {
+          const track = document.createElement('track');
+          track.kind = 'subtitles';
+          track.label = 'English';
+          track.srclang = 'en';
+          track.src = `/api/jobs/${v.run_id}/files/captions.srt`;
+          videoEl.appendChild(track);
+        }
+        playerWrap.appendChild(videoEl);
       }
 
       // Downloads
@@ -628,10 +687,77 @@
       });
       document.getElementById('regen-btn').href = `/?${regenParams}`;
 
-      // Script
+      // Interactive transcript (from segments.json) or plain script fallback
       const scriptPanel = document.getElementById('script-panel');
-      if (v.script && v.script.trim()) {
-        document.getElementById('script-text').textContent = v.script;
+      const scriptContainer = document.getElementById('script-text');
+      const hasSegments = v.output_files && v.output_files.includes('segments.json');
+
+      if (hasSegments) {
+        try {
+          const segRes = await fetch(`/api/jobs/${v.run_id}/files/segments.json`);
+          const segs = segRes.ok ? await segRes.json() : null;
+          if (segs && segs.length) {
+            // Build cumulative start times
+            let cursor = 0;
+            const rows = segs.map((seg, i) => {
+              const start = cursor;
+              cursor += seg.actual_duration_sec;
+              return { start, text: seg.text };
+            });
+
+            // Render transcript
+            scriptContainer.className = 'transcript';
+            scriptContainer.innerHTML = rows.map((r, i) => {
+              const m = Math.floor(r.start / 60);
+              const s = Math.floor(r.start % 60);
+              const ts = `${m}:${String(s).padStart(2, '0')}`;
+              return `<button class="transcript-row" data-start="${r.start}" data-index="${i}">
+                <span class="transcript-ts">${ts}</span>
+                <span class="transcript-text">${escHtml(r.text)}</span>
+              </button>`;
+            }).join('');
+
+            // Click to seek
+            scriptContainer.addEventListener('click', e => {
+              const row = e.target.closest('.transcript-row');
+              if (!row || !videoEl) return;
+              videoEl.currentTime = parseFloat(row.dataset.start);
+              videoEl.play();
+            });
+
+            // Highlight active segment on timeupdate
+            if (videoEl) {
+              const rowEls = scriptContainer.querySelectorAll('.transcript-row');
+              videoEl.addEventListener('timeupdate', () => {
+                const t = videoEl.currentTime;
+                let active = 0;
+                for (let i = 0; i < rows.length; i++) {
+                  if (t >= rows[i].start) active = i;
+                }
+                rowEls.forEach((el, i) => {
+                  const isActive = i === active;
+                  if (isActive === el.classList.contains('active')) return;
+                  el.classList.toggle('active', isActive);
+                  // Auto-scroll active row into view (smooth, centered)
+                  if (isActive) {
+                    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                  }
+                });
+              });
+            }
+          } else {
+            throw new Error('empty');
+          }
+        } catch {
+          // Fall back to plain script text
+          if (v.script && v.script.trim()) {
+            scriptContainer.textContent = v.script;
+          } else {
+            scriptPanel.remove();
+          }
+        }
+      } else if (v.script && v.script.trim()) {
+        scriptContainer.textContent = v.script;
       } else {
         scriptPanel.remove();
       }
