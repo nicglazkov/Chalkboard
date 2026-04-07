@@ -36,6 +36,12 @@ def test_render_trigger_writes_all_output_files(base_state, tmp_path):
     assert manifest["scene_class_name"] == "ChalkboardScene"
     assert manifest["run_id"] == "test-run-001"
     assert manifest["topic"] == base_state["topic"]
+    assert manifest["effort"] == base_state["effort_level"]
+    assert manifest["audience"] == base_state["audience"]
+    assert manifest["tone"] == base_state["tone"]
+    assert manifest["theme"] == base_state["theme"]
+    assert manifest["template"] == base_state["template"]
+    assert manifest["speed"] == base_state["speed"]
 
 
 def test_render_trigger_segments_json_uses_actual_durations(base_state, tmp_path):
