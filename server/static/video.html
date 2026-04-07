@@ -131,16 +131,26 @@
       margin-bottom: 1.5rem;
     }
 
-    /* ── Two-column layout ── */
-    .main-layout {
+    /* ── Unified page grid ── */
+    .page-grid {
       display: grid;
       grid-template-columns: auto 320px;
       gap: 2rem;
-      align-items: stretch;
+      align-items: start;
+      width: fit-content;
+      margin: 0 auto;
+      max-width: 100%;
     }
 
     @media (max-width: 900px) {
-      .main-layout { grid-template-columns: 1fr; }
+      .page-grid { grid-template-columns: 1fr; width: 100%; }
+    }
+
+    /* ── Player cell ── */
+    .player-cell {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
     }
 
     /* ── Video player ── */
@@ -148,13 +158,14 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      height: 100%;
+      flex: 1;
       aspect-ratio: 16 / 9;
       min-height: 200px;
     }
 
     @media (max-width: 900px) {
-      .player-wrap { height: auto; width: 100%; }
+      .player-cell { display: block; }
+      .player-wrap { flex: none; width: 100%; }
     }
 
     .player-wrap video {
@@ -289,16 +300,6 @@
       border-color: rgba(200,185,122,0.4);
     }
 
-    /* ── Below fold layout ── */
-    .below-fold {
-      margin-top: 2rem;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      align-items: start;
-    }
-
-    @media (max-width: 760px) { .below-fold { grid-template-columns: 1fr; } }
 
     /* ── Script panel ── */
     .script-text {
@@ -427,11 +428,11 @@
       <h1 class="video-title" id="video-title"></h1>
       <div class="video-date" id="video-date"></div>
 
-      <!-- Main two-column -->
-      <div class="main-layout">
+      <!-- Unified grid: video | sidebar on row 1, script | related on row 2 -->
+      <div class="page-grid">
 
         <!-- Player -->
-        <div>
+        <div class="player-cell">
           <div class="player-wrap" id="player-wrap">
             <div class="player-missing" id="player-missing">
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -460,10 +461,6 @@
           </div>
 
         </div>
-      </div>
-
-      <!-- Below fold: script + related -->
-      <div class="below-fold">
 
         <!-- Script -->
         <div class="panel" id="script-panel">
