@@ -149,8 +149,6 @@
     /* ── Player cell ── */
     .player-cell {
       align-self: stretch;
-      display: flex;
-      flex-direction: column;
     }
 
     /* ── Video player ── */
@@ -158,21 +156,19 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      flex: 1;
+      height: 100%;
       aspect-ratio: 16 / 9;
       min-height: 200px;
     }
 
     @media (max-width: 900px) {
-      .player-cell { display: block; }
-      .player-wrap { flex: none; width: 100%; }
+      .player-wrap { height: auto; width: 100%; }
     }
 
     .player-wrap video {
       display: block;
       width: 100%;
       height: 100%;
-      object-fit: contain;
     }
 
     .player-missing {
@@ -566,7 +562,7 @@
         const vid = document.createElement('video');
         vid.controls = true;
         vid.preload = 'metadata';
-        vid.style.cssText = 'display:block;width:100%;height:100%;';
+        vid.style.cssText = 'width:100%;height:100%;display:block;';
         const src = document.createElement('source');
         src.src = `/api/jobs/${v.run_id}/files/final.mp4`;
         src.type = 'video/mp4';
