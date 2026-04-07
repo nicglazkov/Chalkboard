@@ -227,6 +227,23 @@
       margin-bottom: 0;
     }
 
+    .advanced-grid--3 {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    /* Section label within the form card */
+    .form-section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 1.5rem 0 0.85rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+      opacity: 0.7;
+    }
+
     .checkbox-group {
       display: flex;
       align-items: center;
@@ -510,11 +527,14 @@
 
     <div class="form-card">
       <form id="job-form">
+
+        <!-- Topic -->
         <div class="form-group">
           <label for="topic">Topic</label>
           <textarea id="topic" name="topic" placeholder="e.g. How merge sort works" required></textarea>
         </div>
 
+        <!-- Core -->
         <div class="form-grid">
           <div class="form-group">
             <label for="effort">Effort</label>
@@ -524,7 +544,6 @@
               <option value="high">high</option>
             </select>
           </div>
-
           <div class="form-group">
             <label for="audience">Audience</label>
             <select id="audience" name="audience">
@@ -535,10 +554,37 @@
           </div>
         </div>
 
-        <details class="advanced">
-          <summary>Advanced options</summary>
-          <div class="advanced-grid">
+        <!-- Source Material (always visible) -->
+        <p class="form-section-label">Source Material</p>
 
+        <div class="form-group">
+          <label>Local files</label>
+          <div class="upload-zone" id="upload-zone">
+            <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
+            <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
+            <input type="file" id="file-input" multiple
+              accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
+          </div>
+          <div class="file-list" id="file-list"></div>
+          <div class="upload-total" id="upload-total" style="display:none;"></div>
+        </div>
+
+        <div class="form-group">
+          <label>URLs</label>
+          <div class="repeatable-list" id="url-list"></div>
+          <button type="button" class="btn-add" id="add-url">+ Add URL</button>
+        </div>
+
+        <div class="form-group">
+          <label>GitHub repos</label>
+          <div class="repeatable-list" id="github-list"></div>
+          <button type="button" class="btn-add" id="add-github">+ Add repo</button>
+        </div>
+
+        <!-- Style -->
+        <details class="advanced">
+          <summary>Style</summary>
+          <div class="advanced-grid advanced-grid--3">
             <div class="form-group">
               <label for="tone">Tone</label>
               <select id="tone" name="tone">
@@ -547,7 +593,6 @@
                 <option value="socratic">socratic</option>
               </select>
             </div>
-
             <div class="form-group">
               <label for="theme">Theme</label>
               <select id="theme" name="theme">
@@ -556,7 +601,6 @@
                 <option value="colorful">colorful</option>
               </select>
             </div>
-
             <div class="form-group">
               <label for="template">Template</label>
               <select id="template" name="template">
@@ -566,12 +610,17 @@
                 <option value="compare">compare</option>
               </select>
             </div>
+          </div>
+        </details>
 
+        <!-- Output -->
+        <details class="advanced">
+          <summary>Output</summary>
+          <div class="advanced-grid">
             <div class="form-group">
               <label for="speed">Speed</label>
               <input type="number" id="speed" name="speed" value="1.0" min="0.1" max="4.0" step="0.1" />
             </div>
-
             <div class="form-group">
               <label for="qa-density">Visual QA</label>
               <select id="qa-density" name="qa_density">
@@ -580,7 +629,6 @@
                 <option value="high">high</option>
               </select>
             </div>
-
             <div class="form-group">
               <label aria-hidden="true">&nbsp;</label>
               <div class="checkbox-group">
@@ -589,38 +637,16 @@
                   <span>Burn captions</span>
                 </label>
               </div>
-              <div class="checkbox-group" style="margin-top: 0.5rem;">
+            </div>
+            <div class="form-group">
+              <label aria-hidden="true">&nbsp;</label>
+              <div class="checkbox-group">
                 <label for="quiz" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
                   <input type="checkbox" id="quiz" name="quiz" />
                   <span>Generate quiz</span>
                 </label>
               </div>
             </div>
-
-            <div class="form-group repeatable-full">
-              <label>URLs (source material)</label>
-              <div class="repeatable-list" id="url-list"></div>
-              <button type="button" class="btn-add" id="add-url">+ Add URL</button>
-            </div>
-
-            <div class="form-group repeatable-full">
-              <label>GitHub repos (owner/repo)</label>
-              <div class="repeatable-list" id="github-list"></div>
-              <button type="button" class="btn-add" id="add-github">+ Add repo</button>
-            </div>
-
-            <div class="form-group repeatable-full">
-              <label>Local files (source material)</label>
-              <div class="upload-zone" id="upload-zone">
-                <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
-                <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
-                <input type="file" id="file-input" multiple
-                  accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
-              </div>
-              <div class="file-list" id="file-list"></div>
-              <div class="upload-total" id="upload-total" style="display:none;"></div>
-            </div>
-
           </div>
         </details>
 
