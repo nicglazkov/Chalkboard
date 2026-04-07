@@ -2,11 +2,15 @@
 output/*/
 !output/.gitkeep
 pipeline_state.db
+pipeline_state.db-shm
+pipeline_state.db-wal
+library.db
+library.db-shm
+library.db-wal
 __pycache__/
 *.pyc
 .env
-pipeline_state.db-shm
-pipeline_state.db-wal
 *.DS_Store*
 test_output.txt
 docs/superpowers/
+.superpowers/
