@@ -61,3 +61,32 @@ def test_render_trigger_segments_json_uses_actual_durations(base_state, tmp_path
 
     segments = json.loads((tmp_path / "run-dur-test" / "segments.json").read_text())
     assert segments[0]["actual_duration_sec"] == pytest.approx(2.73)
+
+
+def test_render_trigger_manifest_defaults_when_fields_absent(tmp_path):
+    """Fields absent from state produce correct defaults in manifest.json."""
+    state = {
+        "topic": "test topic",
+        "run_id": "test-run-defaults",
+        "script": "Hello.",
+        "script_segments": [{"text": "Hello.", "estimated_duration_sec": 1.0}],
+        "manim_code": SAMPLE_CODE,
+        # effort_level, audience, tone, theme, template, speed intentionally absent
+    }
+
+    async def mock_generate(segments, output_path, speed=1.0):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"\x00")
+        return output_path, [1.0]
+
+    with patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)), \
+         patch("pipeline.render_trigger.get_backend", return_value=mock_generate):
+        asyncio.run(render_trigger(state))
+
+    manifest = json.loads((tmp_path / "test-run-defaults" / "manifest.json").read_text())
+    assert manifest["effort"] == "medium"
+    assert manifest["audience"] == "intermediate"
+    assert manifest["tone"] == "casual"
+    assert manifest["theme"] == "chalkboard"
+    assert manifest["template"] is None
+    assert manifest["speed"] == 1.0
