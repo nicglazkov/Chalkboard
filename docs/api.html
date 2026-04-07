@@ -59,7 +59,7 @@
 <span class="cmd">python run_server.py</span> <span class="flag">--reload</span>   <span class="comment"># dev mode (auto-reload on file changes)</span>
 <span class="cmd">python run_server.py</span> <span class="flag">--port</span> 9000 <span class="comment"># custom port</span></pre></div>
 
-        <p class="prose">The server holds jobs in memory — they are lost on restart. Each job runs the full pipeline (script → Manim → render → QA) in a background task. The <code>SERVER_PORT</code> env var sets the default port; <code>--port</code> overrides it at runtime.</p>
+        <p class="prose">The server holds jobs in memory; they are lost on restart. Each job runs the full pipeline (script → Manim → render → QA) in a background task. The <code>SERVER_PORT</code> env var sets the default port; <code>--port</code> overrides it at runtime.</p>
       </section>
 
       <!-- Endpoints -->
@@ -115,7 +115,7 @@
         <p class="section-label">Jobs</p>
         <h2>Creating a job</h2>
 
-        <h3>JSON — no files</h3>
+        <h3>JSON (no files)</h3>
         <p class="prose">Send a JSON body to <code>POST /api/jobs</code>. Returns 202 immediately; the pipeline runs in the background.</p>
 
         <p class="code-label">Minimal</p>
@@ -141,7 +141,7 @@
     "github":        ["nicglazkov/Chalkboard"]
   }'</span> | python3 -m json.tool</pre></div>
 
-        <h3>Multipart — with file uploads</h3>
+        <h3>Multipart with file uploads</h3>
         <p class="prose">Send a multipart form to <code>POST /api/jobs/upload</code> to include local files as source material. All the same fields are available as form fields. Per-file size limits: text/code 2 MB · images 5 MB · PDFs 20 MB · DOCX 10 MB · 24 MB total.</p>
 
         <div class="code-block"><pre><span class="cmd">curl</span> -s -X POST http://localhost:8000/api/jobs/upload \
@@ -221,7 +221,7 @@
             </tr>
             <tr>
               <td><span class="flag-name">manifest.json</span></td>
-              <td>Run metadata — run ID, topic, quality, timestamp</td>
+              <td>Run metadata: run ID, topic, quality, timestamp</td>
             </tr>
           </tbody>
         </table>

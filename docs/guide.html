@@ -52,7 +52,7 @@
       <section class="page-hero">
         <p class="page-label">Documentation</p>
         <h1>CLI Guide</h1>
-        <p>Everything you need to run Chalkboard from the terminal — flags, context injection, templates, and configuration.</p>
+        <p>Everything you need to run Chalkboard from the terminal: flags, context injection, templates, and configuration.</p>
       </section>
 
       <!-- Quick start -->
@@ -74,7 +74,7 @@
         <div class="code-block"><pre><span class="cmd">python run_server.py</span>
 <span class="comment"># Open http://localhost:8000</span></pre></div>
 
-        <p class="prose" style="margin-top:20px;">Either way the pipeline runs, renders the animation in Docker, and merges the voiceover — outputting <code>output/&lt;run-id&gt;/final.mp4</code>.</p>
+        <p class="prose" style="margin-top:20px;">Either way the pipeline runs, renders the animation in Docker, and merges the voiceover, outputting <code>output/&lt;run-id&gt;/final.mp4</code>.</p>
         <p class="prose"><strong>First run only:</strong> Docker builds the render image automatically (~30 seconds). Subsequent runs use the cached image.</p>
       </section>
 
@@ -114,7 +114,7 @@
         <p class="prose">The web UI includes a file upload zone in the Advanced options section. Drag and drop individual files or entire folders. Per-file limits: text/code 2 MB · images 5 MB · PDFs 20 MB · DOCX 10 MB · 24 MB total. Errors are shown inline before submission.</p>
 
         <h3>Token reporting</h3>
-        <p class="prose">Before the pipeline starts, Chalkboard reports how much of the context window your source material uses. If context exceeds 10k tokens you'll be prompted to confirm — pass <code>--yes</code> to skip this prompt for scripted runs. If context exceeds 90% of the model window, Chalkboard aborts.</p>
+        <p class="prose">Before the pipeline starts, Chalkboard reports how much of the context window your source material uses. If context exceeds 10k tokens you'll be prompted to confirm. Pass <code>--yes</code> to skip this prompt for scripted runs. If context exceeds 90% of the model window, Chalkboard aborts.</p>
 
         <h3>Resuming with context</h3>
         <p class="prose"><code>--context</code>, <code>--url</code>, and <code>--github</code> are not stored in the checkpoint. Pass them again on resume:</p>
@@ -202,7 +202,7 @@
             <tr>
               <td><span class="flag-name">--github</span></td>
               <td><span class="flag-default">—</span></td>
-              <td>GitHub repo (<code>owner/repo</code> or full URL) — fetches its README as context. Repeatable.</td>
+              <td>GitHub repo (<code>owner/repo</code> or full URL); fetches its README as context. Repeatable.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--yes</span></td>
@@ -258,7 +258,7 @@
             <tr>
               <td><span class="flag-name">--no-render</span></td>
               <td><span class="flag-default">off</span></td>
-              <td>Run the AI pipeline only — skip Docker render and ffmpeg merge.</td>
+              <td>Run the AI pipeline only, skipping Docker render and ffmpeg merge.</td>
             </tr>
             <tr>
               <td><span class="flag-name">--verbose</span></td>
@@ -346,14 +346,14 @@
     · Voynich manuscript — en.wikipedia.org
     · The Strange Quest to Crack the Voynich Code — undark.org
     · ...</pre></div>
-        <p class="prose">If the search fails or the results are clearly off-topic, Chalkboard prints a warning and continues on training data — the pipeline never aborts because of a search failure.</p>
+        <p class="prose">If the search fails or the results are clearly off-topic, Chalkboard prints a warning and continues on training data. The pipeline never aborts because of a search failure.</p>
       </section>
 
       <!-- TTS backends -->
       <section class="section" id="tts">
         <p class="section-label">Voiceover</p>
         <h2>TTS backends</h2>
-        <p class="prose">Set <code>TTS_BACKEND</code> in your <code>.env</code> file. The <code>.env.example</code> ships with <code>openai</code> — it works on all platforms. The code default when unset is <code>kokoro</code>.</p>
+        <p class="prose">Set <code>TTS_BACKEND</code> in your <code>.env</code> file. The <code>.env.example</code> ships with <code>openai</code>, which works on all platforms. The code default when unset is <code>kokoro</code>.</p>
 
         <table class="ref-table">
           <thead>
@@ -369,7 +369,7 @@
               <td><span class="flag-name">kokoro</span></td>
               <td>Best</td>
               <td>Free</td>
-              <td>PyTorch ≥ 2.4, <code>espeak-ng</code> — not available on Intel Macs</td>
+              <td>PyTorch ≥ 2.4, <code>espeak-ng</code> (not available on Intel Macs)</td>
             </tr>
             <tr>
               <td><span class="flag-name">openai</span></td>
@@ -468,7 +468,7 @@
         <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"..."</span> <span class="flag">--run-id</span> &lt;previous-run-id&gt;</pre></div>
 
         <h3>Preview → full render workflow</h3>
-        <p class="prose">Run <code>--preview</code> first to quickly check the visuals at low quality, then do the full HD render. The pipeline result is already checkpointed — it won't re-run:</p>
+        <p class="prose">Run <code>--preview</code> first to quickly check the visuals at low quality, then do the full HD render. The pipeline result is already checkpointed, so it won't re-run:</p>
 
         <div class="code-block"><pre><span class="comment"># Step 1: generate script + animation, render preview</span>
 <span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how B-trees work"</span> <span class="flag">--preview</span>

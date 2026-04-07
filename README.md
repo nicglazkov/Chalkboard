@@ -53,7 +53,7 @@ python run_server.py
 # Open http://localhost:8000
 ```
 
-Either way, the pipeline runs, renders the animation in Docker, and merges the voiceover — outputting `output/<run-id>/final.mp4`.
+Either way, the pipeline runs, renders the animation in Docker, and merges the voiceover, outputting `output/<run-id>/final.mp4`.
 
 > **First run only:** Docker will build the render image automatically (~30s). Subsequent runs use the cached image.
 
@@ -66,7 +66,7 @@ Either way, the pipeline runs, renders the animation in Docker, and merges the v
 | Flag               | Required | Default        | Description                                                                                                           |
 | ------------------ | -------- | -------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `--topic`          | **Yes**  | —              | Topic to explain, e.g. `"how B-trees work"`                                                                           |
-| `--effort`         | No       | `medium`       | Validation thoroughness — see [Effort levels](#effort-levels)                                                         |
+| `--effort`         | No       | `medium`       | Validation thoroughness (see [Effort levels](#effort-levels))                                                         |
 | `--audience`       | No       | `intermediate` | Target audience: `beginner`, `intermediate`, `expert`                                                                 |
 | `--tone`           | No       | `casual`       | Narration tone: `casual`, `formal`, `socratic`                                                                        |
 | `--theme`          | No       | `chalkboard`   | Visual color theme: `chalkboard`, `light`, `colorful`                                                                 |
@@ -74,12 +74,12 @@ Either way, the pipeline runs, renders the animation in Docker, and merges the v
 | `--speed`          | No       | `1.0`          | Narration speed multiplier (e.g. `1.25` for 25% faster). OpenAI: native (0.25–4.0). Kokoro/ElevenLabs: ffmpeg atempo. |
 | `--run-id`         | No       | auto           | Resume a previous run using its ID                                                                                    |
 | `--preview`        | No       | off            | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render                             |
-| `--no-render`      | No       | off            | Run the AI pipeline only — skip Docker render and ffmpeg merge                                                        |
+| `--no-render`      | No       | off            | Run the AI pipeline only, skipping Docker render and ffmpeg merge                                                     |
 | `--verbose`        | No       | off            | Stream raw Docker/Manim output to the terminal while rendering                                                        |
 | `--context`        | No       | —              | File or directory to use as source material. Repeatable.                                                              |
 | `--context-ignore` | No       | —              | Glob pattern to exclude from context directories. Repeatable.                                                         |
 | `--url`            | No       | —              | URL to fetch as source material (HTML stripped to text). Repeatable.                                                  |
-| `--github`         | No       | —              | GitHub repo (`owner/repo` or URL) — fetches its README as context. Repeatable.                                        |
+| `--github`         | No       | —              | GitHub repo (`owner/repo` or URL); fetches its README as context. Repeatable.                                         |
 | `--quiz`           | No       | off            | Generate comprehension questions (`quiz.json`) after the pipeline.                                                    |
 | `--burn-captions`  | No       | off            | Burn subtitles into the video (re-encodes; `captions.srt` is always written regardless)                               |
 | `--qa-density`     | No       | `normal`       | Visual QA frame sampling: `zero` (skip), `normal` (1/30s, up to 10 frames), `high` (1/15s, up to 20 frames)           |
@@ -123,7 +123,7 @@ python main.py --topic "explain this library" --github https://github.com/owner/
 
 Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, `.ps1`, `.bat`, …), images (`.png`, `.jpg`, `.webp`, …), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
 
-The **web UI** also supports context injection via the file upload zone in Advanced options — drag and drop files or entire folders directly onto the zone. Per-file limits: text/code 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB, 24 MB total.
+The **web UI** also supports context injection via the file upload zone in Advanced options. Drag and drop files or entire folders directly onto the zone. Per-file limits: text/code 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB, 24 MB total.
 
 Before the pipeline starts, Chalkboard reports how many tokens the context uses:
 
@@ -131,7 +131,7 @@ Before the pipeline starts, Chalkboard reports how many tokens the context uses:
 Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
 ```
 
-If context exceeds 10k tokens you'll be prompted to confirm — pass `--yes` to skip this prompt for scripted or non-interactive runs. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
+If context exceeds 10k tokens you'll be prompted to confirm. Pass `--yes` to skip this prompt for scripted or non-interactive runs. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
 
 **Resuming with context:** `--context`, `--url`, and `--github` are not stored in the checkpoint. Pass them again on resume to re-inject source material:
 
@@ -194,7 +194,7 @@ Add `--quiz` to generate comprehension questions alongside any video:
 python main.py --topic "explain binary search" --quiz
 ```
 
-After the pipeline finishes, Chalkboard calls Claude with the completed script and writes `output/<run-id>/quiz.json` — a list of 4–6 multiple-choice questions with answer keys and explanations:
+After the pipeline finishes, Chalkboard calls Claude with the completed script and writes `output/<run-id>/quiz.json`, a list of 4–6 multiple-choice questions with answer keys and explanations:
 
 ```json
 [
@@ -212,7 +212,7 @@ After the pipeline finishes, Chalkboard calls Claude with the completed script a
 ]
 ```
 
-Works with `--no-render` too — quiz generation only needs the script, not the video.
+Works with `--no-render` too. Quiz generation only needs the script, not the video.
 
 ---
 
@@ -235,7 +235,7 @@ OpenAI TTS uses its native speed parameter (0.25–4.0). Kokoro and ElevenLabs a
 | ------------ | ------- | ------------ | ------------------------------------------------------------ |
 | `openai`     | Great   | API          | `OPENAI_API_KEY`                                             |
 | `elevenlabs` | Great   | API          | `pip install elevenlabs`, `ELEVENLABS_API_KEY`               |
-| `kokoro`     | Best    | Free (local) | PyTorch ≥ 2.4, `espeak-ng` — **not available on Intel Macs** |
+| `kokoro`     | Best    | Free (local) | PyTorch ≥ 2.4, `espeak-ng` (**not available on Intel Macs**) |
 
 Set `TTS_BACKEND` in your `.env` file. The `.env.example` ships with `openai` (works on all platforms). The code default when unset is `kokoro`.
 
@@ -267,7 +267,7 @@ python main.py --topic "..." --run-id <previous-run-id>
 
 ### Preview → full render workflow
 
-Run `--preview` first to quickly check the visuals at low quality, then do the full HD render with `--run-id` (the pipeline result is already checkpointed — it won't re-run):
+Run `--preview` first to quickly check the visuals at low quality, then do the full HD render with `--run-id` (the pipeline result is already checkpointed, so it won't re-run):
 
 ```bash
 # Step 1: generate script + animation, render preview
@@ -316,7 +316,7 @@ python run_server.py --port 9000
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST /api/jobs` | Create job | Start the pipeline for a topic (JSON body) |
-| `POST /api/jobs/upload` | Create job with files | Multipart form — same fields plus file uploads |
+| `POST /api/jobs/upload` | Create job with files | Multipart form (same fields plus file uploads) |
 | `GET /api/jobs` | List jobs | All jobs in this server session |
 | `GET /api/jobs/{id}` | Get job | Poll status and output file list |
 | `GET /api/jobs/{id}/events` | SSE stream | Live pipeline progress events |
@@ -377,7 +377,7 @@ curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
 
 ### Web UI
 
-The server includes a built-in single-page UI. Start the server and open `http://localhost:8000` in your browser — you'll see:
+The server includes a built-in single-page UI. Start the server and open `http://localhost:8000` in your browser:
 
 - A form with **Topic**, **Effort**, and **Audience** always visible, plus an **Advanced options** section (collapsible) containing Tone, Theme, Template, Speed, Visual QA density, Burn Captions, Generate Quiz, URL inputs, GitHub repo inputs, and a **file upload zone**
 - File upload zone supports drag-and-drop of individual files or entire folders, with inline per-file and total-size error display (text/code: 2 MB, images: 5 MB, PDFs: 20 MB, DOCX: 10 MB, total: 24 MB)
