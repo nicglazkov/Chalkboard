@@ -112,9 +112,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
 
     @router.get("/jobs/{job_id}/files/{filename}")
     async def get_file(job_id: str, filename: str):
-        job = store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Job not found")
+        # Works for both in-session jobs and backfilled library runs
         base_dir = Path(OUTPUT_DIR).resolve() / job_id
         file_path = (base_dir / filename).resolve()
         if not file_path.is_relative_to(base_dir):
