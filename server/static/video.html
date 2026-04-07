@@ -738,9 +738,18 @@
                   const isActive = i === active;
                   if (isActive === el.classList.contains('active')) return;
                   el.classList.toggle('active', isActive);
-                  // Auto-scroll active row into view (smooth, centered)
+                  // Scroll only within the transcript box — never touch page scroll
                   if (isActive) {
-                    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    const box = scriptContainer;
+                    const rowTop = el.offsetTop;
+                    const rowBottom = rowTop + el.offsetHeight;
+                    const boxTop = box.scrollTop;
+                    const boxBottom = boxTop + box.clientHeight;
+                    if (rowTop < boxTop) {
+                      box.scrollTop = rowTop - 8;
+                    } else if (rowBottom > boxBottom) {
+                      box.scrollTop = rowBottom - box.clientHeight + 8;
+                    }
                   }
                 });
               });
