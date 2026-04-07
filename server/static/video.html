@@ -134,19 +134,13 @@
     /* ── Two-column layout ── */
     .main-layout {
       display: grid;
-      grid-template-columns: 1fr 320px;
+      grid-template-columns: auto 320px;
       gap: 2rem;
       align-items: stretch;
     }
 
-    .main-layout > div:first-child {
-      display: flex;
-      flex-direction: column;
-    }
-
     @media (max-width: 900px) {
       .main-layout { grid-template-columns: 1fr; }
-      .main-layout > div:first-child { display: block; }
     }
 
     /* ── Video player ── */
@@ -154,10 +148,13 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      position: relative;
-      width: 100%;
-      flex: 1;
+      height: 100%;
+      aspect-ratio: 16 / 9;
       min-height: 200px;
+    }
+
+    @media (max-width: 900px) {
+      .player-wrap { height: auto; width: 100%; }
     }
 
     .player-wrap video {
@@ -572,7 +569,7 @@
         const vid = document.createElement('video');
         vid.controls = true;
         vid.preload = 'metadata';
-        vid.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain;';
+        vid.style.cssText = 'display:block;width:100%;height:100%;';
         const src = document.createElement('source');
         src.src = `/api/jobs/${v.run_id}/files/final.mp4`;
         src.type = 'video/mp4';
