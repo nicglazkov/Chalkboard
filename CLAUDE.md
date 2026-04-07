@@ -54,12 +54,16 @@ main.py               CLI entry point, async graph runner
 run_server.py         uvicorn entrypoint (python run_server.py [--reload] [--port N])
 server/
   __init__.py
-  app.py              FastAPI app factory (create_app)
+  app.py              FastAPI app factory (create_app), startup backfill
   jobs.py             Job dataclass, JobStore, run_job, _do_render
   models.py           Pydantic CreateJobRequest / JobResponse
   routes.py           All API routes (/api/jobs, /api/jobs/{id}/events, etc.)
+  library.py          VideoMeta model, LibraryStore ABC, SQLiteLibraryStore
+  library_routes.py   /api/library routes + /library page routes
   static/
     index.html        Single-page UI (form → SSE progress → video player + downloads)
+    library.html      Video library grid page (/library)
+    video.html        Video detail page (/library/{run_id})
 ```
 
 ---
@@ -375,6 +379,41 @@ Minimum is always 5 frames regardless of density. Formula: `n_frames = max(5, mi
 LangGraph uses `AsyncSqliteSaver` (stored in `pipeline_state.db`) to checkpoint after every node. On resume (`--run-id`), execution resumes from the last successful checkpoint.
 
 **Important:** If a node raises an unhandled exception, LangGraph does not save that node's output — the checkpoint stays at the pre-node state. The next resume re-runs the failed node from scratch. This means retrying after a Python-level bug (not a validation failure) does not increment attempt counters.
+
+---
+
+## Video Library
+
+The video library provides a YouTube-style browser for all generated runs. It lives on top of the existing API server.
+
+### Storage — LibraryStore
+
+`server/library.py` defines:
+
+- **`VideoMeta`** — Pydantic model with 14 persisted fields (`run_id`, `topic`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`). `output_files` is a computed field — not stored in the DB, dynamically read from disk in the GET endpoint.
+- **`LibraryStore`** — ABC with `init()`, `add_video()`, `get_video()`, `list_videos()`, `delete_video()`. Swap the concrete implementation to migrate storage.
+- **`SQLiteLibraryStore`** — local implementation using `aiosqlite` with WAL mode. DB file: `library.db` in the working directory.
+
+**SaaS migration path:** Implement `PostgresLibraryStore` with the same interface and pass it to `create_app(library_store=...)`. The routes and business logic are untouched.
+
+### Startup backfill
+
+`_backfill(store, output_dir)` in `server/app.py` runs at startup. It scans `output/` for directories with both `manifest.json` and `final.mp4`, checks whether each `run_id` is already indexed, and inserts any missing entries. File mtime is used as `created_at` for old runs that predate the library. Idempotent — safe to call on every startup.
+
+### Thumbnail extraction
+
+`_extract_thumbnail(run_dir)` in `main.py` runs after each successful render. It reads `segments.json` to get total duration, seeks to the 10% mark, and extracts one frame via ffmpeg to `output/<run_id>/thumb.jpg`. Returns `None` (silently) on any error so failures never block the render pipeline.
+
+For runs without a thumbnail (old runs or failed extraction), the frontend uses CSS fallback thumbnails keyed by theme (chalkboard/light/colorful gradients).
+
+### Routes
+
+- `make_library_router(store)` — prefix `/api`: `GET /api/library`, `GET /api/library/{run_id}`, `DELETE /api/library/{run_id}`
+- `make_pages_router()` — no prefix: `GET /library` → `library.html`, `GET /library/{run_id}` → `video.html`
+
+### manifest.json extended fields
+
+`render_trigger.py` now writes `effort`, `audience`, `tone`, `theme`, `template`, and `speed` into `manifest.json` alongside the existing fields. Old manifests missing these fields are handled with `state.get("field", default)` in `render_trigger.py` and `.get("field", default)` in `_backfill`.
 
 ---
 

@@ -386,6 +386,27 @@ The server includes a built-in single-page UI. Start the server and open `http:/
 
 No build step required. The UI lives in `server/static/index.html`.
 
+### Video Library
+
+A YouTube-style library browser is available at `http://localhost:8000/library`:
+
+- **4-column responsive grid** with thumbnails, title, duration badge, quality badge, and date
+- **Search** across topic and script text; **sort** by newest, oldest, longest, or shortest
+- **Load-more pagination** — handles large collections without loading everything at once
+- **Detail page** at `/library/{run_id}` with the video player, download links, generation settings, full script, and related videos
+- **Re-generate button** pre-fills the generate form with the same settings used for that video
+- **CSS fallback thumbnails** keyed to the animation theme (chalkboard / light / colorful) for runs without a rendered thumbnail
+
+All generated videos are automatically indexed into a SQLite database (`library.db`) when the server starts. Existing runs in `output/` are backfilled at startup. The storage layer uses a `LibraryStore` abstract interface so it can be swapped for a PostgreSQL backend for hosted deployments.
+
+#### Library API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET /api/library` | List videos | Supports `q`, `sort`, `limit`, `offset` query params |
+| `GET /api/library/{run_id}` | Get video | Full metadata + dynamic `output_files` list |
+| `DELETE /api/library/{run_id}` | Delete video | Removes from index (does not delete files) |
+
 ---
 
 ## Development
@@ -410,7 +431,7 @@ pipeline/
 docker/
   Dockerfile      # extends manimcommunity/manim:v0.20.1
   render.sh       # renders scene.py inside Docker
-server/         # FastAPI app, job store, routes, static frontend
+server/         # FastAPI app, job store, routes, library, static frontend
 tests/            # one test file per module
 config.py         # env var loading
 main.py           # CLI entry point
