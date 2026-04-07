@@ -393,7 +393,9 @@ A YouTube-style library browser is available at `http://localhost:8000/library`:
 - **4-column responsive grid** with thumbnails, title, duration badge, quality badge, and date
 - **Search** across topic and script text; **sort** by newest, oldest, longest, or shortest
 - **Load-more pagination** — handles large collections without loading everything at once
-- **Detail page** at `/library/{run_id}` with the video player, download links, generation settings, full script, and related videos
+- **Detail page** at `/library/{run_id}` with the video player, download links, generation settings, interactive transcript, and related videos
+  - **Interactive transcript** — clickable `0:11 · segment text` rows; clicking seeks the video, active segment highlights and scrolls into view as the video plays
+  - **CC subtitles** — native subtitle track loaded from `captions.srt`; toggle with the CC button in the player controls
 - **Re-generate button** pre-fills the generate form with the same settings used for that video
 - **CSS fallback thumbnails** keyed to the animation theme (chalkboard / light / colorful) for runs without a rendered thumbnail
 
