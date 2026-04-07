@@ -13,6 +13,7 @@ from typing import Literal
 _QADensity = Literal["zero", "normal", "high"]
 
 from pipeline.context import fetch_url_blocks, collect_files, load_context_blocks
+from server.library import VideoMeta
 from main import (
     run as _pipeline_run,
     _render, RenderFailed,
@@ -188,8 +189,6 @@ async def run_job(job: Job, output_dir: Path, library_store=None) -> None:
         # Index completed job in library
         if library_store is not None:
             try:
-                from server.library import VideoMeta
-                run_dir = output_dir / job.id
                 seg_path = run_dir / "segments.json"
                 duration_sec = 0.0
                 if seg_path.exists():
