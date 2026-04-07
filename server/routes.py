@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 from config import OUTPUT_DIR
 from server.jobs import JobStore, run_job, Job
+from server.library import LibraryStore
 from server.models import CreateJobRequest, JobResponse
 from server.upload import (
     validate_and_save,
@@ -27,7 +28,7 @@ def _job_to_response(job: Job) -> JobResponse:
     )
 
 
-def make_router(store: JobStore) -> APIRouter:
+def make_router(store: JobStore, library_store: LibraryStore | None = None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.post("/jobs", status_code=202, response_model=JobResponse)
@@ -39,7 +40,7 @@ def make_router(store: JobStore) -> APIRouter:
             urls=req.urls, github=req.github, qa_density=req.qa_density,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
-        asyncio.create_task(run_job(job, output_dir))
+        asyncio.create_task(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
     @router.post("/jobs/upload", status_code=202, response_model=JobResponse)
@@ -82,7 +83,7 @@ def make_router(store: JobStore) -> APIRouter:
             upload_dir=upload_dir,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
-        asyncio.create_task(run_job(job, output_dir))
+        asyncio.create_task(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
     @router.get("/jobs", response_model=list[JobResponse])

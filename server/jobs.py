@@ -1,10 +1,12 @@
 # server/jobs.py
 from __future__ import annotations
 import asyncio
+import json
 import os
 import shutil
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -94,7 +96,7 @@ async def _do_render(run_id: str, verbose: bool = False, burn_captions: bool = F
         return None
 
 
-async def run_job(job: Job, output_dir: Path) -> None:
+async def run_job(job: Job, output_dir: Path, library_store=None) -> None:
     """Execute the full pipeline + render for a job. Updates job.status in place."""
     job.status = "running"
 
@@ -182,6 +184,44 @@ async def run_job(job: Job, output_dir: Path) -> None:
             ]
 
         job.status = "completed"
+
+        # Index completed job in library
+        if library_store is not None:
+            try:
+                from server.library import VideoMeta
+                run_dir = output_dir / job.id
+                seg_path = run_dir / "segments.json"
+                duration_sec = 0.0
+                if seg_path.exists():
+                    segs = json.loads(seg_path.read_text())
+                    duration_sec = sum(s.get("actual_duration_sec", 0) for s in segs)
+                manifest_path = run_dir / "manifest.json"
+                quality = "medium"
+                if manifest_path.exists():
+                    quality = json.loads(manifest_path.read_text()).get("quality", "medium")
+                script = (run_dir / "script.txt").read_text() if (run_dir / "script.txt").exists() else ""
+                thumb_path = str(run_dir / "thumb.jpg") if (run_dir / "thumb.jpg").exists() else None
+                created_at = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                meta = VideoMeta(
+                    run_id=job.id,
+                    topic=job.topic,
+                    duration_sec=duration_sec,
+                    quality=quality,
+                    created_at=created_at,
+                    thumb_path=thumb_path,
+                    script=script,
+                    effort=job.effort,
+                    audience=job.audience,
+                    tone=job.tone,
+                    theme=job.theme,
+                    template=job.template,
+                    speed=job.speed,
+                    status="completed",
+                )
+                await library_store.add_video(meta)
+            except Exception as e:
+                print(f"  [library] failed to index job {job.id}: {e}")
+
     except Exception as e:
         job.status = "failed"
         job.error = str(e)
