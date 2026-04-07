@@ -24,8 +24,24 @@
     </div>
   </nav>
 
-  <main>
-    <div class="container">
+  <div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+      <nav class="sidebar-nav" aria-label="On this page">
+        <p class="sidebar-heading">On this page</p>
+        <a href="#start" class="sidebar-link">Starting the server</a>
+        <a href="#endpoints" class="sidebar-link">Endpoints</a>
+        <a href="#create" class="sidebar-link">Creating a job</a>
+        <a href="#events" class="sidebar-link">Live progress (SSE)</a>
+        <a href="#output" class="sidebar-link">Downloading output</a>
+        <a href="#response" class="sidebar-link">Job response</a>
+        <a href="#webui" class="sidebar-link">Web UI</a>
+      </nav>
+    </aside>
+
+    <!-- Content -->
+    <main class="docs-content">
 
       <!-- Hero -->
       <section class="page-hero">
@@ -259,8 +275,39 @@
         </div>
       </footer>
 
-    </div>
-  </main>
+    </main>
+  </div>
+
+  <script>
+  (function () {
+    var links = document.querySelectorAll('.sidebar-link, .sidebar-sublink');
+    var ids = Array.from(links).map(function (l) { return l.getAttribute('href').slice(1); });
+    var targets = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    var offsets = [];
+
+    function computeOffsets() {
+      offsets = targets.map(function (t) {
+        return t.getBoundingClientRect().top + window.scrollY;
+      });
+    }
+
+    function update() {
+      var scrollY = window.scrollY + 96;
+      var active = null;
+      for (var i = 0; i < offsets.length; i++) {
+        if (offsets[i] <= scrollY) active = ids[i];
+      }
+      links.forEach(function (l) {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + active);
+      });
+    }
+
+    computeOffsets();
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', function () { computeOffsets(); update(); });
+  })();
+  </script>
 
 </body>
 </html>

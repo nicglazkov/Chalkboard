@@ -21,6 +21,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 32px;
 }
 
 body {
@@ -51,6 +52,82 @@ body::before {
   position: relative;
   z-index: 1;
 }
+
+/* ── Docs page layout: sidebar + content ── */
+.docs-layout {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: grid;
+  grid-template-columns: 196px 1fr;
+  gap: 0 64px;
+  align-items: start;
+  position: relative;
+  z-index: 1;
+}
+
+.docs-content {
+  min-width: 0; /* prevent grid blowout from wide <pre> blocks */
+}
+
+/* ── Sidebar ── */
+.docs-sidebar {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding-top: 64px; /* align with .page-hero padding-top */
+  scrollbar-width: none;
+}
+
+.docs-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-heading {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.60rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  opacity: 0.55;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.71rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 0;
+  transition: color 0.15s;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+
+.sidebar-link:hover { color: var(--text); }
+.sidebar-link.active { color: var(--accent); }
+
+.sidebar-sublink {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.66rem;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 3px 0 3px 12px;
+  border-left: 1px solid var(--border);
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  opacity: 0.7;
+}
+
+.sidebar-sublink:hover { color: var(--text); opacity: 1; }
+.sidebar-sublink.active { color: var(--accent); border-left-color: var(--accent); opacity: 1; }
 
 /* ── Nav ── */
 nav {
@@ -434,6 +511,17 @@ footer {
 }
 
 /* ── Responsive ── */
+@media (max-width: 900px) {
+  .docs-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .docs-sidebar {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .cards {
     grid-template-columns: 1fr;

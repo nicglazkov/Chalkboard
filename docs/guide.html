@@ -24,8 +24,29 @@
     </div>
   </nav>
 
-  <main>
-    <div class="container">
+  <div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+      <nav class="sidebar-nav" aria-label="On this page">
+        <p class="sidebar-heading">On this page</p>
+        <a href="#quickstart" class="sidebar-link">Quick start</a>
+        <a href="#context" class="sidebar-link">Context injection</a>
+        <a href="#flags" class="sidebar-link">CLI flags</a>
+        <a href="#flags-core" class="sidebar-sublink">Core</a>
+        <a href="#flags-context" class="sidebar-sublink">Context</a>
+        <a href="#flags-output" class="sidebar-sublink">Output</a>
+        <a href="#flags-render" class="sidebar-sublink">Render</a>
+        <a href="#templates" class="sidebar-link">Templates</a>
+        <a href="#effort" class="sidebar-link">Effort levels</a>
+        <a href="#tts" class="sidebar-link">TTS backends</a>
+        <a href="#config" class="sidebar-link">Environment variables</a>
+        <a href="#resume" class="sidebar-link">Resuming runs</a>
+      </nav>
+    </aside>
+
+    <!-- Content -->
+    <main class="docs-content">
 
       <!-- Hero -->
       <section class="page-hero">
@@ -105,7 +126,7 @@
         <p class="section-label">Reference</p>
         <h2>CLI flags</h2>
 
-        <h3>Core</h3>
+        <h3 id="flags-core">Core</h3>
         <table class="ref-table">
           <thead>
             <tr>
@@ -153,7 +174,7 @@
           </tbody>
         </table>
 
-        <h3>Context</h3>
+        <h3 id="flags-context">Context</h3>
         <table class="ref-table">
           <thead>
             <tr>
@@ -191,7 +212,7 @@
           </tbody>
         </table>
 
-        <h3>Output</h3>
+        <h3 id="flags-output">Output</h3>
         <table class="ref-table">
           <thead>
             <tr>
@@ -219,7 +240,7 @@
           </tbody>
         </table>
 
-        <h3>Render</h3>
+        <h3 id="flags-render">Render</h3>
         <table class="ref-table">
           <thead>
             <tr>
@@ -466,8 +487,39 @@
         </div>
       </footer>
 
-    </div>
-  </main>
+    </main>
+  </div>
+
+  <script>
+  (function () {
+    var links = document.querySelectorAll('.sidebar-link, .sidebar-sublink');
+    var ids = Array.from(links).map(function (l) { return l.getAttribute('href').slice(1); });
+    var targets = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    var offsets = [];
+
+    function computeOffsets() {
+      offsets = targets.map(function (t) {
+        return t.getBoundingClientRect().top + window.scrollY;
+      });
+    }
+
+    function update() {
+      var scrollY = window.scrollY + 96;
+      var active = null;
+      for (var i = 0; i < offsets.length; i++) {
+        if (offsets[i] <= scrollY) active = ids[i];
+      }
+      links.forEach(function (l) {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + active);
+      });
+    }
+
+    computeOffsets();
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', function () { computeOffsets(); update(); });
+  })();
+  </script>
 
 </body>
 </html>
