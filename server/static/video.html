@@ -148,7 +148,7 @@
 
     /* ── Player cell ── */
     .player-cell {
-      align-self: stretch;
+      /* width/height set by syncPlayer() after sidebar renders */
     }
 
     /* ── Video player ── */
@@ -156,13 +156,11 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      height: 100%;
-      aspect-ratio: 16 / 9;
       min-height: 200px;
     }
 
     @media (max-width: 900px) {
-      .player-wrap { height: auto; width: 100%; }
+      .player-wrap { width: 100% !important; height: auto !important; aspect-ratio: 16/9; }
     }
 
     .player-wrap video {
@@ -550,6 +548,9 @@
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('content').classList.remove('hidden');
 
+      // Size player after all panels have rendered
+      requestAnimationFrame(() => requestAnimationFrame(syncPlayer));
+
       // Title + date
       document.getElementById('video-title').textContent = v.topic;
       document.getElementById('video-date').textContent = formatDate(v.created_at);
@@ -670,7 +671,23 @@
       } catch {
         relPanel.remove();
       }
+
+      // Re-sync now that sidebar final height is known
+      requestAnimationFrame(syncPlayer);
     }
+
+    function syncPlayer() {
+      const sidebar = document.querySelector('.sidebar');
+      const wrap = document.getElementById('player-wrap');
+      if (!sidebar || !wrap) return;
+      // On narrow screens the media query handles sizing — skip
+      if (window.innerWidth <= 900) { wrap.style.width = ''; wrap.style.height = ''; return; }
+      const h = sidebar.offsetHeight;
+      wrap.style.height = h + 'px';
+      wrap.style.width = Math.round(h * 16 / 9) + 'px';
+    }
+
+    window.addEventListener('resize', syncPlayer);
 
     load().catch(err => {
       document.getElementById('loading').textContent = 'Failed to load video.';
