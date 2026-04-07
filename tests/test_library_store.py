@@ -109,6 +109,20 @@ def test_list_videos_sort_longest_first(store):
     assert videos[0].run_id == "long"
 
 
+def test_list_videos_sort_oldest_first(store):
+    asyncio.run(store.add_video(_make_meta(run_id="old", created_at="2026-01-01T00:00:00Z")))
+    asyncio.run(store.add_video(_make_meta(run_id="new", created_at="2026-06-01T00:00:00Z")))
+    videos, _ = asyncio.run(store.list_videos(sort="oldest"))
+    assert videos[0].run_id == "old"
+
+
+def test_list_videos_sort_shortest_first(store):
+    asyncio.run(store.add_video(_make_meta(run_id="short", duration_sec=60)))
+    asyncio.run(store.add_video(_make_meta(run_id="long",  duration_sec=600)))
+    videos, _ = asyncio.run(store.list_videos(sort="shortest"))
+    assert videos[0].run_id == "short"
+
+
 def test_list_videos_pagination(store):
     for i in range(5):
         asyncio.run(store.add_video(_make_meta(run_id=f"run-{i}", topic=f"topic {i}")))

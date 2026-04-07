@@ -68,6 +68,13 @@ _ROW_KEYS = (
     "theme", "template", "speed", "status",
 )
 
+_SORT_MAP = {
+    "newest":   "created_at DESC",
+    "oldest":   "created_at ASC",
+    "longest":  "duration_sec DESC",
+    "shortest": "duration_sec ASC",
+}
+
 
 def _row_to_meta(row: tuple) -> VideoMeta:
     return VideoMeta(**dict(zip(_ROW_KEYS, row)))
@@ -80,6 +87,7 @@ class SQLiteLibraryStore(LibraryStore):
     async def init(self) -> None:
         """Create the videos table if it doesn't exist."""
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(_CREATE_TABLE)
             await db.commit()
 
@@ -116,13 +124,7 @@ class SQLiteLibraryStore(LibraryStore):
         offset: int = 0,
         sort: str = "newest",
     ) -> tuple[list[VideoMeta], int]:
-        _sort_map = {
-            "newest":   "created_at DESC",
-            "oldest":   "created_at ASC",
-            "longest":  "duration_sec DESC",
-            "shortest": "duration_sec ASC",
-        }
-        order = _sort_map.get(sort, "created_at DESC")
+        order = _SORT_MAP.get(sort, "created_at DESC")
 
         if query:
             where = "WHERE topic LIKE ? COLLATE NOCASE OR script LIKE ? COLLATE NOCASE"
