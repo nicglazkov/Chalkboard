@@ -9,4 +9,8 @@ if __name__ == "__main__":
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only — kills in-flight jobs on reload)")
     parser.add_argument("--port", type=int, default=SERVER_PORT)
     args = parser.parse_args()
-    uvicorn.run("server.app:app", host="0.0.0.0", port=args.port, reload=args.reload)
+    reload_kwargs = {}
+    if args.reload:
+        reload_kwargs["reload_dirs"] = ["."]
+        reload_kwargs["reload_excludes"] = ["output/*", "output/**/*", "*.db", "pipeline_state.db"]
+    uvicorn.run("server.app:app", host="0.0.0.0", port=args.port, reload=args.reload, **reload_kwargs)

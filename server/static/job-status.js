@@ -72,7 +72,13 @@
     try {
       const r = await fetch(`/api/jobs/${j.id}`);
       if (!r.ok) {
-        _pollTimer = setTimeout(poll, POLL_INTERVAL_ERROR);
+        if (r.status === 404) {
+          // Job gone (server restarted) — clear pill
+          saveJob(null);
+          renderPill();
+        } else {
+          _pollTimer = setTimeout(poll, POLL_INTERVAL_ERROR);
+        }
         return;
       }
       const data = await r.json();
