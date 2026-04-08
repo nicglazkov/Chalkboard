@@ -32,6 +32,7 @@ KNOWN API PITFALLS (v0.20.1):
 - VGroup.arrange() returns None — assign before arranging, don't chain
 - Always pass run_time as a keyword arg: self.play(anim, run_time=1.0)
 - Never use VGroup(*self.mobjects) — self.mobjects can contain non-VMobjects; use *[FadeOut(m) for m in self.mobjects] instead
+- DASHED is not a Manim constant — use DashedLine(start, end, ...) instead of Line(start, end, line_style=DASHED) or any other DASHED usage; DashedLine accepts the same positional and keyword args as Line
 - Never hardcode self.wait(X) with a float literal — always use _d[i] loaded from segments.json
 - self.wait(0) crashes — always guard: _r = max(0.0, _d[i] - X); if _r > 0: self.wait(_r)
 - Pad _d with: _d = _d + [2.0] * max(0, N - len(_d)) where N is the literal integer segment count
