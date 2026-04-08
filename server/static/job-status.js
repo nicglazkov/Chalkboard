@@ -1,9 +1,20 @@
 // job-status.js — persistent job status pill shown in the nav across all pages
 (function () {
   const KEY = 'chalkboard_active_job';
-  const COMPLETED_TTL = 5 * 60 * 1000; // hide pill 5 min after completion
   const POLL_INTERVAL_RUNNING = 2000;
   const POLL_INTERVAL_ERROR   = 6000;
+
+  const STAGE_LABELS = {
+    init:            'Initializing',
+    research_agent:  'Researching topic',
+    script_agent:    'Writing script',
+    fact_validator:  'Fact-checking',
+    manim_agent:     'Generating animation',
+    code_validator:  'Validating code',
+    render_trigger:  'Synthesizing voiceover',
+    render:          'Rendering',
+    qa:              'Visual QA',
+  };
 
   // ── Storage helpers ──────────────────────────────────────────────────────
   function getJob() {
@@ -17,13 +28,12 @@
   // ── Public API (used by index.html) ──────────────────────────────────────
   window.jobStatus = {
     set: function (id, topic) {
-      saveJob({ id, topic, status: 'running', startedAt: Date.now(), title: '', completedAt: null });
+      saveJob({ id, topic, status: 'running', startedAt: Date.now(), currentStage: null });
     },
-    resolve: function (id, status, title) {
+    resolve: function (id, status) {
+      // Called by index.html when finalizeJob runs — clear immediately
       const j = getJob();
-      if (j && j.id === id) {
-        saveJob({ ...j, status, title: title || j.title || '', completedAt: Date.now() });
-      }
+      if (j && j.id === id) saveJob(null);
       renderPill();
     },
     clear: function () {
@@ -44,30 +54,12 @@
     const j = getJob();
     if (!j) { pill.style.display = 'none'; return; }
 
-    // Expired completed/failed job — clean up and hide
-    if (j.status !== 'running' && j.status !== 'pending') {
-      if (!j.completedAt || Date.now() - j.completedAt > COMPLETED_TTL) {
-        saveJob(null);
-        pill.style.display = 'none';
-        return;
-      }
-    }
-
     pill.style.display = 'flex';
+    dot.className   = 'job-pill-dot running';
+    label.href      = '/';
 
-    if (j.status === 'completed') {
-      dot.className   = 'job-pill-dot done';
-      label.textContent = (j.title || j.topic || 'Video') + ' — Ready';
-      label.href      = `/library/${j.id}`;
-    } else if (j.status === 'failed') {
-      dot.className   = 'job-pill-dot failed';
-      label.textContent = 'Generation failed';
-      label.href      = '/';
-    } else {
-      dot.className   = 'job-pill-dot running';
-      label.textContent = j.topic ? `Generating "${j.topic}"` : 'Generating…';
-      label.href      = '/';
-    }
+    const stageLabel = j.currentStage ? (STAGE_LABELS[j.currentStage] || j.currentStage) : null;
+    label.textContent = stageLabel ? `${stageLabel}…` : 'Generating…';
   }
 
   // ── Polling ──────────────────────────────────────────────────────────────
@@ -80,8 +72,6 @@
     try {
       const r = await fetch(`/api/jobs/${j.id}`);
       if (!r.ok) {
-        // Job gone from server (e.g. server restarted) — keep polling in case
-        // it was just a blip, but slow down
         _pollTimer = setTimeout(poll, POLL_INTERVAL_ERROR);
         return;
       }
@@ -90,19 +80,18 @@
       if (!current || current.id !== j.id) return; // dismissed while polling
 
       if (data.status === 'completed' || data.status === 'failed') {
-        let title = current.title || '';
-        if (data.status === 'completed' && !title) {
-          // Try to grab the AI title from the library endpoint
-          try {
-            const lr = await fetch(`/api/library/${j.id}`);
-            if (lr.ok) { const meta = await lr.json(); title = meta.title || ''; }
-          } catch { /* ignore */ }
-        }
-        saveJob({ ...current, status: data.status, title, completedAt: Date.now() });
+        // Job is done — clear the pill immediately
+        saveJob(null);
         renderPill();
         return; // stop polling
       }
 
+      // Find the most recent active stage from events
+      const events = data.events || [];
+      const lastEvent = events.length ? events[events.length - 1] : null;
+      const currentStage = lastEvent?.node || current.currentStage || null;
+
+      saveJob({ ...current, status: data.status, currentStage });
       renderPill();
       _pollTimer = setTimeout(poll, POLL_INTERVAL_RUNNING);
     } catch {
