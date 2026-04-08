@@ -502,6 +502,11 @@
       </div>`;
     }
 
+    // Called from img onerror — avoids embedding HTML with double quotes inside an attribute
+    function thumbError(img, topic, theme) {
+      img.parentNode.innerHTML = makeThumbFallback(topic, theme);
+    }
+
     function escHtml(s) {
       return String(s)
         .replace(/&/g, '&amp;')
@@ -515,7 +520,7 @@
       const date = formatDate(v.created_at);
       const thumbHtml = v.thumb_path
         ? `<img src="/api/jobs/${v.run_id}/files/thumb.jpg" alt="${escHtml(v.topic)}" loading="lazy"
-               onerror="this.parentNode.innerHTML='${makeThumbFallback(v.topic, v.theme).replace(/'/g, "\\'").replace(/\n/g, '')}'"/>`
+               onerror="thumbError(this,'${escHtml(v.topic).replace(/'/g,"&#39;")}','${escHtml(v.theme||'chalkboard')}')">`
         : makeThumbFallback(v.topic, v.theme);
 
       return `<a class="card" href="/library/${v.run_id}">
