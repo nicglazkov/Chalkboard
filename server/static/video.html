@@ -589,7 +589,7 @@
       const v = await metaRes.json();
 
       // Update page title
-      document.title = `${v.topic} — Chalkboard`;
+      document.title = `${v.title || v.topic} — Chalkboard`;
 
       // Hide loading, show content
       document.getElementById('loading').classList.add('hidden');
@@ -599,7 +599,7 @@
       requestAnimationFrame(() => requestAnimationFrame(syncPlayer));
 
       // Title + date
-      document.getElementById('video-title').textContent = v.topic;
+      document.getElementById('video-title').textContent = v.title || v.topic;
       document.getElementById('video-date').textContent = formatDate(v.created_at);
 
       // Video player

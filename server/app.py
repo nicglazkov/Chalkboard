@@ -44,6 +44,7 @@ async def _backfill(store: LibraryStore, output_dir: Path) -> None:
             meta = VideoMeta(
                 run_id=run_id,
                 topic=manifest.get("topic", run_id),
+                title=manifest.get("title", ""),
                 duration_sec=duration_sec,
                 quality=manifest.get("quality", "medium"),
                 created_at=created_at,

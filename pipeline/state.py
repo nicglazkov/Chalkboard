@@ -10,6 +10,7 @@ class ValidationResult(BaseModel):
 
 class PipelineState(TypedDict):
     topic: str
+    title: str
     run_id: str
     script: str
     script_segments: list[dict]

@@ -11,11 +11,14 @@ teaching segments (3–8 segments). Each segment should be 1–3 sentences.
 
 Respond with valid JSON only:
 {
+  "title": "<concise, engaging video title — 4–8 words, Title Case, no trailing punctuation>",
   "script": "<full narration as a single string>",
   "segments": [{"text": "<segment text>", "estimated_duration_sec": <float>}],
   "needs_web_search": <bool>
 }
 
+Title guidelines: write it like a YouTube video title — specific, descriptive, and punchy.
+Good: "AWD vs 4WD vs RWD Explained" | Bad: "what is the difference between awd 4wd and rwd?"
 Estimate duration as word_count / 2.5 seconds (~150 wpm).
 Set needs_web_search to true only if the topic requires information beyond your training data."""
 
@@ -93,6 +96,7 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
                     "schema": {
                         "type": "object",
                         "properties": {
+                            "title": {"type": "string"},
                             "script": {"type": "string"},
                             "segments": {
                                 "type": "array",
@@ -108,7 +112,7 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
                             },
                             "needs_web_search": {"type": "boolean"},
                         },
-                        "required": ["script", "segments", "needs_web_search"],
+                        "required": ["title", "script", "segments", "needs_web_search"],
                         "additionalProperties": False,
                     },
                 }
@@ -125,6 +129,7 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
         )
     data = json.loads(text_block.text)
     return {
+        "title": data.get("title", ""),
         "script": data["script"],
         "script_segments": data["segments"],
         "needs_web_search": data.get("needs_web_search", False),

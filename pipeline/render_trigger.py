@@ -32,6 +32,7 @@ async def render_trigger(state: PipelineState) -> dict:
         "scene_class_name": "ChalkboardScene",
         "quality": MANIM_QUALITY,
         "topic": state["topic"],
+        "title": state.get("title", ""),
         "effort": state.get("effort_level", "medium"),
         "audience": state.get("audience", "intermediate"),
         "tone": state.get("tone", "casual"),

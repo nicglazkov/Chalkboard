@@ -196,14 +196,18 @@ async def run_job(job: Job, output_dir: Path, library_store=None) -> None:
                     duration_sec = sum(s.get("actual_duration_sec", 0) for s in segs)
                 manifest_path = run_dir / "manifest.json"
                 quality = "medium"
+                title = ""
                 if manifest_path.exists():
-                    quality = json.loads(manifest_path.read_text()).get("quality", "medium")
+                    manifest_data = json.loads(manifest_path.read_text())
+                    quality = manifest_data.get("quality", "medium")
+                    title = manifest_data.get("title", "")
                 script = (run_dir / "script.txt").read_text() if (run_dir / "script.txt").exists() else ""
                 thumb_path = str(run_dir / "thumb.jpg") if (run_dir / "thumb.jpg").exists() else None
                 created_at = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 meta = VideoMeta(
                     run_id=job.id,
                     topic=job.topic,
+                    title=title,
                     duration_sec=duration_sec,
                     quality=quality,
                     created_at=created_at,

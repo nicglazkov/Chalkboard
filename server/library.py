@@ -8,6 +8,7 @@ import aiosqlite
 class VideoMeta(BaseModel):
     run_id: str
     topic: str
+    title: str = ""                        # AI-generated title; falls back to topic if empty
     created_at: str                        # ISO8601 UTC e.g. "2026-04-07T10:00:00Z"
     duration_sec: float = 0.0
     quality: str = "medium"               # low / medium / high
@@ -47,6 +48,7 @@ _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS videos (
     run_id       TEXT PRIMARY KEY,
     topic        TEXT NOT NULL,
+    title        TEXT DEFAULT '',
     duration_sec REAL DEFAULT 0,
     quality      TEXT DEFAULT 'medium',
     created_at   TEXT NOT NULL,
@@ -63,7 +65,7 @@ CREATE TABLE IF NOT EXISTS videos (
 """
 
 _ROW_KEYS = (
-    "run_id", "topic", "duration_sec", "quality", "created_at",
+    "run_id", "topic", "title", "duration_sec", "quality", "created_at",
     "thumb_path", "script", "effort", "audience", "tone",
     "theme", "template", "speed", "status",
 )
@@ -85,22 +87,27 @@ class SQLiteLibraryStore(LibraryStore):
         self.db_path = db_path
 
     async def init(self) -> None:
-        """Create the videos table if it doesn't exist."""
+        """Create the videos table if it doesn't exist, and migrate existing DBs."""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(_CREATE_TABLE)
+            # Migrate: add title column to existing DBs that predate it
+            try:
+                await db.execute("ALTER TABLE videos ADD COLUMN title TEXT DEFAULT ''")
+            except Exception:
+                pass  # column already exists
             await db.commit()
 
     async def add_video(self, meta: VideoMeta) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """INSERT OR REPLACE INTO videos
-                   (run_id, topic, duration_sec, quality, created_at,
+                   (run_id, topic, title, duration_sec, quality, created_at,
                     thumb_path, script, effort, audience, tone,
                     theme, template, speed, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    meta.run_id, meta.topic, meta.duration_sec, meta.quality,
+                    meta.run_id, meta.topic, meta.title, meta.duration_sec, meta.quality,
                     meta.created_at, meta.thumb_path, meta.script,
                     meta.effort, meta.audience, meta.tone, meta.theme,
                     meta.template, meta.speed, meta.status,
@@ -127,8 +134,8 @@ class SQLiteLibraryStore(LibraryStore):
         order = _SORT_MAP.get(sort, "created_at DESC")
 
         if query:
-            where = "WHERE topic LIKE ? COLLATE NOCASE OR script LIKE ? COLLATE NOCASE"
-            params = (f"%{query}%", f"%{query}%")
+            where = "WHERE topic LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR script LIKE ? COLLATE NOCASE"
+            params = (f"%{query}%", f"%{query}%", f"%{query}%")
         else:
             where = ""
             params = ()
