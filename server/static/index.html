@@ -1487,6 +1487,44 @@
       // Clean up the URL so it doesn't re-trigger on refresh
       history.replaceState(null, '', '/');
     })();
+
+    // ── Reconnect to active job on page load ──────────────────────
+    // If there's a running job in localStorage and the user navigated
+    // back to this page, replay past events to rebuild stage state
+    // and reconnect SSE for the live tail.
+    (async function reconnectActiveJob() {
+      // Don't reconnect if this is a re-generate prefill
+      if (new URLSearchParams(location.search).has('topic')) return;
+
+      const stored = window.jobStatus?.get();
+      if (!stored || (stored.status !== 'running' && stored.status !== 'pending')) return;
+
+      let job;
+      try {
+        const r = await fetch(`/api/jobs/${stored.id}`);
+        if (!r.ok) return;
+        job = await r.json();
+      } catch { return; }
+
+      // Show progress panel and disable form submit
+      progressPanel.style.display = 'block';
+      appBody.classList.add('is-active');
+      submitBtn.disabled = true;
+
+      // Replay past events to reconstruct stage checkpoints
+      for (const event of (job.events || [])) {
+        handleEvent(event);
+      }
+
+      // If job already finished while we were away, finalize immediately
+      if (job.status === 'completed' || job.status === 'failed') {
+        finalizeJob(stored.id);
+        return;
+      }
+
+      // Reconnect SSE for live updates going forward
+      startSSE(stored.id);
+    })();
   </script>
 </body>
 </html>
