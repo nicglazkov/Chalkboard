@@ -427,30 +427,37 @@
     }
 
     .stage-dot {
-      width: 8px;
-      height: 8px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       flex-shrink: 0;
-      background: var(--muted);
-      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid var(--muted);
+      transition: background 0.2s, border-color 0.2s;
     }
 
     .stage-dot.running {
-      background: var(--accent);
+      background: rgba(200,185,122,0.15);
+      border-color: var(--accent);
       animation: pulse 1.2s ease-in-out infinite;
     }
 
     .stage-dot.done {
-      background: var(--accent);
+      background: rgba(200,185,122,0.15);
+      border-color: var(--accent);
     }
 
     .stage-dot.failed {
-      background: #c0392b;
+      background: rgba(192,57,43,0.15);
+      border-color: #c0392b;
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.75); }
+      50% { opacity: 0.6; transform: scale(0.88); }
     }
 
     .stage-name {
@@ -460,13 +467,80 @@
       flex: 1;
     }
 
-    .stage-item.pending .stage-name {
-      color: var(--muted);
+    .stage-item.pending .stage-name { color: var(--muted); }
+    .stage-item.running .stage-name { color: var(--chalk); }
+    .stage-item.done   .stage-name  { color: var(--text); }
+
+    /* ── Completion card ── */
+    #completion-card {
+      display: none;
+      margin-top: 1.25rem;
+      background: rgba(200,185,122,0.07);
+      border: 1px solid rgba(200,185,122,0.2);
+      border-radius: 8px;
+      padding: 1.25rem 1.25rem 1rem;
     }
 
-    .stage-item.running .stage-name {
+    .completion-heading {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.1rem;
       color: var(--chalk);
+      margin-bottom: 0.25rem;
     }
+
+    .completion-topic {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .completion-actions {
+      display: flex;
+      gap: 0.65rem;
+    }
+
+    .btn-watch {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.25rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .btn-watch:hover { opacity: 0.88; }
+
+    .btn-again {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 1.25rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .btn-again:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
 
     /* Error panel */
     #error-panel {
@@ -689,6 +763,19 @@
         <div id="progress-panel">
           <p class="panel-title">Pipeline progress</p>
           <div class="stages" id="stages-list"></div>
+          <div id="completion-card">
+            <div class="completion-heading">Your video is ready!</div>
+            <div class="completion-topic" id="completion-topic"></div>
+            <div class="completion-actions">
+              <a class="btn-watch" id="btn-watch" href="#">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="3,1.5 11.5,6.5 3,11.5" fill="currentColor"/>
+                </svg>
+                Watch now
+              </a>
+              <button class="btn-again" id="btn-again" type="button">Generate another</button>
+            </div>
+          </div>
         </div>
         <video id="result-video" controls></video>
       </div>
@@ -1069,9 +1156,8 @@
       downloadsList.innerHTML = '';
       resultVideo.removeAttribute('src');
       resultVideo.style.display = 'none';
-      // Remove any no-video note from a prior run
-      const prevNote = appLeft.querySelector('.no-video-note');
-      if (prevNote) prevNote.remove();
+      document.getElementById('completion-card').style.display = 'none';
+      document.getElementById('btn-watch').style.display = '';
       stageEls = {};
       seenStages = [];
       finalized = false;
@@ -1095,10 +1181,16 @@
       return stageEls[node];
     }
 
+    const CHECKMARK_SVG = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const CROSS_SVG     = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2l5 5M7 2l-5 5" stroke="#c0392b" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
     function setStageStatus(node, status) {
       const el = ensureStage(node);
       el.item.className = `stage-item ${status}`;
       el.dot.className = `stage-dot ${status}`;
+      if (status === 'done')   el.dot.innerHTML = CHECKMARK_SVG;
+      if (status === 'failed') el.dot.innerHTML = CROSS_SVG;
+      if (status === 'running' || status === 'pending') el.dot.innerHTML = '';
     }
 
     function markAllPriorDone(currentNode) {
@@ -1161,38 +1253,29 @@
         return;
       }
 
-      // Transition to video / controls layout
-      progressPanel.style.display = 'none';
-      appBody.classList.remove('is-active');
-      appBody.classList.add('is-complete');
-
       const outputFiles = job.output_files || [];
+      const hasVideo = outputFiles.includes('final.mp4');
 
-      if (outputFiles.includes('final.mp4')) {
-        resultVideo.src = `/api/jobs/${jobId}/files/final.mp4`;
-        resultVideo.style.display = 'block';
-      } else {
-        resultVideo.style.display = 'none';
-        const note = document.createElement('p');
-        note.className = 'no-video-note';
-        note.style.cssText = 'font-family: "DM Mono", monospace; font-size: 0.8rem; color: var(--muted); margin-bottom: 1.25rem;';
-        note.textContent = 'Job completed (no video \u2014 pipeline output preserved)';
-        appLeft.appendChild(note);
+      // Show completion card (keep progress panel visible)
+      const card = document.getElementById('completion-card');
+      const topicEl = document.getElementById('completion-topic');
+      const watchBtn = document.getElementById('btn-watch');
+      const againBtn = document.getElementById('btn-again');
+
+      topicEl.textContent = job.topic || '';
+      watchBtn.href = `/library/${jobId}`;
+      card.style.display = 'block';
+
+      if (!hasVideo) {
+        watchBtn.style.display = 'none';
       }
 
-      downloadsList.innerHTML = '';
-      for (const fname of DOWNLOADABLE) {
-        if (outputFiles.includes(fname)) {
-          const a = document.createElement('a');
-          a.href = `/api/jobs/${jobId}/files/${fname}`;
-          a.textContent = fname;
-          a.className = 'download-link';
-          a.download = fname;
-          downloadsList.appendChild(a);
-        }
-      }
+      againBtn.addEventListener('click', () => {
+        card.style.display = 'none';
+        resetUI();
+        submitBtn.disabled = false;
+      }, { once: true });
 
-      downloadsPanel.style.display = 'block';
       submitBtn.disabled = false;
     }
 
