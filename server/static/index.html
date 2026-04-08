@@ -765,7 +765,6 @@
           <div class="stages" id="stages-list"></div>
           <div id="completion-card">
             <div class="completion-heading">Your video is ready!</div>
-            <div class="completion-topic" id="completion-topic"></div>
             <div class="completion-actions">
               <a class="btn-watch" id="btn-watch" href="#">
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1258,11 +1257,9 @@
 
       // Show completion card (keep progress panel visible)
       const card = document.getElementById('completion-card');
-      const topicEl = document.getElementById('completion-topic');
       const watchBtn = document.getElementById('btn-watch');
       const againBtn = document.getElementById('btn-again');
 
-      topicEl.textContent = job.topic || '';
       watchBtn.href = `/library/${jobId}`;
       card.style.display = 'block';
 
