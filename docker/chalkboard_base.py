@@ -104,6 +104,15 @@ class ChalkboardSceneBase:
         return super().play(*animations, run_time=run_time, **kwargs)
 
     # ------------------------------------------------------------------
+    # wait() override — accumulate duration
+    # ------------------------------------------------------------------
+
+    def wait(self, duration=1.0, **kwargs):
+        if not self._lc_done and self._lc_segment is not None:
+            self._lc_run_time += duration
+        return super().wait(duration, **kwargs)
+
+    # ------------------------------------------------------------------
     # Internal validation
     # ------------------------------------------------------------------
 

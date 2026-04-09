@@ -39,6 +39,11 @@ class _FakeScene(ChalkboardSceneBase):
         if not self._lc_done and self._lc_segment is not None:
             self._lc_run_time += run_time if run_time is not None else 1.0
 
+    def wait(self, duration=1.0, **kwargs):
+        # Don't call super() — no real Manim scene in tests
+        if not self._lc_done and self._lc_segment is not None:
+            self._lc_run_time += duration
+
 
 # ── _classify_overlap ─────────────────────────────────────────────────────────
 
@@ -215,3 +220,30 @@ def test_end_layout_check_before_final_fadeout_does_not_count_it(tmp_path):
     report = json.loads((tmp_path / "layout_report.json").read_text())
     timing_violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
     assert timing_violations == []
+
+
+def test_wait_contributes_to_timing(tmp_path):
+    """self.wait() calls must count toward segment timing budget."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=3.0)
+    scene.play(run_time=1.0)
+    scene.wait(3.0)  # total 4.0 > 3.0 — should trigger overrun
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
+    assert len(violations) == 1
+    assert violations[0]["actual_sec"] == pytest.approx(4.0)
+
+
+def test_wait_after_end_layout_check_not_counted(tmp_path):
+    """self.wait() after end_layout_check() must not affect timing."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=3.0)
+    scene.play(run_time=1.0)
+    scene.end_layout_check()
+    scene.wait(10.0)  # after check — must not trigger overrun
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
+    assert violations == []
