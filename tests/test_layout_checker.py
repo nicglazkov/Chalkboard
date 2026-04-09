@@ -13,6 +13,10 @@ def _base_state(run_id="test-run", code_attempts=0):
         "code_attempts": code_attempts,
         "script": "Test script.",
         "topic": "Test",
+        "script_segments": [
+            {"text": "Hello.", "estimated_duration_sec": 2.0},
+            {"text": "World.", "estimated_duration_sec": 3.0},
+        ],
     }
 
 
@@ -154,6 +158,36 @@ def test_layout_checker_handles_timeout(tmp_path):
     assert "timed out" in result["code_feedback"].lower()
     assert result["code_attempts"] == 1
     assert kill_called, "proc.kill() must be called on timeout"
+
+
+def test_layout_checker_writes_scene_and_segments_before_docker(tmp_path):
+    """scene.py and stub segments.json must exist before Docker is invoked."""
+    state = _base_state(run_id="run7")
+    run_dir = tmp_path / "run7"
+
+    written_before_docker = {}
+
+    async def _communicate():
+        written_before_docker["scene"] = (run_dir / "scene.py").exists()
+        written_before_docker["segments"] = (run_dir / "segments.json").exists()
+        if written_before_docker["segments"]:
+            data = json.loads((run_dir / "segments.json").read_text())
+            written_before_docker["segments_data"] = data
+        _write_report(run_dir, passed=True)
+        return b"", b""
+
+    mock = MagicMock()
+    mock.communicate = AsyncMock(side_effect=_communicate)
+
+    with patch("pipeline.agents.layout_checker.OUTPUT_DIR", str(tmp_path)), \
+         patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock)):
+        asyncio.run(_run(state))
+
+    assert written_before_docker["scene"], "scene.py must exist before Docker communicate()"
+    assert written_before_docker["segments"], "segments.json must exist before Docker communicate()"
+    segs = written_before_docker["segments_data"]
+    assert segs[0]["actual_duration_sec"] == 2.0
+    assert segs[1]["actual_duration_sec"] == 3.0
 
 
 def test_layout_checker_stale_report_not_used(tmp_path):

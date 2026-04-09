@@ -22,6 +22,16 @@ async def layout_checker(state: PipelineState) -> dict:
     run_dir = Path(OUTPUT_DIR).resolve() / run_id
     report_path = run_dir / "layout_report.json"
 
+    # Write scene.py and a stub segments.json so Docker can find them.
+    # render_trigger hasn't run yet, so we use estimated durations as placeholders.
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "scene.py").write_text(state["manim_code"])
+    stub_segments = [
+        {"text": s.get("text", ""), "actual_duration_sec": s.get("estimated_duration_sec", 2.0)}
+        for s in state.get("script_segments", [])
+    ]
+    (run_dir / "segments.json").write_text(json.dumps(stub_segments))
+
     # Remove stale report from a previous attempt
     report_path.unlink(missing_ok=True)
 
