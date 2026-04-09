@@ -15,6 +15,7 @@ sys.path.insert(0, "/output")
 sys.path.insert(0, "/render")   # chalkboard_base.py lives here in the image
 from manim import config as _cfg
 _cfg.dry_run = True
+_cfg.frame_rate = 1   # 1fps → ~60x faster dry-run; safe because we track run_time not frames
 _cfg.verbosity = "ERROR"
 import importlib.util as _u
 _spec = _u.spec_from_file_location("scene", "/output/scene.py")
