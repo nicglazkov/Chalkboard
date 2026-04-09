@@ -6,4 +6,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 USER manimuser
 WORKDIR /render
 COPY --chmod=755 docker/render.sh /render/render.sh
+COPY docker/chalkboard_base.py /render/chalkboard_base.py
 ENTRYPOINT ["/render/render.sh"]
