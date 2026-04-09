@@ -104,7 +104,8 @@ def _segment_boundary_timestamps(
         cumulative += dur
         timestamps.append((round(cumulative, 2), i, text))
 
-    # Deduplicate and sort
+    # Deduplicate and sort. Float equality is safe here: all timestamps are
+    # either the literal 0.5 or cumulative sums rounded to 2 decimal places.
     seen: set[float] = set()
     unique: list[tuple[float, int, str]] = []
     for t, idx, txt in sorted(timestamps, key=lambda x: x[0]):

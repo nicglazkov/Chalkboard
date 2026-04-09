@@ -458,7 +458,12 @@ async def _qa_regenerate_scene(
     theme: str, audience: str, tone: str, effort_level: str,
     context_blocks=None,
 ) -> None:
-    """Re-invoke manim_agent with QA feedback, overwrite scene.py in place."""
+    """Re-invoke manim_agent with QA feedback, overwrite scene.py in place.
+
+    Note: this intentionally bypasses code_validator and layout_checker for
+    speed — the QA loop cap (max_qa_attempts=2) bounds the blast radius. A
+    future improvement could run layout_checker before re-rendering here.
+    """
     from pipeline.agents.manim_agent import manim_agent
     output_dir = Path(OUTPUT_DIR).resolve()
     run_dir = output_dir / run_id
@@ -630,7 +635,11 @@ def _run_qa_loop(
     context_blocks=None, verbose: bool = False,
     max_qa_attempts: int = 2, qa_density: str = "normal",
 ) -> None:
-    """Run visual QA; if errors found, regenerate the Manim code and re-render (up to max_qa_attempts)."""
+    """Run visual QA; if errors found, regenerate the Manim code and re-render (up to max_qa_attempts).
+
+    Loop runs max_qa_attempts+1 times: the final iteration runs QA but never
+    regenerates (the qa_attempt >= max_qa_attempts guard exits after logging).
+    """
     output_dir = Path(OUTPUT_DIR).resolve()
 
     for qa_attempt in range(max_qa_attempts + 1):

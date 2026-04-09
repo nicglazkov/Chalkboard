@@ -90,11 +90,11 @@ async def layout_checker(state: PipelineState) -> dict:
 
 
 def _format_violations(violations: list) -> str:
-    lines = ["Layout check failed. Fix these issues before rendering:\n"]
+    lines = ["Layout check failed. Fix these issues before rendering:"]
     for v in violations:
         vtype = v.get("type", "unknown").upper().replace("_", " ")
         seg = v.get("segment", "?")
+        lines.append("")
         lines.append(f"[Segment {seg} — {vtype}]")
         lines.append(v.get("description", "No description"))
-        lines.append("")
     return "\n".join(lines)
