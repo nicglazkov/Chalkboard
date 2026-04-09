@@ -404,19 +404,43 @@ def _render(run_id: str, verbose: bool = False, burn_captions: bool = False) -> 
                 raise
 
 
-def _run_visual_qa(run_id: str, final_mp4: Path, density: str = "normal") -> dict | None:
-    """Run visual QA. Returns result dict, or None if skipped (density='zero' or error)."""
+def _run_visual_qa(
+    run_id: str,
+    final_mp4: Path,
+    density: str = "normal",
+    use_layout_report: bool = False,
+) -> dict | None:
+    """Run visual QA. Returns result dict, or None if skipped or errored."""
     if density == "zero":
         print("\n  [qa] skipped (--qa-density zero)")
         return None
     from pipeline.visual_qa import visual_qa  # lazy import keeps anthropic out of startup path
     output_dir = Path(OUTPUT_DIR).resolve()
-    qa_dir = output_dir / run_id / "qa_frames"
-    scene_py = output_dir / run_id / "scene.py"
+    run_dir = output_dir / run_id
+    qa_dir = run_dir / "qa_frames"
+    scene_py = run_dir / "scene.py"
     scene_code = scene_py.read_text() if scene_py.exists() else None
+
+    # Load segments for segment-boundary sampling
+    segments = None
+    segments_path = run_dir / "segments.json"
+    if segments_path.exists():
+        try:
+            segments = json.loads(segments_path.read_text())
+        except Exception:
+            pass
+
+    layout_report_path = (run_dir / "layout_report.json") if use_layout_report else None
+
     print("\n  [qa] running visual quality check...")
     try:
-        result = visual_qa(final_mp4, qa_dir, scene_code=scene_code, density=density)
+        result = visual_qa(
+            final_mp4, qa_dir,
+            scene_code=scene_code,
+            density=density,
+            segments=segments,
+            layout_report_path=layout_report_path,
+        )
     except Exception as e:
         print(f"  [qa] skipped — {e}")
         return None
@@ -610,7 +634,12 @@ def _run_qa_loop(
     output_dir = Path(OUTPUT_DIR).resolve()
 
     for qa_attempt in range(max_qa_attempts + 1):
-        result = _run_visual_qa(run_id, final_mp4, density=qa_density)
+        # Use layout_report cross-reference on first pass only (stale after regen)
+        result = _run_visual_qa(
+            run_id, final_mp4,
+            density=qa_density,
+            use_layout_report=(qa_attempt == 0),
+        )
         if result is None or result["passed"]:
             return
 
