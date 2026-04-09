@@ -18,6 +18,7 @@ TIMEOUT_RESEARCH_AGENT = 120.0   # research_agent (web search, may take multiple
 TIMEOUT_FACT_VALIDATOR =  60.0   # fact_validator
 TIMEOUT_MANIM_AGENT    = 180.0   # manim_agent (max_tokens=16384)
 TIMEOUT_CODE_VALIDATOR =  60.0   # code_validator
+TIMEOUT_LAYOUT_CHECKER =  45.0   # layout_checker (Docker dry-run)
 TIMEOUT_VISUAL_QA      =  90.0   # visual_qa (5 base64 images)
 TIMEOUT_TTS_SEGMENT    =  30.0   # OpenAI + ElevenLabs per-segment
 TIMEOUT_TTS_KOKORO     = 120.0   # Kokoro full call (includes model load)
