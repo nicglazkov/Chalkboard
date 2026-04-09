@@ -56,7 +56,18 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"with individual width W, where the leftmost element center is at x_0: "
         f"right_edge = x_0 + (N − 0.5) × W. If this right_edge > −0.5 and both left-zone and "
         f"right-zone elements are present in the same segment, the left-zone element overflows "
-        f"into the right zone and causes overlap — return needs_revision."
+        f"into the right zone and causes overlap — return needs_revision.\n\n"
+        f"ChalkboardSceneBase check: The class declaration must be "
+        f"`class ChalkboardScene(ChalkboardSceneBase, Scene):` and must include "
+        f"`from chalkboard_base import ChalkboardSceneBase` at the top. "
+        f"If ChalkboardScene inherits from Scene only (without ChalkboardSceneBase), "
+        f"return needs_revision.\n\n"
+        f"begin_segment check: Every segment block marked by a '# ── Segment N:' comment "
+        f"must have a `self.begin_segment(N, duration=_d[N])` call within 3 lines after "
+        f"the comment. If any segment block is missing this call, return needs_revision.\n\n"
+        f"end_layout_check check: The construct() method must call `self.end_layout_check()` "
+        f"before the final `self.play(*[FadeOut(m) for m in self.mobjects], ...)` teardown. "
+        f"If end_layout_check() is absent or appears after the final FadeOut, return needs_revision."
     )
 
     def _call():
