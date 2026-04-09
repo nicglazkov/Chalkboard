@@ -5,11 +5,12 @@ set -e
 # Reads manifest.json to get scene_class_name and quality.
 # Set PREVIEW_MODE=1 to render at low quality into media_preview/ dir.
 
-# Layout check mode — runs scene headlessly without rendering video
+# Layout check mode — runs scene headlessly without rendering video.
+# Writes /output/layout_report.json via ChalkboardSceneBase.end_layout_check().
+# A missing layout_report.json after exit 0 is treated as failure by layout_checker.
 if [[ "${1:-}" == "--check" ]]; then
-    cd /output
     python - <<'PYEOF'
-import sys, os
+import sys
 sys.path.insert(0, "/output")
 sys.path.insert(0, "/render")   # chalkboard_base.py lives here in the image
 from manim import config as _cfg
@@ -19,6 +20,8 @@ import importlib.util as _u
 _spec = _u.spec_from_file_location("scene", "/output/scene.py")
 _mod = _u.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
+if not hasattr(_mod, "ChalkboardScene"):
+    raise RuntimeError("scene.py does not define ChalkboardScene")
 _mod.ChalkboardScene().render()
 PYEOF
     exit $?
