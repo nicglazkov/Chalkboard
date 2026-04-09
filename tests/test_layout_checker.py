@@ -120,19 +120,40 @@ def test_layout_checker_handles_missing_report(tmp_path):
 
 
 def test_layout_checker_handles_timeout(tmp_path):
+    """Timeout during communicate() kills the process and returns feedback."""
     state = _base_state(run_id="run5")
     (tmp_path / "run5").mkdir()
 
-    async def _slow_create(*args, **kwargs):
+    kill_called = []
+
+    async def _slow_communicate():
         raise asyncio.TimeoutError()
 
+    async def _drain():
+        return b"", b""
+
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(side_effect=_slow_communicate)
+    mock_proc.kill = MagicMock(side_effect=lambda: kill_called.append(True))
+
+    # Second communicate() call (drain after kill) must not raise
+    drain_mock = AsyncMock(return_value=(b"", b""))
+
+    # After kill(), proc.communicate is called again to drain — swap to drain mock
+    def _kill_side_effect():
+        kill_called.append(True)
+        mock_proc.communicate = drain_mock
+
+    mock_proc.kill = MagicMock(side_effect=_kill_side_effect)
+
     with patch("pipeline.agents.layout_checker.OUTPUT_DIR", str(tmp_path)), \
-         patch("asyncio.create_subprocess_exec", new=_slow_create):
+         patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
         result = asyncio.run(_run(state))
 
     assert result["code_feedback"] is not None
     assert "timed out" in result["code_feedback"].lower()
     assert result["code_attempts"] == 1
+    assert kill_called, "proc.kill() must be called on timeout"
 
 
 def test_layout_checker_stale_report_not_used(tmp_path):

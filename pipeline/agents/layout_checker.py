@@ -33,29 +33,30 @@ async def layout_checker(state: PipelineState) -> dict:
     ]
 
     try:
-        proc = await asyncio.wait_for(
-            asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            ),
-            timeout=TIMEOUT_LAYOUT_CHECKER,
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+    except Exception as e:
+        return {
+            "code_feedback": f"Layout check failed to start: {e}",
+            "code_attempts": attempts + 1,
+        }
+
+    try:
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(),
             timeout=TIMEOUT_LAYOUT_CHECKER,
         )
     except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()  # drain to avoid zombie
         return {
             "code_feedback": (
-                "Layout check timed out after 45s. "
+                f"Layout check timed out after {int(TIMEOUT_LAYOUT_CHECKER)}s. "
                 "Simplify the scene — reduce total mobjects or animation count."
             ),
-            "code_attempts": attempts + 1,
-        }
-    except Exception as e:
-        return {
-            "code_feedback": f"Layout check failed to start: {e}",
             "code_attempts": attempts + 1,
         }
 
