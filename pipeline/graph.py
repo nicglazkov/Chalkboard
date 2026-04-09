@@ -9,6 +9,7 @@ from pipeline.agents.script_agent import script_agent
 from pipeline.agents.fact_validator import fact_validator
 from pipeline.agents.manim_agent import manim_agent
 from pipeline.agents.code_validator import code_validator
+from pipeline.agents.layout_checker import layout_checker
 from pipeline.agents.orchestrator import escalate_to_user
 from pipeline.render_trigger import render_trigger
 
@@ -23,6 +24,14 @@ def _after_fact_validator(state: PipelineState) -> str:
 
 def _after_code_validator(state: PipelineState) -> str:
     if not state.get("code_feedback"):  # approved
+        return "layout_checker"          # approved by code_validator → check layout
+    if state["code_attempts"] >= 3:
+        return "escalate_to_user"
+    return "manim_agent"
+
+
+def _after_layout_checker(state: PipelineState) -> str:
+    if not state.get("code_feedback"):   # None = passed → render
         return "render_trigger"
     if state["code_attempts"] >= 3:
         return "escalate_to_user"
@@ -94,6 +103,7 @@ def build_graph(checkpointer=None, context_blocks=None) -> StateGraph:
     builder.add_node("fact_validator", fact_validator)
     builder.add_node("manim_agent", _manim_agent)
     builder.add_node("code_validator", code_validator)
+    builder.add_node("layout_checker", layout_checker)
     builder.add_node("escalate_to_user", escalate_to_user)
     builder.add_node("render_trigger", render_trigger)
 
@@ -105,6 +115,8 @@ def build_graph(checkpointer=None, context_blocks=None) -> StateGraph:
         ["script_agent", "manim_agent", "escalate_to_user"])
     builder.add_edge("manim_agent", "code_validator")
     builder.add_conditional_edges("code_validator", _after_code_validator,
+        ["manim_agent", "layout_checker", "escalate_to_user"])
+    builder.add_conditional_edges("layout_checker", _after_layout_checker,
         ["manim_agent", "render_trigger", "escalate_to_user"])
     builder.add_edge("render_trigger", END)
     builder.add_conditional_edges("escalate_to_user", _after_escalate,

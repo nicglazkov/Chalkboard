@@ -39,10 +39,14 @@ def test_on_progress_callback_receives_events(tmp_path):
         path.write_bytes(b"\x00")
         return path, [1.0]
 
+    async def mock_layout_checker(state, **kw):
+        return {"code_feedback": None}
+
     with patch("pipeline.graph.script_agent", new=mock_script_agent), \
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=mock_layout_checker), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 

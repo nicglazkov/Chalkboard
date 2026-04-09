@@ -28,6 +28,10 @@ def _make_code_approved_state():
     return {"code_feedback": None, "code_attempts": 0}  # None = approved
 
 
+async def _mock_layout_checker_pass(state, **kw):
+    return {"code_feedback": None}  # always passes
+
+
 def test_graph_happy_path_reaches_approved(tmp_path):
     """Full pipeline run with all validators approving on first try."""
     async def mock_script_agent(state, **kw):
@@ -51,6 +55,7 @@ def test_graph_happy_path_reaches_approved(tmp_path):
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=_mock_layout_checker_pass), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -96,6 +101,7 @@ def test_graph_retries_script_on_fact_failure(tmp_path):
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=_mock_layout_checker_pass), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -177,6 +183,7 @@ def test_high_effort_routes_through_research_agent(tmp_path):
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=_mock_layout_checker_pass), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -222,6 +229,7 @@ def test_medium_effort_skips_research_agent(tmp_path):
          patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
          patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=_mock_layout_checker_pass), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
          patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
 
@@ -263,3 +271,118 @@ def test_non_interactive_escalates_to_failed(tmp_path):
 
     assert result["status"] == "failed"
     assert call_counts["fact"] == 3  # ran 3 times before escalation
+
+
+def test_graph_layout_checker_passes_reaches_render_trigger(tmp_path):
+    """layout_checker passes → pipeline proceeds to render_trigger."""
+    async def mock_script_agent(state, **kw):
+        return {
+            "script": "Test.", "script_segments": [{"text": "Test.", "estimated_duration_sec": 2.0}],
+            "needs_web_search": False, "status": "validating",
+        }
+    async def mock_fact_validator(state, **kw):
+        return {"fact_feedback": None, "status": "validating"}
+    async def mock_manim_agent(state, **kw):
+        return {"manim_code": "from manim import *\nclass ChalkboardScene(ChalkboardSceneBase, Scene): pass", "status": "validating"}
+    async def mock_code_validator(state, **kw):
+        return {"code_feedback": None, "code_attempts": 0}
+    async def mock_layout_checker(state, **kw):
+        return {"code_feedback": None}  # passed
+    async def mock_tts(segments, path, speed=1.0):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+        return path, [2.0]
+
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=mock_layout_checker), \
+         patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-lc-pass"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "test", "effort_level": "low"}, config=config,
+        ))
+
+    assert result["status"] == "approved"
+
+
+def test_graph_layout_checker_failure_retries_manim_agent(tmp_path):
+    """layout_checker fails → manim_agent is retried with code_feedback."""
+    call_counts = {"layout": 0, "manim": 0}
+
+    async def mock_script_agent(state, **kw):
+        return {
+            "script": "Test.", "script_segments": [{"text": "Test.", "estimated_duration_sec": 2.0}],
+            "needs_web_search": False, "status": "validating",
+        }
+    async def mock_fact_validator(state, **kw):
+        return {"fact_feedback": None, "status": "validating"}
+    async def mock_manim_agent(state, **kw):
+        call_counts["manim"] += 1
+        return {"manim_code": "from manim import *\nclass ChalkboardScene(ChalkboardSceneBase, Scene): pass", "status": "validating"}
+    async def mock_code_validator(state, **kw):
+        return {"code_feedback": None, "code_attempts": state.get("code_attempts", 0)}
+    async def mock_layout_checker(state, **kw):
+        call_counts["layout"] += 1
+        if call_counts["layout"] == 1:
+            return {"code_feedback": "Overlap in segment 0", "code_attempts": state.get("code_attempts", 0) + 1}
+        return {"code_feedback": None}
+    async def mock_tts(segments, path, speed=1.0):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+        return path, [2.0]
+
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=mock_layout_checker), \
+         patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-lc-retry"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "test", "effort_level": "low"}, config=config,
+        ))
+
+    assert call_counts["manim"] == 2   # retried once
+    assert call_counts["layout"] == 2  # checked twice
+    assert result["status"] == "approved"
+
+
+def test_graph_layout_checker_escalates_at_max_attempts(tmp_path):
+    """layout_checker fails 3 times → escalate_to_user with status=failed."""
+    async def mock_script_agent(state, **kw):
+        return {
+            "script": "Test.", "script_segments": [{"text": "Test.", "estimated_duration_sec": 2.0}],
+            "needs_web_search": False, "status": "validating",
+        }
+    async def mock_fact_validator(state, **kw):
+        return {"fact_feedback": None, "status": "validating"}
+    async def mock_manim_agent(state, **kw):
+        return {"manim_code": "from manim import *\nclass ChalkboardScene(ChalkboardSceneBase, Scene): pass", "status": "validating"}
+    async def mock_code_validator(state, **kw):
+        return {"code_feedback": None, "code_attempts": state.get("code_attempts", 0)}
+    async def mock_layout_checker(state, **kw):
+        attempts = state.get("code_attempts", 0)
+        return {"code_feedback": "Overlap in segment 0", "code_attempts": attempts + 1}
+
+    with patch("pipeline.graph.script_agent", new=mock_script_agent), \
+         patch("pipeline.graph.fact_validator", new=mock_fact_validator), \
+         patch("pipeline.graph.manim_agent", new=mock_manim_agent), \
+         patch("pipeline.graph.code_validator", new=mock_code_validator), \
+         patch("pipeline.graph.layout_checker", new=mock_layout_checker):
+
+        graph = build_graph()
+        config = {"configurable": {"thread_id": "test-lc-escalate"}}
+        result = asyncio.run(graph.ainvoke(
+            {"topic": "test", "effort_level": "low", "interactive": False},
+            config=config,
+        ))
+
+    assert result["status"] == "failed"
