@@ -2,8 +2,11 @@
 from __future__ import annotations
 import asyncio
 import json
+import re
 import shutil
 import tempfile
+import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -16,6 +19,85 @@ from server.upload import (
     validate_and_save,
     FileSizeError, TotalSizeError, UnsupportedFileTypeError,
 )
+
+# ── Claude status cache ──────────────────────────────────────────────────────
+_claude_status_cache: dict | None = None
+_claude_status_ts: float = 0
+_CACHE_TTL = 300  # 5 minutes
+
+# Keywords that indicate an incident may affect the Chalkboard pipeline
+_API_KEYWORDS = re.compile(
+    r"api|sonnet|messages|claude\.ai|elevated.+error|outage|degraded|inference",
+    re.IGNORECASE,
+)
+
+
+async def _fetch_claude_status() -> dict:
+    """Fetch and parse Claude status RSS, with 5-minute cache."""
+    global _claude_status_cache, _claude_status_ts
+
+    now = time.time()
+    if _claude_status_cache and (now - _claude_status_ts) < _CACHE_TTL:
+        return _claude_status_cache
+
+    def _fetch_rss():
+        import httpx
+        return httpx.get("https://status.claude.com/history.rss", timeout=10)
+
+    try:
+        resp = await asyncio.to_thread(_fetch_rss)
+        resp.raise_for_status()
+    except Exception:
+        return {"status": "unknown", "incidents": [],
+                "url": "https://status.claude.com"}
+
+    try:
+        root = ET.fromstring(resp.text)
+    except ET.ParseError:
+        return {"status": "unknown", "incidents": [],
+                "url": "https://status.claude.com"}
+
+    incidents = []
+    for item in root.findall(".//item")[:10]:
+        title = item.findtext("title", "")
+        desc_raw = item.findtext("description", "")
+        link = item.findtext("link", "")
+        pub_date = item.findtext("pubDate", "")
+
+        # Parse the latest status from the description HTML
+        # First <strong> tag contains the most recent status
+        status_match = re.search(r"<strong>(\w+)</strong>", desc_raw)
+        latest_status = status_match.group(1) if status_match else "Unknown"
+
+        # Check relevance to the API pipeline
+        relevant = bool(_API_KEYWORDS.search(title) or _API_KEYWORDS.search(desc_raw))
+
+        incidents.append({
+            "title": title,
+            "status": latest_status,
+            "link": link,
+            "pub_date": pub_date,
+            "relevant": relevant,
+        })
+
+    # Determine overall status
+    active_relevant = [i for i in incidents
+                       if i["relevant"] and i["status"] != "Resolved"]
+    if any(i["status"] in ("Investigating", "Identified") for i in active_relevant):
+        overall = "outage"
+    elif any(i["status"] == "Monitoring" for i in active_relevant):
+        overall = "degraded"
+    else:
+        overall = "operational"
+
+    result = {
+        "status": overall,
+        "incidents": [i for i in incidents if i["relevant"]][:5],
+        "url": "https://status.claude.com",
+    }
+    _claude_status_cache = result
+    _claude_status_ts = now
+    return result
 
 def _job_to_response(job: Job) -> JobResponse:
     return JobResponse(
@@ -109,6 +191,10 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             yield {"data": json.dumps({"done": True})}
 
         return EventSourceResponse(generator())
+
+    @router.get("/claude-status")
+    async def claude_status():
+        return await _fetch_claude_status()
 
     @router.get("/jobs/{job_id}/files/{filename}")
     async def get_file(job_id: str, filename: str):

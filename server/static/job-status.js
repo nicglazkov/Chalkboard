@@ -228,6 +228,35 @@
         padding: 1.5rem 0.75rem;
         text-align: center;
       }
+
+      /* ── Claude API status indicator ── */
+      #claude-status {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.55rem;
+        border-radius: 5px;
+        font-family: 'DM Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--muted, #7a7570);
+        text-decoration: none;
+        transition: background 0.12s, color 0.15s;
+        white-space: nowrap;
+      }
+      #claude-status:hover {
+        background: rgba(255,255,255,0.05);
+        color: var(--text, #e8e4db);
+      }
+      .claude-status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .claude-status-dot.operational { background: #5cba6a; }
+      .claude-status-dot.degraded   { background: #e8b84d; }
+      .claude-status-dot.outage     { background: #e06060; }
+      .claude-status-dot.unknown    { background: var(--muted, #7a7570); }
     `;
     document.head.appendChild(style);
   }
@@ -408,10 +437,60 @@
     }
   });
 
+  // ── Claude API status ───────────────────────────────────────────────────────
+  const STATUS_LABELS = {
+    operational: 'Claude API operational',
+    degraded: 'Claude API degraded',
+    outage: 'Claude API outage',
+    unknown: 'Claude API status unknown',
+  };
+
+  async function fetchClaudeStatus() {
+    const el = document.getElementById('claude-status');
+    if (!el) return;
+    try {
+      const r = await fetch('/api/claude-status');
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      const dot = el.querySelector('.claude-status-dot');
+      const label = el.querySelector('.claude-status-label');
+      dot.className = `claude-status-dot ${data.status}`;
+      label.textContent = STATUS_LABELS[data.status] || 'API status';
+      // Show most recent active incident in title tooltip
+      const active = data.incidents.filter(i => i.status !== 'Resolved');
+      if (active.length > 0) {
+        el.title = active.map(i => `${i.status}: ${i.title}`).join('\n');
+      } else {
+        el.title = STATUS_LABELS[data.status];
+      }
+    } catch {
+      // silently fail — indicator stays in default state
+    }
+  }
+
+  function renderClaudeStatus() {
+    const container = document.getElementById('job-status');
+    if (!container) return;
+    // Insert before the job-status container in the nav
+    if (document.getElementById('claude-status')) return;
+    const link = document.createElement('a');
+    link.id = 'claude-status';
+    link.href = 'https://status.claude.com';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Checking API status…';
+    link.innerHTML = '<span class="claude-status-dot unknown"></span><span class="claude-status-label">Claude API</span>';
+    container.parentNode.insertBefore(link, container);
+    fetchClaudeStatus();
+    // Refresh every 5 minutes
+    setInterval(fetchClaudeStatus, 300000);
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     injectStyles();
     render();
+    renderClaudeStatus();
     if (activeJobs().length > 0) startPolling();
   }
 
