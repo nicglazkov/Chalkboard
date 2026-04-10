@@ -639,48 +639,6 @@
     .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
     .nav-link.active { color: var(--accent); }
 
-    /* ── Job status pill ─────────────────────────────────────────── */
-    #job-pill {
-      margin-left: auto;
-      display: none;
-      align-items: center;
-      gap: 0.4rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--text);
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 0.2rem 0.5rem 0.2rem 0.55rem;
-      white-space: nowrap;
-    }
-    .job-pill-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-      flex-shrink: 0;
-    }
-    .job-pill-dot.running { animation: pill-pulse 1.4s ease-in-out infinite; }
-    .job-pill-dot.done    { background: #5cba6a; }
-    .job-pill-dot.failed  { background: #e06060; }
-    @keyframes pill-pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.25; }
-    }
-    .job-pill-label {
-      color: inherit;
-      text-decoration: none;
-    }
-    .job-pill-label:hover { color: var(--chalk); }
-    .job-pill-dismiss {
-      background: none; border: none;
-      color: var(--muted); cursor: pointer;
-      padding: 0 0 0 0.15rem;
-      font-size: 1rem; line-height: 1;
-      transition: color 0.15s;
-    }
-    .job-pill-dismiss:hover { color: var(--text); }
-
     /* ── App layout ──────────────────────────────────────────────── */
     .app-body {
       max-width: 640px;
@@ -779,7 +737,7 @@
       letter-spacing: 0;
     }
   </style>
-  <script src="/job-status.js"></script>
+  <script src="/job-status.js?v=2"></script>
 </head>
 <body>
 
@@ -791,11 +749,7 @@
         <a class="nav-link active" href="/">Generate</a>
         <a class="nav-link" href="/library">Library</a>
       </div>
-      <div id="job-pill">
-        <span class="job-pill-dot running"></span>
-        <a class="job-pill-label" href="/" id="job-pill-link">Generating…</a>
-        <button class="job-pill-dismiss" aria-label="Dismiss">×</button>
-      </div>
+      <div id="job-status" style="margin-left:auto;position:relative"></div>
     </div>
   </nav>
 
@@ -1186,6 +1140,7 @@
     let seenStages = [];  // ordered list
     let finalized = false;
     let activeES = null;
+    let currentJobId = null;
 
     function showError(msg) {
       errorPanel.textContent = msg;
@@ -1270,6 +1225,9 @@
       } else {
         setStageStatus(node, 'running');
       }
+
+      // Keep the status dropdown in sync with the current stage
+      if (currentJobId) window.jobStatus?.updateStage(currentJobId, node);
     }
 
     async function finalizeJob(jobId) {
@@ -1297,13 +1255,13 @@
       }
 
       if (job.status === 'failed') {
-        window.jobStatus?.resolve(jobId, 'failed', '');
+        window.jobStatus?.resolve(jobId, 'failed');
         showError(job.error || 'Job failed for an unknown reason.');
         submitBtn.disabled = false;
         return;
       }
 
-      window.jobStatus?.resolve(jobId, 'completed', '');
+      window.jobStatus?.resolve(jobId, 'completed');
 
       const outputFiles = job.output_files || [];
       const hasVideo = outputFiles.includes('final.mp4');
@@ -1430,6 +1388,7 @@
         return;
       }
 
+      currentJobId = job.id;
       window.jobStatus?.set(job.id, topic);
       startSSE(job.id);
     });
@@ -1509,6 +1468,7 @@
       } catch { return; }
 
       // Show progress panel and disable form submit
+      currentJobId = stored.id;
       progressPanel.style.display = 'block';
       appBody.classList.add('is-active');
       submitBtn.disabled = true;
