@@ -9,9 +9,15 @@ SYSTEM_PROMPT = """You are an expert Manim Community Edition (v0.20.1) developer
 Generate a complete, runnable Manim scene for an educational animation.
 
 STRICT REQUIREMENTS:
-- The scene class MUST be named exactly `ChalkboardScene` (inherits from Scene)
+- The scene class MUST be named exactly `ChalkboardScene` and inherit from BOTH ChalkboardSceneBase and Scene:
+    from chalkboard_base import ChalkboardSceneBase
+    class ChalkboardScene(ChalkboardSceneBase, Scene):
 - Use `from manim import *` plus stdlib imports as needed (json, pathlib, etc.)
 - Each narration segment gets an animation block followed by self.wait(duration_sec)
+- At the start of EVERY segment block, call self.begin_segment(N, duration=_d[N]) where N is the 0-based segment index
+- At the END of construct(), call self.end_layout_check() BEFORE the final FadeOut cleanup:
+    self.end_layout_check()
+    self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
 - Use self.play(..., run_time=X) for animations
 - The code must be syntactically valid Python
 - At the start of construct(), load actual segment durations:
@@ -79,6 +85,40 @@ CLEAN SLATE rule — mandatory at every segment boundary:
    seg_items; FadeOut it explicitly at the segment where it is no longer needed.
 7. Leaving mobjects from a prior segment on screen while starting a new segment is the
    primary cause of visual overlap — treat this rule as strictly as the self.wait(0) guard.
+8. Call self.begin_segment(N, duration=_d[N]) at the start of each segment block (right after the
+   '# ── Segment N:' comment). Call self.end_layout_check() at the end of construct() BEFORE the
+   final FadeOut. These are required — code_validator will reject code missing them.
+
+REQUIRED SCAFFOLD — every scene must follow this structure exactly:
+
+from chalkboard_base import ChalkboardSceneBase
+from manim import *
+import json
+from pathlib import Path
+
+class ChalkboardScene(ChalkboardSceneBase, Scene):
+    def construct(self):
+        _seg_data = json.loads((Path(__file__).parent / "segments.json").read_text())
+        _d = [s["actual_duration_sec"] for s in _seg_data]
+        _d = _d + [2.0] * max(0, N - len(_d))  # N = total segment count (integer)
+
+        # ── Segment 0: <title> ──
+        self.begin_segment(0, duration=_d[0])
+        seg_items = []
+        # ... animations ...
+        _r = max(0.0, _d[0] - <animation_time>)
+        if _r > 0:
+            self.wait(_r)
+
+        # ── Segment 1: <title> ──
+        self.play(*[FadeOut(m) for m in seg_items], run_time=0.5)
+        seg_items = []
+        self.begin_segment(1, duration=_d[1])
+        # ... animations ...
+
+        # ── End ──
+        self.end_layout_check()
+        self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 

@@ -160,3 +160,38 @@ def test_manim_agent_without_context_blocks_sends_string_content(base_state):
     call_args = client_instance.messages.create.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, str)
+
+
+def test_manim_agent_output_includes_chalkboard_base_import(base_state):
+    """Generated code must import ChalkboardSceneBase and inherit from it."""
+    code = """
+from chalkboard_base import ChalkboardSceneBase
+from manim import *
+import json
+from pathlib import Path
+
+class ChalkboardScene(ChalkboardSceneBase, Scene):
+    def construct(self):
+        _seg_data = json.loads((Path(__file__).parent / "segments.json").read_text())
+        _d = [s["actual_duration_sec"] for s in _seg_data]
+        _d = _d + [2.0] * max(0, 1 - len(_d))
+        # ── Segment 0 ──
+        self.begin_segment(0, duration=_d[0])
+        seg_items = []
+        t = Text("Hello")
+        self.play(Write(t), run_time=1.0)
+        seg_items.append(t)
+        self.end_layout_check()
+        self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
+"""
+    mock_resp = MagicMock()
+    mock_resp.content = [MagicMock(text=json.dumps({"manim_code": code}))]
+
+    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.create.return_value = mock_resp
+        result = asyncio.run(manim_agent(base_state))
+
+    assert "ChalkboardSceneBase" in result["manim_code"]
+    assert "from chalkboard_base import ChalkboardSceneBase" in result["manim_code"]
+    assert "begin_segment" in result["manim_code"]
+    assert "end_layout_check" in result["manim_code"]
