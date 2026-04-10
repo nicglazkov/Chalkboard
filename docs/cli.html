@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLI Reference — Chalkboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./docs.css" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+</head>
+<body>
+
+  <nav>
+    <div class="container--nav">
+      <a href="index.html" class="nav-logo">Chalkboard</a>
+      <div class="nav-links">
+        <a href="guide.html">Guide</a>
+        <a href="cli.html" class="active">CLI</a>
+        <a href="api.html">API</a>
+        <a href="index.html#quickstart">Quickstart</a>
+        <a href="https://github.com/nicglazkov/Chalkboard" target="_blank" class="nav-github">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+      <nav class="sidebar-nav" aria-label="On this page">
+        <p class="sidebar-heading">On this page</p>
+        <a href="#usage" class="sidebar-link">Basic usage</a>
+        <a href="#flags" class="sidebar-link">CLI flags</a>
+        <a href="#flags-core" class="sidebar-sublink">Core</a>
+        <a href="#flags-context" class="sidebar-sublink">Context</a>
+        <a href="#flags-output" class="sidebar-sublink">Output</a>
+        <a href="#flags-render" class="sidebar-sublink">Render</a>
+        <a href="#context" class="sidebar-link">Context injection</a>
+        <a href="#config" class="sidebar-link">Environment variables</a>
+        <a href="#resume" class="sidebar-link">Resuming runs</a>
+      </nav>
+    </aside>
+
+    <!-- Content -->
+    <main class="docs-content">
+
+      <!-- Hero -->
+      <section class="page-hero">
+        <p class="page-label">Reference</p>
+        <h1>CLI Reference</h1>
+        <p>Every flag, environment variable, and workflow for running Chalkboard from the terminal. For concepts like templates, themes, and effort levels, see the <a href="guide.html" style="color:var(--accent);">Guide</a>.</p>
+      </section>
+
+      <!-- Basic usage -->
+      <section class="section" id="usage">
+        <p class="section-label">Getting started</p>
+        <h2>Basic usage</h2>
+        <p class="prose">The CLI entry point is <code>main.py</code>. At minimum, pass a topic:</p>
+
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain how B-trees work"</span></pre></div>
+
+        <p class="prose">This runs the full pipeline: script generation, fact-checking, Manim code generation, layout validation, TTS voiceover, Docker render, and ffmpeg merge. Output lands in <code>output/&lt;run-id&gt;/final.mp4</code>.</p>
+
+        <p class="code-label">Common patterns</p>
+        <div class="code-block"><pre><span class="comment"># Quick low-effort run</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"what is a hash table"</span> <span class="flag">--effort</span> low
+
+<span class="comment"># High-effort with web research, algorithm template</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain merge sort"</span> <span class="flag">--effort</span> high <span class="flag">--template</span> algorithm
+
+<span class="comment"># Expert audience, formal tone, light theme</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"CAP theorem"</span> <span class="flag">--audience</span> expert <span class="flag">--tone</span> formal <span class="flag">--theme</span> light
+
+<span class="comment"># Pipeline only (no Docker render)</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"recursion basics"</span> <span class="flag">--no-render</span></pre></div>
+      </section>
+
+      <!-- CLI flags -->
+      <section class="section" id="flags">
+        <p class="section-label">Reference</p>
+        <h2>CLI flags</h2>
+
+        <h3 id="flags-core">Core</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--topic</span></td>
+              <td><span class="flag-required">required</span></td>
+              <td>Topic to explain, e.g. <code>"how B-trees work"</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--effort</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td>Validation thoroughness: <code>low</code>, <code>medium</code>, <code>high</code>. See <a href="guide.html#effort" style="color:var(--accent);">effort levels</a>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--audience</span></td>
+              <td><span class="flag-default">intermediate</span></td>
+              <td>Target audience: <code>beginner</code>, <code>intermediate</code>, <code>expert</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--tone</span></td>
+              <td><span class="flag-default">casual</span></td>
+              <td>Narration tone: <code>casual</code>, <code>formal</code>, <code>socratic</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--theme</span></td>
+              <td><span class="flag-default">chalkboard</span></td>
+              <td>Visual color theme: <code>chalkboard</code>, <code>light</code>, <code>colorful</code>. See <a href="guide.html#themes" style="color:var(--accent);">themes</a>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--template</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Animation template: <code>algorithm</code>, <code>code</code>, <code>compare</code>, <code>howto</code>, <code>timeline</code>. See <a href="guide.html#templates" style="color:var(--accent);">templates</a>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--speed</span></td>
+              <td><span class="flag-default">1.0</span></td>
+              <td>Narration speed multiplier. OpenAI: native 0.25–4.0. Kokoro/ElevenLabs: ffmpeg atempo.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="flags-context">Context</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--context</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>File or directory to use as source material. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--context-ignore</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Glob pattern to exclude from context directories. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--url</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>URL to fetch as source material (HTML stripped to text). Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--github</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>GitHub repo (<code>owner/repo</code> or full URL); fetches its README as context. Repeatable.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--yes</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Skip the large-context confirmation prompt. Useful for scripted runs.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="flags-output">Output</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--quiz</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Generate comprehension questions as <code>quiz.json</code> after the pipeline.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--burn-captions</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Burn subtitles into the video (re-encodes). <code>captions.srt</code> is always written regardless.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--run-id</span></td>
+              <td><span class="flag-default">auto</span></td>
+              <td>Resume a previous run using its ID. See <a href="#resume" style="color:var(--accent);">resuming runs</a>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="flags-render">Render</h3>
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:160px">Flag</th>
+              <th style="width:110px">Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">--preview</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Render a fast low-quality preview (480p15) to <code>preview.mp4</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--no-render</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Run the AI pipeline only, skipping Docker render and ffmpeg merge.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--verbose</span></td>
+              <td><span class="flag-default">off</span></td>
+              <td>Stream raw Docker/Manim output to the terminal while rendering. Cannot be combined with <code>--preview</code>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">--qa-density</span></td>
+              <td><span class="flag-default">normal</span></td>
+              <td>Visual QA frame sampling: <code>zero</code> (skip), <code>normal</code> (1 frame/30s, up to 10), <code>high</code> (1 frame/15s, up to 20).</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Context injection -->
+      <section class="section" id="context">
+        <p class="section-label">Source material</p>
+        <h2>Context injection</h2>
+        <p class="prose">Pass local files, URLs, or GitHub repos as source material. The pipeline builds the animation from your content rather than Claude's training data alone.</p>
+
+        <p class="code-label">Local files and directories</p>
+        <div class="code-block"><pre><span class="comment"># Explain a codebase</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this codebase"</span> <span class="flag">--context</span> ./src <span class="flag">--context</span> ./docs
+
+<span class="comment"># Turn a paper into an animation</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"summarize this paper"</span> <span class="flag">--context</span> paper.pdf
+
+<span class="comment"># Exclude lock files and build output</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"visualize this"</span> <span class="flag">--context</span> ./repo <span class="flag">--context-ignore</span> <span class="str">"*.lock"</span> <span class="flag">--context-ignore</span> <span class="str">"dist/"</span>
+
+<span class="comment"># Obsidian vault page</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"visualize my notes"</span> <span class="flag">--context</span> ~/Documents/vault/page.md</pre></div>
+
+        <p class="code-label">URLs and GitHub repos</p>
+        <div class="code-block"><pre><span class="comment"># Web article</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this concept"</span> <span class="flag">--url</span> https://en.wikipedia.org/wiki/Binary_search_tree
+
+<span class="comment"># GitHub repo README</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain this project"</span> <span class="flag">--github</span> nicglazkov/Chalkboard
+
+<span class="comment"># Combine files and URLs</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain my project"</span> <span class="flag">--context</span> ./README.md <span class="flag">--url</span> https://example.com/blog-post</pre></div>
+
+        <h3>Supported file types</h3>
+        <p class="prose">Text and code files (<code>.py</code>, <code>.js</code>, <code>.md</code>, <code>.yaml</code>, <code>.ps1</code>, <code>.bat</code>, and many more), images (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>, <code>.gif</code>), PDFs, and Word docs (<code>.docx</code>). URLs are fetched with HTML stripped to plain text, truncated at 100k characters.</p>
+
+        <h3>File uploads via the web UI</h3>
+        <p class="prose">The web UI also supports file uploads with drag-and-drop folder support. See <a href="guide.html#uploads" style="color:var(--accent);">file uploads</a> in the Guide for details and size limits.</p>
+
+        <h3>Token reporting</h3>
+        <p class="prose">Before the pipeline starts, Chalkboard reports how much of the context window your source material uses. If context exceeds 10k tokens you'll be prompted to confirm. Pass <code>--yes</code> to skip this prompt for scripted runs. If context exceeds 90% of the model window, Chalkboard aborts.</p>
+
+        <h3>Resuming with context</h3>
+        <p class="prose"><code>--context</code>, <code>--url</code>, and <code>--github</code> are not stored in the checkpoint. Pass them again on resume:</p>
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"..."</span> <span class="flag">--run-id</span> &lt;id&gt; <span class="flag">--context</span> ./src</pre></div>
+      </section>
+
+      <!-- Environment variables -->
+      <section class="section" id="config">
+        <p class="section-label">Configuration</p>
+        <h2>Environment variables</h2>
+        <p class="prose">All settings can be overridden via <code>.env</code> or environment variables. Copy <code>.env.example</code> to get started.</p>
+
+        <table class="ref-table">
+          <thead>
+            <tr>
+              <th style="width:180px">Variable</th>
+              <th style="width:130px">Default</th>
+              <th>Options</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="flag-name">TTS_BACKEND</span></td>
+              <td><span class="flag-default">kokoro</span></td>
+              <td><code>kokoro</code>, <code>openai</code>, <code>elevenlabs</code>. See <a href="guide.html#tts" style="color:var(--accent);">TTS backends</a>.</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">ANTHROPIC_API_KEY</span></td>
+              <td><span class="flag-default">—</span></td>
+              <td>Required. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">MANIM_QUALITY</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td><code>low</code>, <code>medium</code>, <code>high</code> (1080p60)</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_EFFORT</span></td>
+              <td><span class="flag-default">medium</span></td>
+              <td><code>low</code>, <code>medium</code>, <code>high</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_AUDIENCE</span></td>
+              <td><span class="flag-default">intermediate</span></td>
+              <td><code>beginner</code>, <code>intermediate</code>, <code>expert</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_TONE</span></td>
+              <td><span class="flag-default">casual</span></td>
+              <td><code>casual</code>, <code>formal</code>, <code>socratic</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">DEFAULT_THEME</span></td>
+              <td><span class="flag-default">chalkboard</span></td>
+              <td><code>chalkboard</code>, <code>light</code>, <code>colorful</code></td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">OUTPUT_DIR</span></td>
+              <td><span class="flag-default">./output</span></td>
+              <td>Any path</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">CHECKPOINT_DB</span></td>
+              <td><span class="flag-default">pipeline_state.db</span></td>
+              <td>Any path</td>
+            </tr>
+            <tr>
+              <td><span class="flag-name">SERVER_PORT</span></td>
+              <td><span class="flag-default">8000</span></td>
+              <td>Overridden by <code>--port</code> at runtime</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Resuming runs -->
+      <section class="section" id="resume">
+        <p class="section-label">Checkpointing</p>
+        <h2>Resuming runs</h2>
+        <p class="prose">Every run is checkpointed after each pipeline stage. If it crashes or you abort, resume with the same run ID:</p>
+
+        <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"..."</span> <span class="flag">--run-id</span> &lt;previous-run-id&gt;</pre></div>
+
+        <p class="prose">Execution picks up from the last successful checkpoint. The pipeline does not re-run stages that already completed.</p>
+
+        <h3>Preview to full render workflow</h3>
+        <p class="prose">Run <code>--preview</code> first to quickly check the visuals at low quality, then do the full HD render. The pipeline result is already checkpointed, so it won't re-run:</p>
+
+        <div class="code-block"><pre><span class="comment"># Step 1: generate script + animation, render preview</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how B-trees work"</span> <span class="flag">--preview</span>
+<span class="comment"># → output/&lt;run-id&gt;/preview.mp4 (480p, fast)</span>
+
+<span class="comment"># Step 2: full HD render (pipeline skipped — uses checkpoint)</span>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how B-trees work"</span> <span class="flag">--run-id</span> &lt;run-id&gt;
+<span class="comment"># → output/&lt;run-id&gt;/final.mp4 (full quality + visual QA)</span></pre></div>
+      </section>
+
+      <!-- Footer -->
+      <footer>
+        <span class="footer-left">Chalkboard — MIT License</span>
+        <div class="footer-right">
+          <a href="https://github.com/nicglazkov/Chalkboard" target="_blank">github.com/nicglazkov/Chalkboard ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "a176d383a88845e4a39bccf3f7c30879"}'></script>
+  <!-- End Cloudflare Web Analytics -->
+
+  <script>
+  (function () {
+    var links = document.querySelectorAll('.sidebar-link, .sidebar-sublink');
+    var ids = Array.from(links).map(function (l) { return l.getAttribute('href').slice(1); });
+    var targets = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+    var offsets = [];
+
+    function computeOffsets() {
+      offsets = targets.map(function (t) {
+        return t.getBoundingClientRect().top + window.scrollY;
+      });
+    }
+
+    function update() {
+      var scrollY = window.scrollY + 96;
+      var active = null;
+      for (var i = 0; i < offsets.length; i++) {
+        if (offsets[i] <= scrollY) active = ids[i];
+      }
+      links.forEach(function (l) {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + active);
+      });
+    }
+
+    computeOffsets();
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', function () { computeOffsets(); update(); });
+  })();
+  </script>
+
+</body>
+</html>
