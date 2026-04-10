@@ -5,15 +5,15 @@
   const POLL_INTERVAL_ERROR   = 6000;
 
   const STAGE_LABELS = {
-    init:            'Initializing',
-    research_agent:  'Researching topic',
-    script_agent:    'Writing script',
-    fact_validator:  'Fact-checking',
-    manim_agent:     'Generating animation',
-    code_validator:  'Validating code',
-    render_trigger:  'Synthesizing voiceover',
-    render:          'Rendering',
-    qa:              'Visual QA',
+    init:              'Initializing',
+    research_agent:    'Researching topic',
+    script_agent:      'Writing script',
+    fact_validator:    'Fact-checking',
+    manim_agent:       'Generating animation code',
+    code_validator:    'Validating code',
+    layout_checker:    'Checking layout',
+    render_trigger:    'Synthesizing voiceover',
+    escalate_to_user:  'Waiting for user input',
   };
 
   // ── Storage helpers ──────────────────────────────────────────────────────

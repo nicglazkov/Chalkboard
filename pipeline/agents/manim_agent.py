@@ -49,7 +49,7 @@ KNOWN API PITFALLS (v0.20.1):
 
 LAYOUT RULES — required for every scene:
 
-Canvas: x ∈ [−7.1, +7.1], y ∈ [−4.0, +4.0]. Use these named anchor points:
+Canvas: x ∈ [−7.11, +7.11], y ∈ [−4.0, +4.0]. Use these named anchor points:
   title_anchor  = UP * 3.5               # persistent title — full width
   left_anchor   = LEFT * 3.5 + UP * 0.5  # code, arrays, diagrams (left half)
   right_anchor  = RIGHT * 3.5 + UP * 0.5 # callouts, annotations (right half)
