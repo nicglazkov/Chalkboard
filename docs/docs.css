@@ -483,6 +483,45 @@ nav {
   line-height: 1.65;
 }
 
+/* ── Screenshot gallery ── */
+.screenshots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 8px;
+}
+
+.screenshots.triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.screenshot {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.screenshot:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.screenshot img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.screenshot-caption {
+  padding: 14px 18px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
 /* ── Footer ── */
 footer {
   padding: 40px 0;
@@ -533,6 +572,11 @@ footer {
 
   .ref-table {
     font-size: 0.8rem;
+  }
+
+  .screenshots,
+  .screenshots.triple {
+    grid-template-columns: 1fr;
   }
 
   .page-hero h1 {
