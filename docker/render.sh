@@ -12,7 +12,7 @@ if [[ "${1:-}" == "--check" ]]; then
     python - <<'PYEOF'
 import sys
 sys.path.insert(0, "/output")
-sys.path.insert(0, "/render")   # chalkboard_base.py lives here in the image
+# /render is on PYTHONPATH (set in Dockerfile), so chalkboard_base is importable
 from manim import config as _cfg
 _cfg.dry_run = True
 _cfg.frame_rate = 1   # 1fps → ~60x faster dry-run; safe because we track run_time not frames
