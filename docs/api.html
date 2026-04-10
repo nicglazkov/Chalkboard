@@ -17,6 +17,7 @@
       <a href="index.html" class="nav-logo">Chalkboard</a>
       <div class="nav-links">
         <a href="guide.html">Guide</a>
+        <a href="cli.html">CLI</a>
         <a href="api.html" class="active">API</a>
         <a href="index.html#quickstart">Quickstart</a>
         <a href="https://github.com/nicglazkov/Chalkboard" target="_blank" class="nav-github">GitHub ↗</a>
@@ -249,22 +250,7 @@
       <section class="section" id="webui">
         <p class="section-label">Interface</p>
         <h2>Web UI</h2>
-        <p class="prose">The server includes a built-in single-page UI. Start the server and open <code>http://localhost:8000</code> in your browser.</p>
-
-        <div class="cards" style="grid-template-columns:1fr 1fr;">
-          <div class="card">
-            <p class="card-name">Form</p>
-            <h4>Job creation</h4>
-            <p>Topic, Effort, and Audience always visible. Advanced options (collapsible): Tone, Theme, Template, Speed, Visual QA density, Burn Captions, Generate Quiz, URL inputs, GitHub repos, and a file upload zone with drag-and-drop folder support.</p>
-          </div>
-          <div class="card">
-            <p class="card-name">Progress</p>
-            <h4>Live pipeline view</h4>
-            <p>Stage-by-stage progress driven by the SSE stream. Each pipeline node lights up as it completes. Video player with download links appears when the job finishes.</p>
-          </div>
-        </div>
-
-        <p class="prose" style="margin-top:20px;">No build step required. The UI lives in <code>server/static/index.html</code> and is served automatically by the FastAPI app.</p>
+        <p class="prose">The server includes a built-in web interface at <code>http://localhost:8000</code> with a job creation form, live progress view, and video library. No build step required. See the <a href="guide.html" style="color:var(--accent)">Guide</a> for a full walkthrough.</p>
       </section>
 
       <!-- Footer -->
