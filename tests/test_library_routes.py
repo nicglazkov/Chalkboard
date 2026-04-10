@@ -82,6 +82,42 @@ def test_delete_missing_returns_204(lib_client):
     assert resp.status_code == 204
 
 
+def test_delete_with_files_removes_directory(lib_client):
+    tc, store, tmp_path = lib_client
+    _add(store, run_id="r1")
+    run_dir = tmp_path / "r1"
+    run_dir.mkdir()
+    (run_dir / "final.mp4").write_bytes(b"video-data")
+    (run_dir / "scene.py").write_text("code")
+    resp = tc.delete("/api/library/r1?files=true")
+    assert resp.status_code == 204
+    assert asyncio.run(store.get_video("r1")) is None
+    assert not run_dir.exists()
+
+
+def test_delete_without_files_preserves_directory(lib_client):
+    tc, store, tmp_path = lib_client
+    _add(store, run_id="r1")
+    run_dir = tmp_path / "r1"
+    run_dir.mkdir()
+    (run_dir / "final.mp4").write_bytes(b"video-data")
+    resp = tc.delete("/api/library/r1")
+    assert resp.status_code == 204
+    assert asyncio.run(store.get_video("r1")) is None
+    assert run_dir.exists()
+    assert (run_dir / "final.mp4").exists()
+
+
+def test_delete_with_files_no_directory(lib_client):
+    tc, store, tmp_path = lib_client
+    _add(store, run_id="r1")
+    run_dir = tmp_path / "r1"
+    assert not run_dir.exists()
+    resp = tc.delete("/api/library/r1?files=true")
+    assert resp.status_code == 204
+    assert asyncio.run(store.get_video("r1")) is None
+
+
 def test_list_limit_capped_at_100(lib_client):
     tc, store, _ = lib_client
     resp = tc.get("/api/library?limit=999")

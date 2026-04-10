@@ -70,7 +70,7 @@ Either way, the pipeline runs, renders the animation in Docker, and merges the v
 | `--audience`       | No       | `intermediate` | Target audience: `beginner`, `intermediate`, `expert`                                                                 |
 | `--tone`           | No       | `casual`       | Narration tone: `casual`, `formal`, `socratic`                                                                        |
 | `--theme`          | No       | `chalkboard`   | Visual color theme: `chalkboard`, `light`, `colorful`                                                                 |
-| `--template`       | No       | —              | Animation template: `algorithm`, `code`, `compare`                                                                    |
+| `--template`       | No       | —              | Animation template: `algorithm`, `code`, `compare`, `howto`, `timeline`                                               |
 | `--speed`          | No       | `1.0`          | Narration speed multiplier (e.g. `1.25` for 25% faster). OpenAI: native (0.25–4.0). Kokoro/ElevenLabs: ffmpeg atempo. |
 | `--run-id`         | No       | auto           | Resume a previous run using its ID                                                                                    |
 | `--preview`        | No       | off            | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full HD render                             |
@@ -154,11 +154,15 @@ All required packages (`pathspec`, `python-docx`, `httpx`, `beautifulsoup4`) are
 | `algorithm` | Sorting, searching, graph traversal          | Array cells + pointer arrows + step counter + explicit swap animations |
 | `code`      | Code walkthroughs, implementation explainers | Manim `Code` object, incremental line reveal, callout annotations      |
 | `compare`   | A vs B trade-offs, technology comparisons    | Two labeled columns, consistent color per side, summary row at end     |
+| `howto`     | Setup guides, recipes, processes             | Numbered step list, active step highlighted, completed steps dimmed     |
+| `timeline`  | History, version timelines, biographies      | Horizontal axis with dated markers, chronological left-to-right reveal |
 
 ```bash
 python main.py --topic "explain merge sort" --template algorithm
 python main.py --topic "walk through a binary search implementation" --template code
 python main.py --topic "SQL vs NoSQL trade-offs" --template compare
+python main.py --topic "how to set up a Python virtual environment" --template howto
+python main.py --topic "history of the internet" --template timeline
 ```
 
 Templates compose freely with `--theme`, `--tone`, `--audience`, and `--speed`.

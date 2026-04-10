@@ -164,7 +164,7 @@
             <tr>
               <td><span class="flag-name">--template</span></td>
               <td><span class="flag-default">—</span></td>
-              <td>Animation template: <code>algorithm</code>, <code>code</code>, <code>compare</code></td>
+              <td>Animation template: <code>algorithm</code>, <code>code</code>, <code>compare</code>, <code>howto</code>, <code>timeline</code></td>
             </tr>
             <tr>
               <td><span class="flag-name">--speed</span></td>
@@ -311,12 +311,24 @@
             <h4>A vs B trade-offs</h4>
             <p>Two labeled columns, consistent color per side, summary row at end. Best for technology comparisons.</p>
           </div>
+          <div class="card">
+            <p class="card-name">howto</p>
+            <h4>Step-by-step guides</h4>
+            <p>Numbered steps revealed progressively, active step highlighted, completed steps dimmed. Best for setup guides, recipes, and processes.</p>
+          </div>
+          <div class="card">
+            <p class="card-name">timeline</p>
+            <h4>Chronological events</h4>
+            <p>Horizontal axis with dated markers animated left to right. Best for history, version timelines, and biographical sequences.</p>
+          </div>
         </div>
 
         <p class="code-label" style="margin-top:24px">Examples</p>
         <div class="code-block"><pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"explain merge sort"</span>                      <span class="flag">--template</span> algorithm
 <span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"walk through a binary search implementation"</span> <span class="flag">--template</span> code
-<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"SQL vs NoSQL trade-offs"</span>                   <span class="flag">--template</span> compare</pre></div>
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"SQL vs NoSQL trade-offs"</span>                   <span class="flag">--template</span> compare
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"how to set up a Python virtual environment"</span> <span class="flag">--template</span> howto
+<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="str">"history of the internet"</span>                   <span class="flag">--template</span> timeline</pre></div>
       </section>
 
       <!-- Effort levels -->

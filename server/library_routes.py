@@ -1,4 +1,6 @@
 from __future__ import annotations
+import asyncio
+import shutil
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -37,8 +39,12 @@ def make_library_router(store: LibraryStore, output_dir: Path | str | None = Non
         return meta.model_dump()
 
     @router.delete("/library/{run_id}", status_code=204)
-    async def delete_video(run_id: str):
+    async def delete_video(run_id: str, files: bool = False):
         await store.delete_video(run_id)
+        if files:
+            run_dir = _output_dir / run_id
+            if run_dir.exists():
+                await asyncio.to_thread(shutil.rmtree, run_dir)
 
     return router
 

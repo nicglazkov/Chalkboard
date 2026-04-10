@@ -26,10 +26,12 @@ def _run_agent(state):
 
 # ── TEMPLATE_SPECS structure ─────────────────────────────────────────────────
 
-def test_all_three_templates_defined():
+def test_all_five_templates_defined():
     assert "algorithm" in TEMPLATE_SPECS
     assert "code" in TEMPLATE_SPECS
     assert "compare" in TEMPLATE_SPECS
+    assert "howto" in TEMPLATE_SPECS
+    assert "timeline" in TEMPLATE_SPECS
 
 
 def test_template_specs_are_non_empty_strings():
@@ -76,6 +78,24 @@ def test_compare_template_injected(base_state):
     content = _run_agent(base_state)
     assert "column" in content.lower()
     assert "divider" in content.lower() or "DashedLine" in content
+
+
+def test_howto_template_injected(base_state):
+    base_state["script"] = "How to set up a Python virtual environment."
+    base_state["script_segments"] = [{"text": "Set up venv.", "estimated_duration_sec": 2.0}]
+    base_state["template"] = "howto"
+    content = _run_agent(base_state)
+    assert "step" in content.lower() or "how-to" in content.lower()
+    assert "highlight" in content.lower() or "accent" in content.lower()
+
+
+def test_timeline_template_injected(base_state):
+    base_state["script"] = "History of the internet from ARPANET to today."
+    base_state["script_segments"] = [{"text": "ARPANET began.", "estimated_duration_sec": 2.0}]
+    base_state["template"] = "timeline"
+    content = _run_agent(base_state)
+    assert "timeline" in content.lower()
+    assert "Dot" in content or "marker" in content.lower()
 
 
 def test_template_appended_after_theme(base_state):

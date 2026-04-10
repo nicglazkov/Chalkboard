@@ -22,7 +22,7 @@ EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
 TONE_CHOICES = ["casual", "formal", "socratic"]
 THEME_CHOICES = ["chalkboard", "light", "colorful"]
-TEMPLATE_CHOICES = ["algorithm", "code", "compare"]
+TEMPLATE_CHOICES = ["algorithm", "code", "compare", "howto", "timeline"]
 DOCKER_IMAGE = "chalkboard-render"
 QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 
@@ -754,7 +754,7 @@ def main():
     parser.add_argument("--theme", choices=THEME_CHOICES, default=DEFAULT_THEME,
                         help="Visual color theme for the animation")
     parser.add_argument("--template", choices=TEMPLATE_CHOICES, default=None,
-                        help="Animation template: algorithm, code, compare")
+                        help="Animation template: algorithm, code, compare, howto, timeline")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")

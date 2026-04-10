@@ -181,7 +181,7 @@ All four agents are `async def` and wrap their `messages.create()` call with `ap
 - Scene class **must** be named `ChalkboardScene`
 - System prompt includes Manim v0.20.1 API pitfalls (see below)
 - Reads `theme` from state to inject a color palette block into user message via `THEME_SPECS` dict (background color, primary/accent/secondary palette)
-- Reads `template` from state to inject layout/visual-convention guidance via `TEMPLATE_SPECS` dict. Templates: `algorithm` (array cells, pointers, step counter), `code` (Manim `Code` object, line-by-line reveal), `compare` (two-column layout, per-side colors, summary). Template spec is appended after the theme spec. Unknown/None values are silently ignored.
+- Reads `template` from state to inject layout/visual-convention guidance via `TEMPLATE_SPECS` dict. Templates: `algorithm` (array cells, pointers, step counter), `code` (Manim `Code` object, line-by-line reveal), `compare` (two-column layout, per-side colors, summary), `howto` (numbered step list, active highlight, completed dimmed), `timeline` (horizontal axis, dated markers, chronological reveal). Template spec is appended after the theme spec. Unknown/None values are silently ignored.
 
 ### code_validator
 - Model: `CLAUDE_MODEL`

@@ -174,6 +174,44 @@ TEMPLATE_SPECS = {
         "  For tables/grids in the left column: verify right_edge = x_0 + (N − 0.5) × W < −0.5\n"
         "  before committing to column count and width (see BOUNDING BOX CHECK in LAYOUT RULES)."
     ),
+    "howto": (
+        "ANIMATION TEMPLATE — how-to steps:\n"
+        "Structure the scene as a numbered step list that builds up progressively, one step per narration segment.\n"
+        "Required visual elements:\n"
+        "- Step items: each step is a row containing a circled number (Circle + Text) on the left and\n"
+        "  a short Text description to its right, grouped in a VGroup.\n"
+        "- Progressive reveal: FadeIn each new step row at the bottom of the growing list.\n"
+        "- Active step highlight: set the current step's circle fill to accent color and its text to\n"
+        "  primary color at full opacity.\n"
+        "- Completed steps: once narration moves past a step, dim it — set circle fill to a muted\n"
+        "  shade (e.g. interpolate_color(accent, background, 0.6)) and reduce text opacity to 0.4.\n"
+        "- Vertical layout: arrange steps from the top down using left_anchor as the starting point.\n"
+        "  Space rows with buff=0.55 so they don't crowd. Keep all step rows within x < +3.5 to\n"
+        "  leave room for an optional illustration or icon on the right side.\n"
+        "- Optional right-side visual: a small diagram, icon, or annotation in the right_anchor zone\n"
+        "  that updates per step (FadeOut old, FadeIn new). Omit if content is purely textual.\n"
+        "- Final recap: in the last segment, briefly re-highlight all steps simultaneously (set all\n"
+        "  circles back to accent) before the closing FadeOut."
+    ),
+    "timeline": (
+        "ANIMATION TEMPLATE — chronological timeline:\n"
+        "Structure the scene around a horizontal timeline axis with dated event markers.\n"
+        "Required visual elements:\n"
+        "- Timeline axis: a horizontal Line spanning roughly x ∈ [−6.0, +6.0] at y = 0 (center_anchor),\n"
+        "  with small Arrow tips or Dot endpoints.\n"
+        "- Event markers: for each event, place a Dot on the axis at the appropriate x position.\n"
+        "  Above or below the dot, add a short Text date/year label (font_size ≤ 22) and a brief\n"
+        "  Text description (font_size ≤ 24). Alternate above/below to avoid crowding.\n"
+        "- Chronological animation: reveal events left to right, one per narration segment.\n"
+        "  Use GrowFromCenter for the Dot and FadeIn for the label group.\n"
+        "- Active event: highlight the current event's dot and label with accent color.\n"
+        "  Revert previous events to secondary or a dimmed primary.\n"
+        "- Connector lines: use short vertical Line segments (height ~0.3) from each Dot to its\n"
+        "  label group so the association is visually clear.\n"
+        "- Scale to fit: if there are more than 6 events, scale the entire timeline VGroup to fit\n"
+        "  within the canvas or split across two rows (top row for earlier events, bottom for later).\n"
+        "- Title: place the scene title at title_anchor as usual; the timeline axis sits below it."
+    ),
 }
 
 THEME_SPECS = {

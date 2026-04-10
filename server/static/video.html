@@ -331,6 +331,32 @@
       border-color: rgba(200,185,122,0.4);
     }
 
+    /* ── Delete button ── */
+    .btn-delete {
+      display: block;
+      width: 100%;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      background: rgba(224,96,96,0.12);
+      color: #e06060;
+      border: 1px solid rgba(224,96,96,0.25);
+      border-radius: 6px;
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+      margin-top: 0.5rem;
+    }
+
+    .btn-delete:hover {
+      background: rgba(224,96,96,0.2);
+      border-color: rgba(224,96,96,0.4);
+    }
+
 
     /* ── Script panel ── */
     /* ── Transcript ── */
@@ -544,6 +570,7 @@
             <div class="panel-title">Settings</div>
             <div class="params-grid" id="params-grid"></div>
             <a class="btn-regen" id="regen-btn" href="/">Re-generate with same settings</a>
+            <button class="btn-delete" id="delete-btn">Delete video</button>
           </div>
 
         </div>
@@ -731,6 +758,22 @@
         ...(v.template ? { template: v.template } : {}),
       });
       document.getElementById('regen-btn').href = `/?${regenParams}`;
+
+      // Delete button
+      document.getElementById('delete-btn').addEventListener('click', async () => {
+        if (!confirm('Delete this video and all its files? This cannot be undone.')) return;
+        try {
+          const res = await fetch(`/api/library/${runId}?files=true`, { method: 'DELETE' });
+          if (res.ok) {
+            window.location.href = '/library';
+          } else {
+            alert('Failed to delete video.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Failed to delete video.');
+        }
+      });
 
       // Interactive transcript (from segments.json) or plain script fallback
       const scriptPanel = document.getElementById('script-panel');
