@@ -274,11 +274,19 @@
         </table>
 
         <h3 id="flags-quality">Automatic quality checks</h3>
-        <p class="prose">Two quality checks run automatically on every video — no flags required:</p>
-        <ul class="prose-list">
-          <li><strong>Layout check (pre-render)</strong> — Chalkboard dry-runs the Manim scene headlessly inside Docker before committing to a full render. It validates every segment's bounding boxes (off-screen elements, colliding elements) and animation timing against the audio budget. Any violations are fed back to the animation generator and retried automatically.</li>
-          <li><strong>Visual QA (post-render)</strong> — After rendering, Chalkboard samples frames from <code>final.mp4</code> and asks Claude to flag overlapping text, off-screen content, or readability issues. Errors trigger scene regeneration and re-render (up to 2 attempts). Warnings are logged but don't block completion. Control sampling density with <code>--qa-density</code>.</li>
-        </ul>
+        <p class="prose">Two quality checks run automatically on every video — no flags required.</p>
+        <div class="cards" style="grid-template-columns: 1fr 1fr; margin-top: 16px;">
+          <div class="card">
+            <p class="card-name">pre-render</p>
+            <h4>Layout check</h4>
+            <p>Dry-runs the scene headlessly inside Docker and validates every segment's bounding boxes (off-screen, colliding elements) and animation timing against the audio budget. Violations are fed back to the animation generator and retried automatically.</p>
+          </div>
+          <div class="card">
+            <p class="card-name">post-render</p>
+            <h4>Visual QA</h4>
+            <p>Samples frames from <code>final.mp4</code> and asks Claude to flag overlapping text, off-screen content, or readability issues. Errors trigger scene regeneration and re-render (up to 2 attempts). Control sampling density with <code>--qa-density</code>.</p>
+          </div>
+        </div>
       </section>
 
       <!-- Templates -->
