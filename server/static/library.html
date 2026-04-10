@@ -244,6 +244,75 @@
       transform: translateY(-2px);
     }
 
+    /* ── Card menu ── */
+    .card { position: relative; }
+
+    .card-menu-btn {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.4rem;
+      z-index: 5;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s, background 0.12s;
+      backdrop-filter: blur(4px);
+    }
+
+    .card:hover .card-menu-btn { opacity: 1; }
+    .card-menu-btn:hover { background: rgba(0,0,0,0.8); }
+
+    .card-dropdown {
+      position: absolute;
+      top: 2rem;
+      right: 0.4rem;
+      z-index: 10;
+      min-width: 140px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      overflow: hidden;
+      display: none;
+    }
+
+    .card-dropdown.open { display: block; }
+
+    .card-dropdown button {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: none;
+      background: none;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .card-dropdown button:hover {
+      background: rgba(255,255,255,0.06);
+    }
+
+    .card-dropdown .delete-opt {
+      color: #e06060;
+    }
+
+    .card-dropdown .delete-opt:hover {
+      background: rgba(224,96,96,0.1);
+    }
+
     /* ── Thumbnail ── */
     .thumb-wrap {
       position: relative;
@@ -369,36 +438,89 @@
       white-space: nowrap;
     }
 
-    /* ── Load more ── */
-    .load-more-wrap {
-      text-align: center;
+    /* ── Pagination ── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
       margin-top: 2rem;
     }
 
-    .btn-load-more {
+    .page-btn {
       font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      min-width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: transparent;
       color: var(--muted);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 0.6rem 1.75rem;
+      padding: 0 0.5rem;
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
 
-    .btn-load-more:hover {
+    .page-btn:hover:not(:disabled):not(.active) {
       color: var(--text);
       border-color: rgba(255,255,255,0.2);
     }
 
-    .btn-load-more:disabled {
-      opacity: 0.4;
+    .page-btn.active {
+      color: var(--chalk);
+      border-color: var(--accent);
+      background: rgba(200,185,122,0.1);
+    }
+
+    .page-btn:disabled {
+      opacity: 0.3;
       cursor: not-allowed;
     }
+
+    .page-ellipsis {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 0 0.15rem;
+    }
+
+    .per-page-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-left: auto;
+    }
+
+    .per-page-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .per-page-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      border-radius: 5px;
+      padding: 0.3rem 1.5rem 0.3rem 0.5rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7570' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.4rem center;
+      transition: border-color 0.15s;
+    }
+
+    .per-page-select:focus { border-color: var(--accent); }
 
     /* ── Empty state ── */
     .empty-state {
@@ -505,16 +627,14 @@
     <!-- Video grid -->
     <div class="grid" id="grid"></div>
 
-    <!-- Load more -->
-    <div class="load-more-wrap" id="load-more-wrap" style="display:none">
-      <button class="btn-load-more" id="load-more-btn">Load more</button>
-    </div>
+    <!-- Pagination -->
+    <div class="pagination" id="pagination" style="display:none"></div>
 
   </div>
 
   <script>
-    const PAGE_SIZE = 20;
-    let offset = 0;
+    let perPage = 25;
+    let currentPage = 1;
     let total = 0;
     let currentQuery = '';
     let currentSort = 'newest';
@@ -524,8 +644,7 @@
     const searchEl = document.getElementById('search');
     const sortEl = document.getElementById('sort');
     const totalLabel = document.getElementById('total-label');
-    const loadMoreWrap = document.getElementById('load-more-wrap');
-    const loadMoreBtn = document.getElementById('load-more-btn');
+    const paginationEl = document.getElementById('pagination');
 
     function formatDuration(sec) {
       if (!sec || sec < 1) return '';
@@ -568,7 +687,12 @@
                onerror="thumbError(this,'${escHtml(v.topic).replace(/'/g,"&#39;")}','${escHtml(v.theme||'chalkboard')}')">`
         : makeThumbFallback(v.topic, v.theme);
 
-      return `<a class="card" href="/library/${v.run_id}">
+      return `<a class="card" href="/library/${v.run_id}" data-run-id="${escHtml(v.run_id)}">
+        <button class="card-menu-btn" aria-label="More options" onclick="toggleMenu(event, this)">&#8942;</button>
+        <div class="card-dropdown">
+          <button onclick="openVideo(event, '${escHtml(v.run_id)}')">Open</button>
+          <button class="delete-opt" onclick="deleteVideo(event, '${escHtml(v.run_id)}', '${escHtml(v.title || v.topic).replace(/'/g,"&#39;")}')">Delete</button>
+        </div>
         <div class="thumb-wrap">
           ${thumbHtml}
           ${dur ? `<span class="duration-badge">${escHtml(dur)}</span>` : ''}
@@ -596,21 +720,19 @@
         </div>`).join('');
     }
 
-    async function fetchVideos(reset = false) {
+    async function fetchVideos() {
       if (loading) return;
       loading = true;
 
-      if (reset) {
-        offset = 0;
-        grid.innerHTML = makeSkeletons(8);
-        loadMoreWrap.style.display = 'none';
-        totalLabel.textContent = '';
-      }
+      grid.innerHTML = makeSkeletons(8);
+      paginationEl.style.display = 'none';
+      totalLabel.textContent = '';
 
+      const offset = (currentPage - 1) * perPage;
       const params = new URLSearchParams({
         q: currentQuery,
         sort: currentSort,
-        limit: PAGE_SIZE,
+        limit: perPage,
         offset,
       });
 
@@ -619,12 +741,11 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        if (reset) grid.innerHTML = '';
-
+        grid.innerHTML = '';
         total = data.total;
         totalLabel.textContent = total === 1 ? '1 video' : `${total} videos`;
 
-        if (data.videos.length === 0 && reset) {
+        if (data.videos.length === 0) {
           grid.innerHTML = `
             <div class="empty-state">
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -640,21 +761,81 @@
           data.videos.forEach(v => {
             grid.insertAdjacentHTML('beforeend', makeCard(v));
           });
-          offset += data.videos.length;
         }
 
-        const hasMore = offset < total;
-        loadMoreWrap.style.display = hasMore ? 'block' : 'none';
-        loadMoreBtn.disabled = false;
+        renderPagination();
 
       } catch (err) {
-        if (reset) {
-          grid.innerHTML = `<div class="empty-state"><p>Failed to load library.</p></div>`;
-        }
+        grid.innerHTML = `<div class="empty-state"><p>Failed to load library.</p></div>`;
         console.error(err);
       }
 
       loading = false;
+    }
+
+    // ── Pagination rendering ──────────────────────────────────────────────────
+    function renderPagination() {
+      const totalPages = Math.max(1, Math.ceil(total / perPage));
+      if (total <= 0) { paginationEl.style.display = 'none'; return; }
+
+      paginationEl.style.display = 'flex';
+      let html = '';
+
+      // Prev button
+      html += `<button class="page-btn" ${currentPage <= 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">&#8249;</button>`;
+
+      // Page numbers with ellipsis
+      const pages = buildPageNumbers(currentPage, totalPages);
+      for (const p of pages) {
+        if (p === '...') {
+          html += `<span class="page-ellipsis">…</span>`;
+        } else {
+          html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+        }
+      }
+
+      // Next button
+      html += `<button class="page-btn" ${currentPage >= totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">&#8250;</button>`;
+
+      // Per-page selector
+      html += `
+        <div class="per-page-wrap">
+          <span class="per-page-label">per page</span>
+          <select class="per-page-select" onchange="changePerPage(Number(this.value))">
+            <option value="25" ${perPage===25?'selected':''}>25</option>
+            <option value="50" ${perPage===50?'selected':''}>50</option>
+            <option value="100" ${perPage===100?'selected':''}>100</option>
+          </select>
+        </div>`;
+
+      paginationEl.innerHTML = html;
+    }
+
+    function buildPageNumbers(current, totalPages) {
+      if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+      const pages = [];
+      pages.push(1);
+      if (current > 3) pages.push('...');
+      for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) {
+        pages.push(i);
+      }
+      if (current < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+      return pages;
+    }
+
+    function goToPage(page) {
+      const totalPages = Math.max(1, Math.ceil(total / perPage));
+      if (page < 1 || page > totalPages || page === currentPage) return;
+      currentPage = page;
+      fetchVideos();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function changePerPage(n) {
+      perPage = n;
+      currentPage = 1;
+      fetchVideos();
     }
 
     // Search debounce
@@ -663,24 +844,59 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         currentQuery = searchEl.value.trim();
-        fetchVideos(true);
+        currentPage = 1;
+        fetchVideos();
       }, 300);
     });
 
     // Sort
     sortEl.addEventListener('change', () => {
       currentSort = sortEl.value;
-      fetchVideos(true);
+      currentPage = 1;
+      fetchVideos();
     });
 
-    // Load more
-    loadMoreBtn.addEventListener('click', () => {
-      loadMoreBtn.disabled = true;
-      fetchVideos(false);
-    });
+    // ── Card context menu ────────────────────────────────────────────────────
+    function closeAllMenus() {
+      document.querySelectorAll('.card-dropdown.open').forEach(d => d.classList.remove('open'));
+    }
+
+    function toggleMenu(e, btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropdown = btn.nextElementSibling;
+      const wasOpen = dropdown.classList.contains('open');
+      closeAllMenus();
+      if (!wasOpen) dropdown.classList.add('open');
+    }
+
+    function openVideo(e, runId) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAllMenus();
+      window.location.href = `/library/${runId}`;
+    }
+
+    async function deleteVideo(e, runId, title) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAllMenus();
+      if (!confirm(`Delete "${title}" and all its files? This cannot be undone.`)) return;
+      try {
+        const res = await fetch(`/api/library/${runId}?files=true`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        fetchVideos();
+      } catch (err) {
+        alert('Failed to delete video.');
+        console.error(err);
+      }
+    }
+
+    // Close menus on outside click
+    document.addEventListener('click', closeAllMenus);
 
     // Initial load
-    fetchVideos(true);
+    fetchVideos();
   </script>
 
 </body>
