@@ -75,10 +75,11 @@ def test_classify_overlap_touching_edges_not_partial():
 # ── Timing validation ─────────────────────────────────────────────────────────
 
 def test_timing_overrun_detected(tmp_path):
+    # Overrun must exceed 1.5s tolerance to be flagged (budget=3.0, actual=5.0 = 2.0s over)
     scene = _FakeScene(tmp_path)
     scene.begin_segment(0, duration=3.0)
-    scene.play(run_time=2.0)
-    scene.play(run_time=2.0)  # total 4.0 > 3.0
+    scene.play(run_time=2.5)
+    scene.play(run_time=2.5)  # total 5.0 > 3.0 + 1.5 tolerance
     scene.end_layout_check()
 
     report = json.loads((tmp_path / "layout_report.json").read_text())
@@ -86,7 +87,7 @@ def test_timing_overrun_detected(tmp_path):
     violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
     assert len(violations) == 1
     assert violations[0]["segment"] == 0
-    assert violations[0]["actual_sec"] == pytest.approx(4.0)
+    assert violations[0]["actual_sec"] == pytest.approx(5.0)
     assert violations[0]["budget_sec"] == pytest.approx(3.0)
 
 
@@ -101,11 +102,11 @@ def test_timing_within_budget_not_flagged(tmp_path):
     assert timing_violations == []
 
 
-def test_timing_tolerance_0_1s(tmp_path):
-    """Overrun of exactly 0.1s should not be flagged (tolerance)."""
+def test_timing_tolerance_1_5s(tmp_path):
+    """Overrun within 1.5s tolerance should not be flagged."""
     scene = _FakeScene(tmp_path)
     scene.begin_segment(0, duration=3.0)
-    scene.play(run_time=3.1)
+    scene.play(run_time=4.4)  # 1.4s over — within 1.5s tolerance
     scene.end_layout_check()
 
     report = json.loads((tmp_path / "layout_report.json").read_text())
@@ -227,13 +228,13 @@ def test_wait_contributes_to_timing(tmp_path):
     scene = _FakeScene(tmp_path)
     scene.begin_segment(0, duration=3.0)
     scene.play(run_time=1.0)
-    scene.wait(3.0)  # total 4.0 > 3.0 — should trigger overrun
+    scene.wait(4.0)  # total 5.0 > 3.0 + 1.5 tolerance — should trigger overrun
     scene.end_layout_check()
 
     report = json.loads((tmp_path / "layout_report.json").read_text())
     violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
     assert len(violations) == 1
-    assert violations[0]["actual_sec"] == pytest.approx(4.0)
+    assert violations[0]["actual_sec"] == pytest.approx(5.0)
 
 
 def test_wait_after_end_layout_check_not_counted(tmp_path):

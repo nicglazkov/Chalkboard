@@ -122,7 +122,10 @@ class ChalkboardSceneBase:
         n = self._lc_segment
 
         # 1. Timing overrun
-        if self._lc_run_time > self._lc_budget + 0.1:
+        # Tolerance of 1.5s accounts for: (a) the 0.5s inter-segment FadeOut that
+        # runs before begin_segment() and is charged to the previous segment, and
+        # (b) the ~5-10% uncertainty between estimated and actual TTS durations.
+        if self._lc_run_time > self._lc_budget + 1.5:
             self._lc_violations.append({
                 "type": "timing_overrun",
                 "segment": n,
