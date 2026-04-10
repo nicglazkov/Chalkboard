@@ -17,6 +17,7 @@ main.py
        ├─ fact_validator    — Claude fact-checks the script
        ├─ manim_agent       — Claude writes Manim scene code
        ├─ code_validator    — syntax check + Claude semantic review
+       ├─ layout_checker    — headless dry-run; validates bounding boxes + timing
        ├─ render_trigger    — TTS → audio, write output files
        └─ escalate_to_user  — interrupt() when max retries hit
 ```
@@ -39,6 +40,7 @@ pipeline/
     fact_validator.py   Fact checking (Claude) — async
     manim_agent.py      Manim code generation (Claude) — async
     code_validator.py   Syntax + semantic code review (Claude) — async
+    layout_checker.py   Headless scene dry-run + bounding-box/timing validation
     orchestrator.py     escalate_to_user node (LangGraph interrupt)
   tts/
     base.py             Backend registry (get_backend)
@@ -46,8 +48,9 @@ pipeline/
     openai_tts.py       OpenAI TTS API
     elevenlabs_tts.py   ElevenLabs TTS API
 docker/
-  Dockerfile          Extends manimcommunity/manim:v0.20.1
-  render.sh           Manim render entrypoint (no audio merge)
+  Dockerfile          Extends manimcommunity/manim:v0.20.1; PYTHONPATH=/render
+  render.sh           Manim render entrypoint (no audio merge); --check mode for dry-run layout validation
+  chalkboard_base.py  ChalkboardSceneBase mixin — bounding-box, off-screen, timing checks per segment
 tests/                One test file per module
 config.py             Env var loading + CLAUDE_MODEL constant
 main.py               CLI entry point, async graph runner
@@ -118,10 +121,17 @@ def _after_fact_validator(state):
 
 def _after_code_validator(state):
     if not state.get("code_feedback"):   # None = approved → proceed
-        return "render_trigger"
+        return "layout_checker"          # dry-run before committing to full render
     if state["code_attempts"] >= 3:      # too many failures → escalate
         return "escalate_to_user"
     return "manim_agent"                 # retry
+
+def _after_layout_checker(state):
+    if not state.get("code_feedback"):   # None = passed → render
+        return "render_trigger"
+    if state["code_attempts"] >= 3:
+        return "escalate_to_user"
+    return "manim_agent"                 # layout violations → regenerate
 ```
 
 **Do not** check attempt counters to determine approval — check the feedback field. Approval can happen on attempt 1, 2, or 3; the counter just tracks when to give up.
@@ -178,6 +188,24 @@ All four agents are `async def` and wrap their `messages.create()` call with `ap
 - Timeout: `TIMEOUT_CODE_VALIDATOR` = 60s
 - Fast path: `ast.parse()` syntax check before calling Claude (no timeout needed — pure Python)
 - Output: `{"verdict": "approved"|"needs_revision", "feedback": str}`
+
+### layout_checker
+- No Claude call — pure Docker headless execution
+- Timeout: `TIMEOUT_LAYOUT_CHECKER` = 90s
+- Writes `scene.py` and a stub `segments.json` (from `script_segments`) to `output/<run_id>/` before spawning Docker
+- Runs `docker run --rm chalkboard-render --check` with `PYTHONPATH=/render`, `dry_run=True`, `frame_rate=1` (for speed)
+- `ChalkboardSceneBase` (mounted at `/render/chalkboard_base.py`) writes `/output/<run_id>/layout_report.json`
+- Report: `{"passed": bool, "violations": [{type, segment, ...}]}`
+- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 Manim unit tolerance), `overlap` (partial bounding-box intersection, ignores contained)
+- On failure: formats violations as `code_feedback`, routes back to `manim_agent` (reuses `code_attempts` counter)
+- On timeout or Docker error: fails open (returns `code_feedback=None`) to avoid blocking the pipeline permanently
+- `ChalkboardSceneBase` is the scene base class injected by `manim_agent`. Generated scenes use:
+  ```python
+  class ChalkboardScene(ChalkboardSceneBase, Scene):
+  ```
+  with `self.begin_segment(n, duration)` and `self.end_layout_check()` calls at segment boundaries.
+- **`play()` override**: accumulates `run_time` kwarg (default 1.0s) into `_lc_run_time`, but skips `Wait` animations (Manim's `wait(x)` internally calls `play(Wait(...))` — skipping prevents double-counting).
+- **`wait()` override**: accumulates `duration` directly.
 
 ---
 
@@ -259,6 +287,7 @@ Uses `threading.Timer` to call `process.kill()` after `timeout` seconds. The std
 | `TIMEOUT_FACT_VALIDATOR` | 60s | fact_validator |
 | `TIMEOUT_MANIM_AGENT` | 180s | manim_agent |
 | `TIMEOUT_CODE_VALIDATOR` | 60s | code_validator |
+| `TIMEOUT_LAYOUT_CHECKER` | 90s | layout_checker |
 | `TIMEOUT_VISUAL_QA` | 90s | visual_qa |
 | `TIMEOUT_TTS_SEGMENT` | 30s | OpenAI, ElevenLabs (per segment) |
 | `TIMEOUT_TTS_KOKORO` | 120s | Kokoro (full call) |

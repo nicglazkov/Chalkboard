@@ -7,7 +7,7 @@
 Turn any topic into a narrated, animated explainer video — fully automated.
 
 ```
-topic → [research] → script → fact-check → Manim animation → code review → voiceover → final.mp4
+topic → [research] → script → fact-check → Manim animation → code review → layout check → voiceover → final.mp4
 ```
 
 Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic; when it gets stuck it asks you for guidance.
@@ -87,7 +87,9 @@ Either way, the pipeline runs, renders the animation in Docker, and merges the v
 
 > `--verbose` and `--preview` cannot be combined.
 
-After a full render, Chalkboard automatically runs a visual quality check: it samples frames from `final.mp4` and asks Claude to flag overlapping elements, off-screen text, or readability issues. If errors are found, it regenerates the Manim scene and re-renders (up to 2 attempts). Use `--qa-density high` for longer or more complex animations, or `--qa-density zero` to skip QA entirely.
+Before rendering, Chalkboard runs a **layout check**: it dry-runs the Manim scene headlessly inside Docker and validates every segment's bounding boxes (off-screen elements, overlapping elements) and animation timing against the audio budget. Layout violations are fed back to the Manim agent as code feedback; it retries until the scene passes or attempts are exhausted.
+
+After a full render, Chalkboard automatically runs a **visual quality check**: it samples frames from `final.mp4` and asks Claude to flag overlapping elements, off-screen text, or readability issues. If errors are found, it regenerates the Manim scene and re-renders (up to 2 attempts). Use `--qa-density high` for longer or more complex animations, or `--qa-density zero` to skip QA entirely.
 
 ---
 
@@ -423,7 +425,7 @@ pytest
 
 ```
 pipeline/
-  agents/         # research_agent, script_agent, fact_validator, manim_agent, code_validator, orchestrator
+  agents/         # research_agent, script_agent, fact_validator, manim_agent, code_validator, layout_checker, orchestrator
   tts/            # kokoro, openai, elevenlabs backends
   context.py      # collect_files, load_context_blocks, fetch_url_blocks, measure_context
   graph.py        # LangGraph state machine

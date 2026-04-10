@@ -272,6 +272,13 @@
             </tr>
           </tbody>
         </table>
+
+        <h3 id="flags-quality">Automatic quality checks</h3>
+        <p class="prose">Two quality checks run automatically on every video — no flags required:</p>
+        <ul class="prose-list">
+          <li><strong>Layout check (pre-render)</strong> — Chalkboard dry-runs the Manim scene headlessly inside Docker before committing to a full render. It validates every segment's bounding boxes (off-screen elements, colliding elements) and animation timing against the audio budget. Any violations are fed back to the animation generator and retried automatically.</li>
+          <li><strong>Visual QA (post-render)</strong> — After rendering, Chalkboard samples frames from <code>final.mp4</code> and asks Claude to flag overlapping text, off-screen content, or readability issues. Errors trigger scene regeneration and re-render (up to 2 attempts). Warnings are logged but don't block completion. Control sampling density with <code>--qa-density</code>.</li>
+        </ul>
       </section>
 
       <!-- Templates -->
