@@ -443,6 +443,45 @@
       color: var(--text);
     }
 
+    /* ── Screenshots ── */
+    .screenshots {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 8px;
+    }
+
+    .screenshots.triple {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .screenshot {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .screenshot:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .screenshot img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .screenshot-caption {
+      padding: 14px 18px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      line-height: 1.5;
+    }
+
     /* ── Animations ── */
     @keyframes fadeUp {
       from {
@@ -459,6 +498,11 @@
     /* ── Responsive ── */
     @media (max-width: 600px) {
       .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .screenshots,
+      .screenshots.triple {
         grid-template-columns: 1fr;
       }
 
@@ -491,6 +535,7 @@
       <a href="#" class="nav-logo">Chalkboard</a>
       <div class="nav-links">
         <a href="guide.html">Guide</a>
+        <a href="cli.html">CLI</a>
         <a href="api.html">API</a>
         <a href="#quickstart">Quickstart</a>
         <a href="https://github.com/nicglazkov/Chalkboard" target="_blank" class="nav-github">GitHub ↗</a>
@@ -506,10 +551,10 @@
         <p class="hero-label">Open source · Powered by Claude</p>
         <h1>Turn <em>any topic</em> into a narrated animation.</h1>
         <p class="hero-sub">
-          Chalkboard is a multi-agent pipeline that writes a script, fact-checks it,
+          Chalkboard is a self-hosted web app that writes a script, fact-checks it,
           generates Manim animation code, synthesizes a voiceover, and renders
           everything to a final <code
-            style="font-family:'DM Mono',monospace;font-size:0.9em;color:var(--text)">.mp4</code>, fully automated.
+            style="font-family:'DM Mono',monospace;font-size:0.9em;color:var(--text)">.mp4</code>. Fully automated.
         </p>
 
         <div class="pipeline">
@@ -532,6 +577,31 @@
         </div>
       </section>
 
+      <!-- Quick start -->
+      <section class="quickstart" id="quickstart">
+        <h2>Quick start</h2>
+        <p class="quickstart-sub">Prerequisites: Python 3.10+, Docker, ffmpeg</p>
+
+        <p class="code-label">Install</p>
+        <div class="code-block">
+          <pre><span class="cmd">git clone https://github.com/nicglazkov/Chalkboard.git</span>
+<span class="cmd">cd Chalkboard</span>
+<span class="cmd">pip install -r requirements.txt</span>
+<span class="cmd">cp .env.example .env</span>  <span class="comment"># add your ANTHROPIC_API_KEY</span></pre>
+        </div>
+
+        <p class="code-label">Start the web UI</p>
+        <div class="code-block">
+          <pre><span class="cmd">python run_server.py</span>
+<span class="comment"># Open http://localhost:8000</span></pre>
+        </div>
+
+        <p class="code-label" style="opacity:0.5">Or run from the terminal</p>
+        <div class="code-block" style="opacity:0.7">
+          <pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"explain how B-trees work"</span> <span class="flag">--effort</span> medium</pre>
+        </div>
+      </section>
+
       <!-- Features -->
       <section class="section">
         <p class="section-label">What it does</p>
@@ -545,7 +615,7 @@
           <div class="feature">
             <p class="feature-num">02</p>
             <h3>Context injection</h3>
-            <p>Feed in local files, PDFs, URLs, or GitHub repos as source material. Chalkboard builds the animation from
+            <p>Upload files, PDFs, URLs, or GitHub repos as source material through the web UI or CLI. Chalkboard builds the animation from
               your content.</p>
           </div>
           <div class="feature">
@@ -563,35 +633,22 @@
         </div>
       </section>
 
-      <!-- Quick start -->
-      <section class="quickstart" id="quickstart">
-        <h2>Quick start</h2>
-        <p class="quickstart-sub">Prerequisites: Python 3.10+, Docker, ffmpeg</p>
-
-        <p class="code-label">Install</p>
-        <div class="code-block">
-          <pre><span class="cmd">git clone https://github.com/nicglazkov/Chalkboard.git</span>
-<span class="cmd">cd Chalkboard</span>
-<span class="cmd">pip install -r requirements.txt</span>
-<span class="cmd">cp .env.example .env</span>  <span class="comment"># add ANTHROPIC_API_KEY + OPENAI_API_KEY</span></pre>
-        </div>
-
-        <p class="code-label">CLI</p>
-        <div class="code-block">
-          <pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"explain how B-trees work"</span> <span class="flag">--effort</span> medium</pre>
-        </div>
-
-        <p class="code-label">Web UI</p>
-        <div class="code-block">
-          <pre><span class="cmd">python run_server.py</span>
-<span class="comment"># Open http://localhost:8000</span></pre>
-        </div>
-
-        <p class="code-label">With context</p>
-        <div class="code-block">
-          <pre><span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"explain this codebase"</span> <span class="flag">--context</span> ./src <span class="flag">--context</span> ./docs
-<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"summarize this paper"</span>   <span class="flag">--context</span> paper.pdf
-<span class="cmd">python main.py</span> <span class="flag">--topic</span> <span class="comment">"explain this project"</span>   <span class="flag">--github</span> nicglazkov/Chalkboard</pre>
+      <!-- Screenshots -->
+      <section class="section">
+        <p class="section-label">The web UI</p>
+        <div class="screenshots triple">
+          <div class="screenshot">
+            <img src="screenshot-form.png" alt="Chalkboard job creation form" loading="lazy" />
+            <p class="screenshot-caption">Create a video with topic, effort, audience, and advanced options.</p>
+          </div>
+          <div class="screenshot">
+            <img src="screenshot-progress.png" alt="Chalkboard live pipeline progress" loading="lazy" />
+            <p class="screenshot-caption">Watch each pipeline stage complete in real time.</p>
+          </div>
+          <div class="screenshot">
+            <img src="screenshot-library.png" alt="Chalkboard video library" loading="lazy" />
+            <p class="screenshot-caption">Browse, search, and rewatch all your generated videos.</p>
+          </div>
         </div>
       </section>
 
