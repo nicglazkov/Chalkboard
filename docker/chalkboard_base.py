@@ -99,7 +99,14 @@ class ChalkboardSceneBase:
     # ------------------------------------------------------------------
 
     def play(self, *animations, run_time=None, **kwargs):
-        if not self._lc_done and self._lc_segment is not None:
+        # Skip accumulation for Wait animations: wait() already counted the duration
+        # directly, and Manim's wait() internally calls play(Wait(...)), which would
+        # cause double-counting.
+        from manim import Wait as _Wait
+        is_internal_wait = (
+            len(animations) == 1 and isinstance(animations[0], _Wait)
+        )
+        if not self._lc_done and self._lc_segment is not None and not is_internal_wait:
             self._lc_run_time += run_time if run_time is not None else 1.0
         if run_time is not None:
             kwargs["run_time"] = run_time
