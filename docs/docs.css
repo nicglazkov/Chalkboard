@@ -507,7 +507,8 @@ nav {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
-.screenshot img {
+.screenshot img,
+.screenshot video {
   width: 100%;
   height: auto;
   display: block;
