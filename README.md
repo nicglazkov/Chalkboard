@@ -2,15 +2,16 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nicglazkov/Chalkboard)
 [![Docs](https://img.shields.io/badge/docs-guide-blue)](https://nicglazkov.github.io/Chalkboard/guide.html)
+[![CLI Reference](https://img.shields.io/badge/docs-CLI-blue)](https://nicglazkov.github.io/Chalkboard/cli.html)
 [![API Reference](https://img.shields.io/badge/docs-API-blue)](https://nicglazkov.github.io/Chalkboard/api.html)
 
 Turn any topic into a narrated, animated explainer video — fully automated.
 
 ```
-topic → [research] → script → fact-check → Manim animation → code review → layout check → voiceover → final.mp4
+topic → script → fact-check → animation → validate → video
 ```
 
-Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic; when it gets stuck it asks you for guidance.
+Chalkboard is a self-hosted web app powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic. Use it through the web UI or the CLI.
 
 ---
 
@@ -42,18 +43,18 @@ OPENAI_API_KEY=sk-...       # if using TTS_BACKEND=openai
 
 ### 3. Run
 
-**CLI:**
-```bash
-python main.py --topic "explain how B-trees work" --effort medium
-```
-
 **Web UI:**
 ```bash
 python run_server.py
 # Open http://localhost:8000
 ```
 
-Either way, the pipeline runs, renders the animation in Docker, and merges the voiceover, outputting `output/<run-id>/final.mp4`.
+**Or from the terminal:**
+```bash
+python main.py --topic "explain how B-trees work" --effort medium
+```
+
+Either way, the pipeline runs, renders the animation in Docker, and merges the voiceover into `output/<run-id>/final.mp4`.
 
 > **First run only:** Docker will build the render image automatically (~30s). Subsequent runs use the cached image.
 

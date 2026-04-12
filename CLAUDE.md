@@ -6,7 +6,7 @@ This document is the authoritative reference for anyone (human or AI agent) cont
 
 ## What this project does
 
-Chalkboard takes a topic string and produces a narrated Manim animation. The pipeline runs fully automatically with retry logic at each stage.
+Chalkboard is a self-hosted web app that takes a topic and produces a narrated Manim animation. It can be used through the web UI (`python run_server.py`) or the CLI (`python main.py`). The pipeline runs fully automatically with retry logic at each stage.
 
 ```
 main.py
