@@ -11,7 +11,7 @@ Turn any topic into a narrated, animated explainer video — fully automated.
 topic → script → fact-check → animation → validate → video
 ```
 
-Chalkboard is a self-hosted web app powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic. Use it through the web UI or the CLI.
+Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, validates the facts, generates Manim animation code, validates the code, synthesizes a voiceover, and renders everything to video. Each stage has automatic retry logic. Use it through the web UI or the CLI.
 
 ---
 
