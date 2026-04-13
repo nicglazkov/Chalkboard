@@ -514,6 +514,10 @@ nav {
   display: block;
 }
 
+.screenshot img {
+  cursor: pointer;
+}
+
 .screenshot-caption {
   padding: 14px 18px;
   font-family: 'DM Mono', monospace;
@@ -521,6 +525,32 @@ nav {
   color: var(--muted);
   letter-spacing: 0.04em;
   line-height: 1.5;
+}
+
+/* ── Lightbox ── */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.lightbox.active {
+  opacity: 1;
+}
+
+.lightbox img {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6);
 }
 
 /* ── Footer ── */

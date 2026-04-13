@@ -482,6 +482,31 @@
     </main>
   </div>
 
+  <script>
+    (function () {
+      document.querySelectorAll('.screenshot img').forEach(function (img) {
+        img.addEventListener('click', function () {
+          var overlay = document.createElement('div');
+          overlay.className = 'lightbox';
+          var full = document.createElement('img');
+          full.src = img.src;
+          full.alt = img.alt;
+          overlay.appendChild(full);
+          document.body.appendChild(overlay);
+          requestAnimationFrame(function () { overlay.classList.add('active'); });
+          function close() {
+            overlay.classList.remove('active');
+            overlay.addEventListener('transitionend', function () { overlay.remove(); });
+          }
+          overlay.addEventListener('click', close);
+          document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', handler); }
+          });
+        });
+      });
+    })();
+  </script>
+
   <!-- Cloudflare Web Analytics -->
   <script defer src='https://static.cloudflareinsights.com/beacon.min.js'
     data-cf-beacon='{"token": "a176d383a88845e4a39bccf3f7c30879"}'></script>
