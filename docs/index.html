@@ -472,6 +472,33 @@
       width: 100%;
       height: auto;
       display: block;
+      cursor: pointer;
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.85);
+      cursor: zoom-out;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .lightbox.active {
+      opacity: 1;
+    }
+
+    .lightbox img,
+    .lightbox video {
+      max-width: 95vw;
+      max-height: 95vh;
+      object-fit: contain;
+      border-radius: 4px;
+      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.6);
     }
 
     .screenshot-caption {
@@ -725,13 +752,15 @@
 
   <script>
     (function () {
-      document.querySelectorAll('.screenshot img').forEach(function (img) {
-        img.addEventListener('click', function () {
+      document.querySelectorAll('.screenshot img, .screenshot video').forEach(function (el) {
+        el.addEventListener('click', function () {
           var overlay = document.createElement('div');
           overlay.className = 'lightbox';
-          var full = document.createElement('img');
-          full.src = img.src;
-          full.alt = img.alt;
+          var isVideo = el.tagName === 'VIDEO';
+          var full = document.createElement(isVideo ? 'video' : 'img');
+          full.src = el.src;
+          if (isVideo) { full.autoplay = true; full.loop = true; full.muted = true; full.playsInline = true; }
+          else { full.alt = el.alt; }
           overlay.appendChild(full);
           document.body.appendChild(overlay);
           requestAnimationFrame(function () { overlay.classList.add('active'); });

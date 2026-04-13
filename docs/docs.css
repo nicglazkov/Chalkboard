@@ -514,7 +514,8 @@ nav {
   display: block;
 }
 
-.screenshot img {
+.screenshot img,
+.screenshot video {
   cursor: pointer;
 }
 
@@ -545,7 +546,8 @@ nav {
   opacity: 1;
 }
 
-.lightbox img {
+.lightbox img,
+.lightbox video {
   max-width: 95vw;
   max-height: 95vh;
   object-fit: contain;

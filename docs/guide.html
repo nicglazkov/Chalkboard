@@ -484,13 +484,15 @@
 
   <script>
     (function () {
-      document.querySelectorAll('.screenshot img').forEach(function (img) {
-        img.addEventListener('click', function () {
+      document.querySelectorAll('.screenshot img, .screenshot video').forEach(function (el) {
+        el.addEventListener('click', function () {
           var overlay = document.createElement('div');
           overlay.className = 'lightbox';
-          var full = document.createElement('img');
-          full.src = img.src;
-          full.alt = img.alt;
+          var isVideo = el.tagName === 'VIDEO';
+          var full = document.createElement(isVideo ? 'video' : 'img');
+          full.src = el.src;
+          if (isVideo) { full.autoplay = true; full.loop = true; full.muted = true; full.playsInline = true; }
+          else { full.alt = el.alt; }
           overlay.appendChild(full);
           document.body.appendChild(overlay);
           requestAnimationFrame(function () { overlay.classList.add('active'); });
