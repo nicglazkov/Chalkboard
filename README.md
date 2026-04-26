@@ -418,6 +418,31 @@ All generated videos are automatically indexed into a SQLite database (`library.
 
 ---
 
+## Python SDK
+
+If you'd rather call Chalkboard from a script than the CLI, there's a typed sync Python client at [`sdk/python/`](sdk/python). It targets the **hosted** version at <https://chalkboard.studio/api/v1>:
+
+```python
+from chalkboard import ChalkboardClient
+
+client = ChalkboardClient(api_key="chk_live_…")  # create one at /account
+job    = client.create_job(topic="How hash tables work")
+final  = client.wait_for_completion(job.id, timeout=600)
+client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
+```
+
+The same client also works against a **self-hosted** Chalkboard — pass `base_url="http://localhost:8000/api/v1"` to the constructor. Self-hosted installs typically don't need an API key (this repo's server has no multi-tenant auth out of the box).
+
+Install:
+
+```bash
+pip install https://github.com/nicglazkov/Chalkboard/releases/download/sdk-py/v0.1.1/chalkboard_sdk-0.1.1-py3-none-any.whl
+```
+
+Full SDK reference + examples: [`sdk/python/README.md`](sdk/python/README.md). Hosted API docs: <https://chalkboard.studio/docs/api>.
+
+---
+
 ## Development
 
 ### Run tests
@@ -441,6 +466,7 @@ docker/
   Dockerfile      # extends manimcommunity/manim:v0.20.1
   render.sh       # renders scene.py inside Docker
 server/         # FastAPI app, job store, routes, library, static frontend
+sdk/python/     # Typed Python client for the hosted (or self-hosted) API
 tests/            # one test file per module
 config.py         # env var loading
 main.py           # CLI entry point

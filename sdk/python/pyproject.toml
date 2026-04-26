@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chalkboard-sdk"
+version = "0.1.1"
+description = "Python client for the Chalkboard API — generate narrated explainer videos from your code."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Chalkboard", email = "hello@chalkboard.studio" }]
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27,<1.0",
+]
+keywords = ["chalkboard", "video-generation", "manim", "claude", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video",
+]
+
+[project.urls]
+Homepage = "https://chalkboard.studio"
+Documentation = "https://chalkboard.studio/docs/api"
+Repository = "https://github.com/nicglazkov/Chalkboard"
+Changelog = "https://chalkboard.studio/changelog"
+
+[tool.setuptools.packages.find]
+include = ["chalkboard*"]
+exclude = ["tests*", "examples*"]
