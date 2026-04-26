@@ -7,12 +7,13 @@ want to know exactly what a method does.
 
 ## Install
 
-```bash
-pip install chalkboard-sdk
-```
+The hosted Chalkboard service is in closed beta — the SDK is shipped
+via GitHub Releases on this repo until the v1 surface stabilises and
+we publish to PyPI.
 
-(Closed-beta period: ship via GitHub Releases until the v1 surface
-stabilises. PyPI release lands once the API contract is locked.)
+```bash
+pip install https://github.com/nicglazkov/Chalkboard/releases/download/sdk-py/v0.1.1/chalkboard_sdk-0.1.1-py3-none-any.whl
+```
 
 ## Quickstart
 
@@ -111,7 +112,9 @@ except ChalkboardError as e:
 
 ## Source
 
-The pipeline code is open-source at
-[github.com/nicglazkov/Chalkboard](https://github.com/nicglazkov/Chalkboard).
-This SDK lives in the closed-source operational repo and gets cut to
-GitHub Releases on every API release.
+This SDK and the underlying multi-agent pipeline are both open source
+in [github.com/nicglazkov/Chalkboard](https://github.com/nicglazkov/Chalkboard).
+The pipeline can be self-hosted (clone the repo, set `ANTHROPIC_API_KEY`,
+run `python run_server.py`) and the SDK works against either the hosted
+endpoint at <https://chalkboard.studio> or your own deployment via the
+`base_url=` kwarg.
