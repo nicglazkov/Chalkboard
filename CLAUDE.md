@@ -104,7 +104,7 @@ server/
 | `tone` | str | `"casual"` / `"formal"` / `"socratic"` |
 | `theme` | str | `"chalkboard"` / `"light"` / `"colorful"` |
 | `script` | str | Full narration script |
-| `script_segments` | list[dict] | `[{"text": str, "estimated_duration_sec": float}]` |
+| `script_segments` | list[dict] | `[{"text": str, "estimated_duration_sec": float, "cue_text"?: str}]`; `text` is clean, `cue_text` keeps the `[[k]]` cue markers |
 | `manim_code` | str | Complete Python source for the Manim scene |
 | `script_attempts` | int | Number of times the script has been revised (starts 0) |
 | `code_attempts` | int | Hard code failures so far (syntax, AST guards, layout). Starts 0 |
@@ -207,6 +207,7 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - Web search enabled when `effort_level == "high"` or `user_approved_search`, **unless** `research_brief` is set
 - Injects `AUDIENCE_INSTRUCTIONS` / `TONE_INSTRUCTIONS`
 - **Narration is spoken:** the system prompt requires math and code to be written the way a lecturer says them ("e to the x", "x squared", "n log n"), never symbols, LaTeX or code syntax, because TTS reads the text aloud while the animation shows the notation.
+- **Cue markers:** segment text carries `[[1]]`, `[[2]]`, ... right before the words where visuals land (2-5 per segment, renumbered per segment). The agent returns segments with clean `text` plus the marked `cue_text`, and a clean `script` (see Word-level sync below).
 
 ### fact_validator
 - Agent key `fact`, `max_tokens` 8000, timeout `TIMEOUT_FACT_VALIDATOR` = 180s
@@ -217,7 +218,8 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - Agent key `manim`, `max_tokens` 48000, **streamed**, timeout `TIMEOUT_MANIM_AGENT` = 900s
 - Output: `{"manim_code": str}`
 - Scene class **must** be `ChalkboardScene(ChalkboardSceneBase, Scene)`
-- The system prompt targets **Manim CE v0.21.0** and teaches the design system: required scaffold (imports of tokens, components, moves, templates), the component / move / template vocabulary, a MATH section (all math through `math_tex` / `tex` / `EquationGroup` / `ChalkMatrix`, house macros, role-colored terms, aligned derivations), the token API and what is forbidden in scene code (raw hex/Manim color constants, raw `font_size`/`buff`/`stroke_width`/`run_time` literals, math in `Text`), role and motion semantics, four annotated exemplars, the verified pitfall list (below), LAYOUT RULES and the CLEAN SLATE rule
+- The system prompt targets **Manim CE v0.21.0** and teaches the design system: required scaffold (imports of tokens, components, moves, templates), the component / move / template vocabulary, a MATH section (all math through `math_tex` / `tex` / `EquationGroup` / `ChalkMatrix`, house macros, role-colored terms, aligned derivations), the token API and what is forbidden in scene code (raw hex/Manim color constants, raw `font_size`/`buff`/`stroke_width`/`run_time` literals, math in `Text`), role and motion semantics, five annotated exemplars (the fifth: word-level sync with `self.cue(k)`), the WORD-LEVEL SYNC rules, the verified pitfall list (below), LAYOUT RULES and the CLEAN SLATE rule
+- `_format_segments` shows each segment's marked `cue_text` with the estimated time of each marker (measured `cues` when present, e.g. on QA regeneration)
 - `THEME_SPECS` are generated from the tokens via `render_prompt_block(theme)`, so prompt and renderer never drift
 - `TEMPLATE_SPECS` (algorithm, code, compare, derivation, howto, timeline) tell the agent to instantiate the matching template class with a `beats` dict
 - **Revision rounds:** when `code_feedback` is set and prior code exists, the agent is asked for minimal targeted edits to the prior scene instead of a rewrite
@@ -234,11 +236,22 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 
 ### layout_checker
 - No Claude call. Timeout `TIMEOUT_LAYOUT_CHECKER` = 180s
-- Writes `scene.py` and a stub `segments.json` (estimated durations) to `output/<run_id>/`, deletes any stale `layout_report.json`, then runs `render.check_cmd(run_dir)`: a native Python dry-run (local) or `docker run ... chalkboard-render --check`. Both set `dry_run=True`, `frame_rate=1`
+- Writes `scene.py` and a stub `segments.json` (estimated durations, and `cues` estimated from each marker's character position; measured `cues`/`actual_duration_sec` are kept when the segments already have them) to `output/<run_id>/`, deletes any stale `layout_report.json`, then runs `render.check_cmd(run_dir)`: a native Python dry-run (local) or `docker run ... chalkboard-render --check`. Both set `dry_run=True`, `frame_rate=1`
 - `ChalkboardSceneBase` writes `layout_report.json`: `{"passed": bool, "violations": [{type, segment, description, ...}]}`
-- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks. `sync_drift` (visuals more than the tolerance behind the narration at a segment boundary) comes from `next_segment` / `end_layout_check`
+- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks. `sync_drift` (visuals more than the tolerance behind the narration at a segment boundary) comes from `next_segment` / `end_layout_check`. `cue_late` (a `self.cue(k)` reached more than 0.6 s after its word) and `cue_unused` (a segment with cue markers whose scene never calls `cue()`; template-driven scenes are exempt) come from the word-level sync. The report also carries `cue_log`: `[{segment, cue, spoken_at, visual_at, lag}]` for every `cue()` call
 - Return values: passed → `code_feedback=None, layout_renderable=True`; violations → formatted feedback, `code_attempts + 1`, `layout_renderable=True`; crash, timeout, missing or unreadable report, failure to start → feedback with `layout_renderable=False` (the stderr tail is included for crashes)
 - `ChalkboardSceneBase` overrides `play()` (accumulates `run_time`, skipping `Wait` so `wait()` is not double counted) and `wait()` to measure per-segment time. Generated scenes call `self.begin_segment(n, duration=_d[n])` and `self.end_layout_check()`
+
+### Word-level sync (cue markers)
+
+Segment-level sync pins every segment start to the narration; cue markers pin the animations inside a segment to the words.
+
+1. **Script** (`script_agent`): `[[k]]` markers before the cued words. `pipeline/cues.py` owns parsing: `parse_cues(text) -> (clean, {k: char_offset})` (offset = first letter of the cued word in the clean text), `strip_cues`, `clean_segments`. Clean text is what everything else reads (fact check, TTS, `script.txt`, captions, chapters, visual QA, quiz, library); the marked text lives only in a segment's `cue_text`.
+2. **Times** (TTS): backends return `(path, durations, cue_times)`; `cue_times[i][k-1]` is the time of marker k in seconds from segment i's audio start (`None` for a skipped number). ElevenLabs uses `POST /v1/text-to-speech/{voice}/with-timestamps` (same body and stitching; JSON `audio_base64` + `alignment.characters` / `character_start_times_seconds`, which match the input text one to one, verified 2026-10-02) via `cue_times_from_alignment`; Kokoro maps `KPipeline.Result.tokens` (`text`, `start_ts` relative to each chunk) via `cue_times_from_tokens`; OpenAI returns the old 2-tuple and `render_trigger` fills `proportional_cue_times`. Speed scaling divides cue times by `speed` too.
+3. **segments.json** per segment: `text` (clean), `actual_duration_sec`, `cues`, and `cue_text` when the segment has markers.
+4. **Scene** (`ChalkboardSceneBase.cue(k)`): waits until `segment narration start + cues[k-1]` and returns, so the next `play()` starts on the word. Segment narration start = sum of the earlier segment budgets (the voiceover is the segments back to back). Cues load lazily from `segments.json` next to the scene module (`sys.modules[type(self).__module__].__file__`), falling back to the report directory; tests assign `scene._cues = {seg: [t, ...]}` (or a list of lists). Unknown cue numbers warn and return `False` without waiting; `has_cue(k)` checks first. Templates call `_cue(1)` before each segment's main reveal and `_cue(2)` before the second element (callout, right-hand point, next derivation line), and `_rest` waits out `segment_time_left()`.
+5. **Scene clock:** in a real render (`not config.dry_run` and `frame_rate >= 10`) `_scene_time()` is `renderer.time`, the frames actually written. Manim rounds every play UP to whole frames (`np.arange(0, run_time, 1/fps)`) and static waits DOWN (`int(duration / dt)`), so summing requested run times drifts from the video by a frame per play. The 1 fps dry-run and unit tests keep the internal `_sync_tracked` clock.
+6. **Captions:** `main._caption_cues` writes one SRT line per sentence (long sentences split at commas), timed by interpolating through the segment's cue anchors.
 
 ---
 
@@ -350,8 +363,11 @@ async def generate_audio(
     segments: list[dict],   # [{"text": str, "estimated_duration_sec": float}]
     output_path: Path,      # write voiceover.wav here
     speed: float = 1.0,     # playback speed multiplier
-) -> tuple[Path, list[float]]:  # (wav_path, actual_durations_per_segment)
+) -> tuple[Path, list[float]] | tuple[Path, list[float], list[list[float | None]]]:
+    # (wav_path, actual_durations_per_segment[, cue_times_per_segment])
 ```
+
+Speak the clean text: `parse_cues(segment_cue_text(seg))` gives it plus the marker offsets (see Word-level sync).
 
 - **OpenAI** (`openai_tts.py`): segments synthesized in parallel (`asyncio.gather`, at most `MAX_CONCURRENT = 6` at once), each through `api_call_with_retry`; results are concatenated in segment order. `speed=` goes to the API. Env: `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`), `OPENAI_TTS_VOICE` (default `alloy`), `OPENAI_TTS_INSTRUCTIONS` (sent only when the model name starts with `gpt-`).
 - **Kokoro** (`kokoro_tts.py`): `KPipeline` is created once per process (`functools.cache` on `_pipeline()`, so it runs on the GPU when CUDA is available and is not reloaded per job). Voice: `KOKORO_VOICE` (default `af_heart`). Tests clear the cache in `conftest.py`.
@@ -379,7 +395,7 @@ async def generate_audio(
 |------|----------|
 | `scene.py` | Complete Manim Python source |
 | `voiceover.wav` | Concatenated TTS audio for all segments (at final speed) |
-| `segments.json` | `[{"text": str, "actual_duration_sec": float}]`, post-speed actual durations |
+| `segments.json` | `[{"text": str, "actual_duration_sec": float, "cues": [float], "cue_text"?: str}]`, post-speed actual durations and cue-marker times (seconds from the segment start) |
 | `script.txt` | Full narration script |
 | `manifest.json` | `{run_id, scene_class_name, quality, topic, title, effort, audience, tone, theme, template, speed}`; `quality` is `state["quality"] or MANIM_QUALITY` |
 
@@ -526,7 +542,7 @@ Current `JobStore` is in-memory (jobs are lost on restart). Auth is not implemen
 
 ```bash
 pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
-pytest                        # 590 tests (with Manim + TeX installed)
+pytest                        # 634 tests (with Manim + TeX installed)
 pytest tests/test_graph.py    # one file
 ```
 
