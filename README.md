@@ -84,12 +84,12 @@ Plus system packages: a TeX distribution with `latex` and `dvisvgm`, ffmpeg, cai
 **Ubuntu / Debian:**
 ```bash
 sudo apt install texlive texlive-latex-extra texlive-fonts-extra texlive-science lmodern cm-super \
-  dvisvgm ffmpeg libcairo2-dev libpango1.0-dev pkg-config fonts-inter
+  dvisvgm ffmpeg libcairo2-dev libpango1.0-dev pkg-config fonts-cmu
 ```
 
-**macOS** (untested): install [MacTeX](https://tug.org/mactex/), or BasicTeX plus the LaTeX packages the house preamble uses (the `tlmgr install` line in `docker/Dockerfile` lists them). Then `brew install ffmpeg cairo pango pkg-config` and install the Inter font.
+**macOS** (untested): install [MacTeX](https://tug.org/mactex/), or BasicTeX plus the LaTeX packages the house preamble uses (the `tlmgr install` line in `docker/Dockerfile` lists them). Then `brew install ffmpeg cairo pango pkg-config` and install the CMU Serif (Computer Modern Unicode) font.
 
-Scene text uses Inter when installed (falling back to another sans); code uses JetBrains Mono NL or DejaVu Sans Mono. Override with `CHALKBOARD_TEXT_FONT` / `CHALKBOARD_CODE_FONT`.
+Scene text uses CMU Serif when installed, so prose matches the LaTeX math (falling back to Inter, then DejaVu Sans); code uses JetBrains Mono NL or DejaVu Sans Mono. Override with `CHALKBOARD_TEXT_FONT` / `CHALKBOARD_CODE_FONT`.
 
 ### Docker rendering
 
@@ -236,7 +236,7 @@ Generated scenes are composed from a small design system that ships with the ren
 - **Components** (`chalkboard_components.py`): `ChalkBox`, `ChalkArrow`, `ChalkCode`, `Callout`, `StepCounter`, `ChalkAxis`, `ChalkAxes`, `ChalkPanel`, `ChalkBadge`, `EquationGroup`, `ChalkMatrix`, `NetworkNode`, plus `math_tex()` / `tex()`.
 - **Moves** (`chalkboard_moves.py`): named animation patterns such as `reveal_with_emphasis`, `compare_split`, `progressive_step`, `derivation_step`, `emphasize_term`.
 - **Templates** (`chalkboard_templates/`): whole-scene choreographies the agent fills with data.
-- **House style** (`chalkboard_style.py`): one LaTeX preamble for all math (amsmath, mathtools, siunitx, cancel, ... and macros such as `\R`, `\E`, `\dd`, `\Var`, `\argmax`), Inter for text, a ligature-free monospace for code.
+- **House style** (`chalkboard_style.py`): one LaTeX preamble for all math (amsmath, mathtools, siunitx, cancel, ... and macros such as `\R`, `\E`, `\dd`, `\Var`, `\argmax`), CMU Serif for text (Computer Modern, matching the math), a ligature-free monospace for code.
 
 Math is always typeset with LaTeX, and the narration says it in words ("x squared", "the derivative of f with respect to x") so the voice never reads symbols aloud.
 
@@ -383,7 +383,7 @@ All settings can be set in `.env` or as environment variables (see `.env.example
 | `SERVER_HOST`             | `127.0.0.1`                           | Server bind address (overridden by `--host`)               |
 | `SERVER_PORT`             | `8000`                                | Server port (overridden by `--port`)                       |
 | `MAX_CONCURRENT_JOBS`     | `3`                                   | Server jobs that run at once; the rest wait their turn     |
-| `CHALKBOARD_TEXT_FONT`    | Inter if installed                    | Font family for scene text                                 |
+| `CHALKBOARD_TEXT_FONT`    | CMU Serif, else Inter                | Font family for scene text                                 |
 | `CHALKBOARD_CODE_FONT`    | JetBrains Mono NL, else DejaVu Sans Mono | Font family for code (use a ligature-free face)         |
 
 ---
