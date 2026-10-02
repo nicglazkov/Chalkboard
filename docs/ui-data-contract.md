@@ -20,7 +20,7 @@ Every event carries `ts` (server ISO time). Existing pipeline node events stay a
    "animation": int|null, "animations": int|null}}` parsed live from the renderer's output
    (Manim "Animation N" lines and a `CB_SEGMENT n` line ChalkboardSceneBase prints at each segment start).
    Also `{"status": "done"|"failed"}` at the end.
-- `{"node": "tts", "updates": {"status": "running"|"done", "segments_done": int, "segments": int, "chars": int}}`
+- `{"node": "tts", "updates": {"status": "running"|"done"|"failed", "segments_done": int, "segments": int, "chars": int}}`
 
 ## Job resource (`GET /api/jobs/{id}`)
 Adds `totals: {"input_tokens", "output_tokens", "web_searches", "cost_usd"|null, "tts_chars"|null}`
@@ -63,3 +63,71 @@ Samples are real TTS output of one fixed sentence, generated on first request an
 ## Estimate (`GET /api/estimate?effort=&quality=&narrator=&research=`)
 `{"based_on_runs": int, "median_seconds"|null, "p25_seconds"|null, "p75_seconds"|null, "median_cost_usd"|null}`
 from finished runs with matching settings (fall back to same quality only); fewer than 3 runs => nulls.
+
+## Backend notes (implemented 2026-10-02; additive unless marked CHANGED)
+Fields beyond the shapes above are extra and safe to ignore.
+
+**Events.** SSE now fans out to every subscriber and first replays the stored events
+(`?replay=0` skips the replay). `job.events` keeps only the latest `peek` per stage (each carries
+the full text); the SSE stream delivers every one. Between `peek`s with growing text there can be a
+long silence while Claude thinks; a retried call starts its text from empty again.
+`usage` may add `cache_tokens` (then `cost_usd` is `null`: no cache rates assumed). Calls that fail
+before returning a response are not counted (their usage is never reported).
+`render`: `segment` = 0-based index of the segment being rendered (`CB_SEGMENT`), `segments` =
+`len(segments.json)`, `animation` = Manim's current animation number (1-based); `animations` is
+always `null` (the total is not known until the render ends: loops, templates and waits add
+animations). The first `render` event of a job has all four `null`. QA re-renders emit more
+`render` running events inside the `visual_qa` phase. `tts.chars` = characters of narration text
+synthesized so far.
+
+**Job resource** adds `totals.claude_calls`, `audience`, `tone`, `theme`, `speed`, `started_at`,
+`finished_at`. With no Claude call yet, tokens are 0 and `cost_usd` 0 (nothing spent).
+
+**run_stats.json** also has `run_id`, `total_seconds`, `claude_calls`, `research` (bool; `null` on
+a resumed run), `source` ("cli"|"server"), `resumed` (CLI `--run-id`: stats cover that invocation
+only; if the run already has a record, the resumed one is appended to its `later_invocations`
+instead of replacing it; resumed records are excluded from estimates and timings). `stage_seconds` keys are graph node names
+plus `render`, `visual_qa`, `quiz`.
+
+**Timeline**: `label` = segment text (first ~80 chars). `waveform` peaks are normalized to the
+loudest peak in the file (1.0 = loudest moment); cached as `waveform.json` in the run dir.
+`rendered_segments` = all segments once `final.mp4` exists; for a live job, the index of the
+segment being rendered (segments before it are done); `null` when unknown.
+
+**Quality**: `sync` only from a `layout_report.json` written by a real render (`mode: "render"`;
+older reports are attributed by file times, else `sync` is `null`). `lag_s` = renderer time when
+the cued animation started minus the word's TTS time (>= 0; the scene waits for early cues), not a
+pixel measurement. Cue entries add `spoken_at_s`, `visual_at_s`; `sync.evidence` explains the
+source. `layout` adds `source` ("render"|"dry_run"|null) and `evidence`. `visual_qa` adds `attempts`.
+`GET /api/library/{run_id}/stats` returns `{"run_stats": {...}|null}`.
+
+**Stats**: `videos_this_week` = rolling 7 days by `created_at`; adds `sync_cues` (cue count behind
+the median). `median_run_seconds` uses successful, non-resumed runs with run_stats only.
+
+**Status**: each check has `detail` (object). Overall: `down` if claude/renderer/disk is down,
+`degraded` if any check is down/warn, `unknown` if claude/renderer/disk is unknown, else `ok`.
+Extra check `claude_status` (status.claude.com JSON API, API component). OpenAI credit cannot be
+read with an API key: `unknown` until a real synthesis (voice sample) has been attempted, then
+`ok`/`down` from that attempt. Response adds `cached` and `cache_ttl_s`.
+
+**Voices** add `voice`, `availability_reason`, `sample_cached`. `available` is `true`/`false` only
+on evidence (ElevenLabs: `GET /v1/voices/{id}`; OpenAI: last real synthesis) else `null`.
+`sample_url` is `null` only when the narrator is known unavailable.
+
+**Estimate** adds `basis` ("exact"|"same_quality"|null) and `cost_runs`; `median_cost_usd` needs
+3 runs with a known cost. Only successful, non-resumed runs with run_stats count.
+
+**Library list items** (`GET /api/library` `videos[]`, also `GET /api/library/{id}`): the stored
+row (`run_id, topic, title, created_at, duration_sec, quality, thumb_path, script, effort,
+audience, tone, theme, template, speed, status, narrator`) plus `has_run_stats`, `has_final`,
+`thumb_url`|null, `video_url`|null, `run_seconds`|null, `cost_usd`|null, `run_result`|null.
+CHANGED: `duration_sec`, `quality`, `effort`, `audience`, `tone`, `theme`, `speed` are `null` when
+the run's files do not record them (were defaulted to 0 / "medium" / ...). `duration_sec` = measured
+narration length. `created_at` = job completion (server) or `final.mp4` mtime (indexed from disk).
+`status` is always "completed" (only runs with `final.mp4` are indexed). `GET /api/library/{id}`
+also includes `run_stats`.
+
+**CHANGED `/api/meta`**: narrators have `configured` (API key set; Kokoro always) instead of
+`available`; use `/api/voices` for availability. **`/api/claude-status`** now reads the status
+page JSON API: `{"status": "operational"|"degraded"|"outage"|"unknown", "summary", "evidence",
+"incidents": [{name, status, impact, url}], "checked_at", "url"}` (no keyword guessing).

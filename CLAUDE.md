@@ -40,6 +40,10 @@ pipeline/
   retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
   context.py         collect_files, load_context_blocks, fetch_url_blocks, measure_context
   visual_qa.py       Post-render frame sampling + Claude review
+  telemetry.py       Per-run event sink (ContextVar): peek / usage / render / tts events
+  partial_json.py    extract_string_field: growing value of one field from streaming JSON
+  pricing.py         Claude list prices -> cost_usd (unknown model => None)
+  run_stats.py       run_stats.json: totals + stage timings from timestamped events
   agents/
     research_agent.py   Web research brief (Claude + web search), async
     script_agent.py     Script generation (Claude), async
@@ -80,6 +84,10 @@ server/
   library.py          VideoMeta model, LibraryStore ABC, SQLiteLibraryStore
   library_routes.py   /api/library routes + /library page routes
   upload.py           Multipart upload handling for /api/jobs/upload
+  run_data.py         Timeline (segments + voiceover peaks), quality (cue_log, layout, QA) per run
+  insights.py         /api/stats and /api/estimate from library + run_stats.json
+  status.py           /api/status probes (free endpoints only, cached 60 s, unknown when unsure)
+  voices.py           /api/voices + real, cached voice samples (output/_voice_samples/)
   static/
     index.html        Generate page (form → SSE progress → player + downloads)
     library.html      Library grid (/library)
@@ -178,7 +186,8 @@ def _after_layout_checker(state):
 
 Every agent (plus visual QA, the quiz and context measurement) talks to Claude through `pipeline/llm.py`:
 
-- **`call_json(agent, *, content, schema, system=None, max_tokens=16000, tools=None, client=None, stream=False)`**: blocking structured-output call returning `(parsed_dict, response)`. Agents run it inside `api_call_with_retry` (it is sync). `stream=True` uses `client.messages.stream(...).get_final_message()`; `manim_agent` streams because scene code is long.
+- **`call_json(agent, *, content, schema, system=None, max_tokens=16000, tools=None, client=None, stream=False)`**: blocking structured-output call returning `(parsed_dict, response)`. Agents run it inside `api_call_with_retry` (it is sync). `stream=True` uses `client.messages.stream(...).get_final_message()`; `manim_agent` streams because scene code is long. After every call it emits a `usage` event (tokens, web searches, `cost_usd` from `pipeline/pricing.py`) to the telemetry sink, if one is set. When the sink asks for peeks (`telemetry.Sink(..., peek=True)`, the server), the `script`, `fact` and `manim` agents always stream and publish `peek` events: the growing value of `script` / `feedback` / `manim_code`, read from the SDK's live text snapshot with `pipeline/partial_json.extract_string_field`, at most every `PEEK_INTERVAL` (0.25 s), then a final `done: true`. With no sink (tests, plain library use) the call path is unchanged.
+- **Telemetry** (`pipeline/telemetry.py`): a ContextVar holds the run's `Sink`; `asyncio.to_thread` copies context, so `call_json`, Kokoro and the render reader (all in worker threads) reach it. `emit(node, updates)` stamps `ts` at emission and never raises. The server's sink (`server/jobs._job_sink`) appends directly on the loop thread and via `call_soon_threadsafe` from others; the CLI's sink is a `run_stats.Recorder` (no peeks). Render progress: `ChalkboardSceneBase.begin_segment` prints `CB_SEGMENT n` in a real render, `main._render_once` parses it and Manim's `Animation N` lines into throttled `render` events (`_RenderProgress`). TTS progress: backends accept `on_segment(index, chars)`; `render_trigger` turns it into `tts` events (backends without it get one `done` event with the text length).
 - **`model_params(agent)`**: `model` from `config.agent_model(agent)`, `thinking={"type": "adaptive"}` and `output_config={"effort": agent_effort(agent)}`. Haiku models get neither thinking nor effort.
 - **`response_text(response)`**: returns the **last** text block. Current models think, so `content[0]` is often a `thinking` block (and with web search, server tool blocks come first). Never read `response.content[0].text`. Raises `ClaudeRefused` on `stop_reason == "refusal"` and `ClaudeTruncated` on `max_tokens`.
 - **`get_client(pdf=False)`**: shared client per process (`max_retries=3`, so the SDK retries 429/5xx itself); `pdf=True` adds the `pdfs-2024-09-25` beta header. `has_pdf(context_blocks)` decides.
@@ -238,7 +247,7 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - No Claude call. Timeout `TIMEOUT_LAYOUT_CHECKER` = 180s
 - Writes `scene.py` and a stub `segments.json` (estimated durations, and `cues` estimated from each marker's character position; measured `cues`/`actual_duration_sec` are kept when the segments already have them) to `output/<run_id>/`, deletes any stale `layout_report.json`, then runs `render.check_cmd(run_dir)`: a native Python dry-run (local) or `docker run ... chalkboard-render --check`. Both set `dry_run=True`, `frame_rate=1`
 - `ChalkboardSceneBase` writes `layout_report.json`: `{"passed": bool, "violations": [{type, segment, description, ...}]}`
-- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks. `sync_drift` (visuals more than the tolerance behind the narration at a segment boundary) comes from `next_segment` / `end_layout_check`. `cue_late` (a `self.cue(k)` reached more than 0.6 s after its word) and `cue_unused` (a segment with cue markers whose scene never calls `cue()`; template-driven scenes are exempt) come from the word-level sync. The report also carries `cue_log`: `[{segment, cue, spoken_at, visual_at, lag}]` for every `cue()` call
+- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks. `sync_drift` (visuals more than the tolerance behind the narration at a segment boundary) comes from `next_segment` / `end_layout_check`. `cue_late` (a `self.cue(k)` reached more than 0.6 s after its word) and `cue_unused` (a segment with cue markers whose scene never calls `cue()`; template-driven scenes are exempt) come from the word-level sync. The report also carries `cue_log`: `[{segment, cue, spoken_at, visual_at, lag}]` for every `cue()` call, and `mode`: `"render"` when a real render wrote it (it overwrites the dry-run report, and is what /api/library/{id}/quality reads for sync) or `"dry_run"`
 - Return values: passed → `code_feedback=None, layout_renderable=True`; violations → formatted feedback, `code_attempts + 1`, `layout_renderable=True`; crash, timeout, missing or unreadable report, failure to start → feedback with `layout_renderable=False` (the stderr tail is included for crashes)
 - `ChalkboardSceneBase` overrides `play()` (accumulates `run_time`, skipping `Wait` so `wait()` is not double counted) and `wait()` to measure per-segment time. Generated scenes call `self.begin_segment(n, duration=_d[n])` and `self.end_layout_check()`
 
@@ -363,6 +372,8 @@ async def generate_audio(
     segments: list[dict],   # [{"text": str, "estimated_duration_sec": float}]
     output_path: Path,      # write voiceover.wav here
     speed: float = 1.0,     # playback speed multiplier
+    *, voice=None, model=None,
+    on_segment=None,        # optional: on_segment(index, chars) as each segment finishes (live `tts` events)
 ) -> tuple[Path, list[float]] | tuple[Path, list[float], list[list[float | None]]]:
     # (wav_path, actual_durations_per_segment[, cue_times_per_segment])
 ```
@@ -399,7 +410,7 @@ Speak the clean text: `parse_cues(segment_cue_text(seg))` gives it plus the mark
 | `script.txt` | Full narration script |
 | `manifest.json` | `{run_id, scene_class_name, quality, topic, title, effort, audience, tone, theme, template, speed}`; `quality` is `state["quality"] or MANIM_QUALITY` |
 
-Written later by `main.py`: `layout_report.json` (layout_checker, before render_trigger), `media/` or `media_preview/` (Manim output), `captions.srt` and `chapters.txt` (`_generate_caption_files`, before the merge), `final.mp4` or `preview.mp4`, `thumb.jpg` (`_extract_thumbnail`), `qa_frames/` (visual QA), `quiz.json` (`--quiz`).
+Written later by `main.py`: `layout_report.json` (layout_checker, before render_trigger), `run_stats.json` (every CLI and server run: timings, tokens, cost, TTS chars, settings, result; `pipeline/run_stats.py`), `qa_report.json` (latest visual QA result + `history`, `main._save_qa_report`), `waveform.json` (cached peak envelope, written by the timeline endpoint), `media/` or `media_preview/` (Manim output), `captions.srt` and `chapters.txt` (`_generate_caption_files`, before the merge), `final.mp4` or `preview.mp4`, `thumb.jpg` (`_extract_thumbnail`), `qa_frames/` (visual QA), `quiz.json` (`--quiz`).
 
 `chapters.txt` is FFMETADATA1 passed to ffmpeg as `-f ffmetadata -i chapters.txt -map_metadata 2`. `--burn-captions` adds `-vf subtitles=<path>` and switches `-c:v copy` to `libx264 -preset fast -crf 18`.
 
@@ -486,9 +497,9 @@ If a node raises, its output is not saved; the next resume re-runs that node fro
 
 ## Video Library
 
-`server/library.py`: `VideoMeta` (16 persisted fields: `run_id`, `topic`, `title`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`, `narrator`; `init()` adds the `title` / `narrator` columns to older databases; `output_files` is computed from disk), the `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
+`server/library.py`: `VideoMeta` (16 persisted fields: `run_id`, `topic`, `title`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`, `narrator`; `init()` adds the `title` / `narrator` columns to older databases; `output_files` is computed from disk; fields the run files do not record are `None`, never a default), the `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
 
-`_backfill(store, output_dir)` (`server/app.py`) indexes every `output/` directory with `manifest.json` and `final.mp4` at startup and, throttled to once per 10 s, on `GET /api/library` so CLI runs show up without a restart (idempotent; file mtime as `created_at`; fills `narrator` on older rows). Consequence: `DELETE /api/library/{id}` without `?files=true` is undone by the next listing, because the files are still there; the web UI always deletes with `files=true`. Old manifests missing fields are read with `.get(field, default)`.
+`_backfill(store, output_dir)` (`server/app.py`) indexes every `output/` directory with `manifest.json` and `final.mp4` at startup and, throttled to once per 10 s, on `GET /api/library` so CLI runs show up without a restart (idempotent; `final.mp4` mtime as `created_at`; at startup `refresh=True` also re-reads indexed runs and corrects rows that older code filled with defaults). Consequence: `DELETE /api/library/{id}` without `?files=true` is undone by the next listing, because the files are still there; the web UI always deletes with `files=true`. Old manifests missing fields give `None` (shown as unknown). List items add `has_run_stats`, `has_final`, `thumb_url`, `video_url`, `run_seconds`, `cost_usd`, `run_result` (`library_routes._list_item`).
 
 Routes: `make_library_router(store)` (`GET/DELETE /api/library...`) and `make_pages_router()` (`/library`, `/library/{run_id}`).
 
@@ -504,7 +515,7 @@ python run_server.py --reload         # dev (kills in-flight jobs on reload)
 
 - **`server/app.py`**: `create_app(...)` factory, mounts `server/static/` at `/`, library init + backfill in the `lifespan` handler. Module-level `app` for uvicorn.
 - **`server/jobs.py`**: `Job` dataclass (status, events, output_files, async queue, pipeline params including `quality`), in-memory `JobStore`, `run_job(job, output_dir, library_store)` which waits on a module-level `asyncio.Semaphore(MAX_CONCURRENT_JOBS)` (default 3) and then runs pipeline + render + QA + quiz, `_do_render(run_id, burn_captions)`.
-- **`server/routes.py`**: `make_router(store, library_store)`. Job tasks are created with `_spawn()`, which keeps a strong reference in `_running_tasks` (the event loop only holds weak references, so an unreferenced task can be garbage-collected mid-run). `/api/claude-status` parses the Claude status RSS with a 5-minute cache. `/api/meta` returns server defaults, the narrators (with `available` = API key present, Kokoro always), the resolved render backend, `CLAUDE_MODEL` and the count of pending/running jobs. The multipart upload route builds a `CreateJobRequest` from its form fields first, so it validates (422) exactly like the JSON route before any file is saved.
+- **`server/routes.py`**: `make_router(store, library_store)`. Job tasks are created with `_spawn()`, which keeps a strong reference in `_running_tasks` (the event loop only holds weak references, so an unreferenced task can be garbage-collected mid-run). `/api/claude-status` reads the status.claude.com JSON API (API component state, open incidents). `/api/meta` returns server defaults, the narrators (with `configured` = API key present, Kokoro always; availability is `/api/voices`), the resolved render backend, `CLAUDE_MODEL` and the count of pending/running jobs. The multipart upload route builds a `CreateJobRequest` from its form fields first, so it validates (422) exactly like the JSON route before any file is saved.
 - **`server/models.py`**: `CreateJobRequest` (topic, effort, audience, tone, theme, template, speed, burn_captions, quiz, urls, github, qa_density, quality), `JobResponse` (id, status, topic, events, error, output_files). The multipart upload route takes the same fields as form fields (`quality=""` means default).
 - **Frontend:** `index.html`, `library.html` and `video.html` each load `/app.css` and `/app.js` in `<head>`. `app.js` exposes helpers on `window.CB`, renders the nav (Generate / Library tabs, Claude status, jobs menu, theme toggle) and the `window.jobStatus` store. No build step. (`job-status.js` was removed; its role moved into `app.js`.)
 
@@ -514,10 +525,21 @@ python run_server.py --reload         # dev (kills in-flight jobs on reload)
 | `POST` | `/api/jobs/upload` | Create job with multipart file uploads |
 | `GET` | `/api/jobs` | List jobs |
 | `GET` | `/api/jobs/{id}` | Get job (404 if missing) |
-| `GET` | `/api/jobs/{id}/events` | SSE stream, one event per node update, then `{"done": true}` |
+| `GET` | `/api/jobs/{id}/events` | SSE stream: replays stored events (`?replay=0` to skip), then node updates and live telemetry (`peek`, `usage`, `render`, `tts`), then `{"done": true}` |
 | `GET` | `/api/jobs/{id}/files/{filename}` | Serve an output file (path-traversal-safe; also works for library runs) |
 | `GET` | `/api/claude-status` | Claude status summary |
-| `GET` | `/api/meta` | Defaults, narrators + availability, render backend, model, running jobs |
+| `GET` | `/api/meta` | Defaults, narrators + `configured` (key set), render backend, model, running jobs |
+| `GET` | `/api/jobs/{id}/timeline` | Segments, measured durations, cues, waveform, rendered segments |
+| `GET` | `/api/library/{id}/timeline` | Same, for a finished run |
+| `GET` | `/api/library/{id}/quality` | Sync (render cue_log), layout report, visual QA |
+| `GET` | `/api/library/{id}/stats` | The run's run_stats.json (or null) |
+| `GET` | `/api/stats` | Library-wide measured stats |
+| `GET` | `/api/status` | Live health checks with evidence (cached 60 s) |
+| `GET` | `/api/voices` | Narrators + evidence-based availability |
+| `GET` | `/api/voices/{id}/sample` | Real TTS sample (cached; 503 with the reason on failure) |
+| `GET` | `/api/estimate` | Time/cost percentiles from matching finished runs (>= 3) |
+
+The UI data contract (event shapes, endpoints, null rules) is `docs/ui-data-contract.md`: every value is measured or computed from run files, or null.
 
 Lifecycle: `pending → running → completed | failed`. `job.error` is set when the pipeline raises or the render fails (`"render failed; pipeline output preserved"`). `run_job` fetches URL/GitHub context, forwards `burn_captions` and `quality`, skips QA for `qa_density="zero"` or a failed render, and runs the quiz independently of render success.
 

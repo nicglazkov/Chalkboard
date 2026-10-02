@@ -2,11 +2,8 @@
 from __future__ import annotations
 import asyncio
 import json
-import re
 import shutil
 import tempfile
-import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -21,85 +18,8 @@ from server.upload import (
     validate_and_save,
     FileSizeError, TotalSizeError, UnsupportedFileTypeError,
 )
+from server import insights, run_data, status as status_mod, voices as voices_mod
 
-# ── Claude status cache ──────────────────────────────────────────────────────
-_claude_status_cache: dict | None = None
-_claude_status_ts: float = 0
-_CACHE_TTL = 300  # 5 minutes
-
-# Keywords that indicate an incident may affect the Chalkboard pipeline
-_API_KEYWORDS = re.compile(
-    r"api|sonnet|messages|claude\.ai|elevated.+error|outage|degraded|inference",
-    re.IGNORECASE,
-)
-
-
-async def _fetch_claude_status() -> dict:
-    """Fetch and parse Claude status RSS, with 5-minute cache."""
-    global _claude_status_cache, _claude_status_ts
-
-    now = time.time()
-    if _claude_status_cache and (now - _claude_status_ts) < _CACHE_TTL:
-        return _claude_status_cache
-
-    def _fetch_rss():
-        import httpx
-        return httpx.get("https://status.claude.com/history.rss", timeout=10)
-
-    try:
-        resp = await asyncio.to_thread(_fetch_rss)
-        resp.raise_for_status()
-    except Exception:
-        return {"status": "unknown", "incidents": [],
-                "url": "https://status.claude.com"}
-
-    try:
-        root = ET.fromstring(resp.text)
-    except ET.ParseError:
-        return {"status": "unknown", "incidents": [],
-                "url": "https://status.claude.com"}
-
-    incidents = []
-    for item in root.findall(".//item")[:10]:
-        title = item.findtext("title", "")
-        desc_raw = item.findtext("description", "")
-        link = item.findtext("link", "")
-        pub_date = item.findtext("pubDate", "")
-
-        # Parse the latest status from the description HTML
-        # First <strong> tag contains the most recent status
-        status_match = re.search(r"<strong>(\w+)</strong>", desc_raw)
-        latest_status = status_match.group(1) if status_match else "Unknown"
-
-        # Check relevance to the API pipeline
-        relevant = bool(_API_KEYWORDS.search(title) or _API_KEYWORDS.search(desc_raw))
-
-        incidents.append({
-            "title": title,
-            "status": latest_status,
-            "link": link,
-            "pub_date": pub_date,
-            "relevant": relevant,
-        })
-
-    # Determine overall status
-    active_relevant = [i for i in incidents
-                       if i["relevant"] and i["status"] != "Resolved"]
-    if any(i["status"] in ("Investigating", "Identified") for i in active_relevant):
-        overall = "outage"
-    elif any(i["status"] == "Monitoring" for i in active_relevant):
-        overall = "degraded"
-    else:
-        overall = "operational"
-
-    result = {
-        "status": overall,
-        "incidents": [i for i in incidents if i["relevant"]][:5],
-        "url": "https://status.claude.com",
-    }
-    _claude_status_cache = result
-    _claude_status_ts = now
-    return result
 
 def _job_to_response(job: Job) -> JobResponse:
     return JobResponse(
@@ -112,6 +32,9 @@ def _job_to_response(job: Job) -> JobResponse:
         effort=job.effort, quality=job.quality, narrator=job.narrator,
         qa_density=job.qa_density, quiz=job.quiz, burn_captions=job.burn_captions,
         template=job.template,
+        audience=job.audience, tone=job.tone, theme=job.theme, speed=job.speed,
+        totals=job.totals(),
+        started_at=job.started_at, finished_at=job.finished_at,
     )
 
 
@@ -207,10 +130,12 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         from pipeline import render as _render_backend
         from pipeline.tts.voices import NARRATORS
         keys = {"elevenlabs": "ELEVENLABS_API_KEY", "openai": "OPENAI_API_KEY"}
+        # `configured` = the backend's API key is set (Kokoro needs none). It is
+        # not a claim that the voice works: /api/voices probes availability.
         narrators = [
             {"id": nid, "label": spec["label"], "tagline": spec["tagline"], "backend": spec["backend"],
              "model": spec["model"],
-             "available": spec["backend"] == "kokoro" or bool(os.getenv(keys.get(spec["backend"], ""), ""))}
+             "configured": spec["backend"] == "kokoro" or bool(os.getenv(keys.get(spec["backend"], ""), ""))}
             for nid, spec in NARRATORS.items()
         ]
         return {
@@ -242,13 +167,13 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         return _job_to_response(job)
 
     @router.get("/jobs/{job_id}/events")
-    async def job_events(job_id: str):
+    async def job_events(job_id: str, replay: bool = True):
         job = store.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
 
         async def generator():
-            async for event in job.event_stream():
+            async for event in job.event_stream(replay=replay):
                 yield {"data": json.dumps(event)}
             yield {"data": json.dumps({"done": True})}
 
@@ -256,7 +181,57 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
 
     @router.get("/claude-status")
     async def claude_status():
-        return await _fetch_claude_status()
+        """Anthropic's status page, read from its JSON API (no keyword guessing)."""
+        c = await asyncio.to_thread(status_mod.check_claude_status_page)
+        label = {"ok": "operational", "warn": "degraded", "down": "outage"}.get(c["state"], "unknown")
+        return {"status": label, "summary": c["summary"], "evidence": c["evidence"],
+                "incidents": c["detail"].get("open_incidents", []), "checked_at": c["checked_at"],
+                "url": "https://status.claude.com"}
+
+    @router.get("/jobs/{job_id}/timeline")
+    async def job_timeline(job_id: str):
+        job = store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        run_dir = Path(OUTPUT_DIR).resolve() / job.id
+        return await asyncio.to_thread(run_data.job_timeline, run_dir, list(job.events))
+
+    @router.get("/status")
+    async def service_status():
+        return await status_mod.status(store, Path(OUTPUT_DIR).resolve())
+
+    @router.get("/voices")
+    async def list_voices():
+        return await voices_mod.list_voices(Path(OUTPUT_DIR).resolve())
+
+    @router.get("/voices/{narrator}/sample")
+    async def voice_sample(narrator: str):
+        from pipeline.tts.voices import NARRATORS
+        if narrator not in NARRATORS:
+            raise HTTPException(status_code=404, detail="Unknown narrator")
+        try:
+            path = await voices_mod.get_sample(Path(OUTPUT_DIR).resolve(), narrator)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=f"sample synthesis failed: {e}")
+        return FileResponse(str(path), media_type="audio/wav")
+
+    @router.get("/stats")
+    async def stats():
+        if library_store is None:
+            raise HTTPException(status_code=503, detail="library not configured")
+        videos, _ = await library_store.list_videos(limit=100000)
+        return await asyncio.to_thread(insights.stats, videos, Path(OUTPUT_DIR).resolve())
+
+    @router.get("/estimate")
+    async def estimate(effort: str | None = None, quality: str | None = None,
+                       narrator: str | None = None, research: bool | None = None):
+        out = Path(OUTPUT_DIR).resolve()
+
+        def _compute():
+            run_ids = [p.name for p in out.iterdir() if (p / "run_stats.json").is_file()] if out.is_dir() else []
+            return insights.estimate(out, run_ids, effort=effort or None, quality=quality or None,
+                                     narrator=narrator or None, research=research)
+        return await asyncio.to_thread(_compute)
 
     @router.get("/jobs/{job_id}/files/{filename}")
     async def get_file(job_id: str, filename: str):

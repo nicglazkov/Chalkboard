@@ -10,16 +10,16 @@ class VideoMeta(BaseModel):
     topic: str
     title: str = ""                        # AI-generated title; falls back to topic if empty
     created_at: str                        # ISO8601 UTC e.g. "2026-04-07T10:00:00Z"
-    duration_sec: float = 0.0
-    quality: str = "medium"               # low / medium / high
+    duration_sec: float | None = None     # measured narration length; None = not recorded
+    quality: str | None = None            # low / medium / high / 4k; None = not recorded
     thumb_path: str | None = None         # relative path; None = CSS fallback
     script: str = ""
-    effort: str = "medium"
-    audience: str = "intermediate"
-    tone: str = "casual"
-    theme: str = "chalkboard"
+    effort: str | None = None             # None = not recorded (old manifests)
+    audience: str | None = None
+    tone: str | None = None
+    theme: str | None = None
     template: str | None = None
-    speed: float = 1.0
+    speed: float | None = None
     status: str = "completed"
     narrator: str | None = None           # pipeline/tts/voices.py name, or backend for legacy runs
     output_files: list[str] = Field(default_factory=list)
@@ -75,8 +75,8 @@ _ROW_KEYS = (
 _SORT_MAP = {
     "newest":   "created_at DESC",
     "oldest":   "created_at ASC",
-    "longest":  "duration_sec DESC",
-    "shortest": "duration_sec ASC",
+    "longest":  "duration_sec IS NULL, duration_sec DESC",  # unknown durations last
+    "shortest": "duration_sec IS NULL, duration_sec ASC",
 }
 
 

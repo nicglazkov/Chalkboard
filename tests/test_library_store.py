@@ -12,8 +12,9 @@ def test_video_meta_instantiation():
         created_at="2026-04-07T10:00:00Z",
     )
     assert meta.run_id == "abc-123"
-    assert meta.duration_sec == 0.0
-    assert meta.quality == "medium"
+    # Unrecorded values stay unknown rather than defaulting to a plausible guess.
+    assert meta.duration_sec is None
+    assert meta.quality is None
     assert meta.thumb_path is None
     assert meta.output_files == []
 

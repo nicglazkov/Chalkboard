@@ -36,3 +36,12 @@ class JobResponse(BaseModel):
     quiz: bool = False
     burn_captions: bool = False
     template: str | None = None
+    audience: str | None = None
+    tone: str | None = None
+    theme: str | None = None
+    speed: float | None = None
+    # Summed from this job's `usage` and `tts` events (see pipeline/run_stats.totals);
+    # cost_usd is None if any call had an unknown price, tts_chars None before TTS finished.
+    totals: dict | None = None
+    started_at: str | None = None
+    finished_at: str | None = None

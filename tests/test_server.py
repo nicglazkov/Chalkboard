@@ -225,7 +225,8 @@ def test_meta_reports_defaults_and_narrators():
     assert {"quality", "narrator", "effort"} <= set(data["defaults"])
     ids = {n["id"] for n in data["narrators"]}
     assert {"aria", "milo", "kokoro"} <= ids
-    assert next(n for n in data["narrators"] if n["id"] == "kokoro")["available"] is True
+    # `configured` (key set), not a claim the voice works: /api/voices probes that.
+    assert next(n for n in data["narrators"] if n["id"] == "kokoro")["configured"] is True
 
 
 @pytest.mark.parametrize("field,value", [
