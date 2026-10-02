@@ -28,7 +28,16 @@ async def _backfill(store: LibraryStore, output_dir: Path) -> None:
         if not manifest_path.exists() or not final_mp4.exists():
             continue
         run_id = run_dir.name
-        if await store.get_video(run_id) is not None:
+        existing = await store.get_video(run_id)
+        if existing is not None:
+            # Rows indexed before the narrator column existed: fill it in once.
+            if existing.narrator is None:
+                try:
+                    narrator = json.loads(manifest_path.read_text()).get("narrator")
+                except Exception:
+                    narrator = None
+                if narrator:
+                    await store.add_video(existing.model_copy(update={"narrator": narrator}))
             continue
         try:
             manifest = json.loads(manifest_path.read_text())
@@ -57,6 +66,7 @@ async def _backfill(store: LibraryStore, output_dir: Path) -> None:
                 template=manifest.get("template"),
                 speed=float(manifest.get("speed", 1.0)),
                 status="completed",
+                narrator=manifest.get("narrator"),
             )
             await store.add_video(meta)
         except Exception as e:

@@ -243,6 +243,7 @@ async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
                     template=job.template,
                     speed=job.speed,
                     status="completed",
+                    narrator=(manifest_data.get("narrator") if manifest_path.exists() else None),
                 )
                 await library_store.add_video(meta)
             except Exception as e:

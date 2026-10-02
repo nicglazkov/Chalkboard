@@ -21,6 +21,7 @@ class VideoMeta(BaseModel):
     template: str | None = None
     speed: float = 1.0
     status: str = "completed"
+    narrator: str | None = None           # pipeline/tts/voices.py name, or backend for legacy runs
     output_files: list[str] = Field(default_factory=list)
 
 
@@ -60,14 +61,15 @@ CREATE TABLE IF NOT EXISTS videos (
     theme        TEXT DEFAULT 'chalkboard',
     template     TEXT,
     speed        REAL DEFAULT 1.0,
-    status       TEXT DEFAULT 'completed'
+    status       TEXT DEFAULT 'completed',
+    narrator     TEXT
 )
 """
 
 _ROW_KEYS = (
     "run_id", "topic", "title", "duration_sec", "quality", "created_at",
     "thumb_path", "script", "effort", "audience", "tone",
-    "theme", "template", "speed", "status",
+    "theme", "template", "speed", "status", "narrator",
 )
 
 _SORT_MAP = {
@@ -92,10 +94,12 @@ class SQLiteLibraryStore(LibraryStore):
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(_CREATE_TABLE)
             # Migrate: add title column to existing DBs that predate it
-            try:
-                await db.execute("ALTER TABLE videos ADD COLUMN title TEXT DEFAULT ''")
-            except Exception:
-                pass  # column already exists
+            for ddl in ("ALTER TABLE videos ADD COLUMN title TEXT DEFAULT ''",
+                        "ALTER TABLE videos ADD COLUMN narrator TEXT"):
+                try:
+                    await db.execute(ddl)
+                except Exception:
+                    pass  # column already exists
             await db.commit()
 
     async def add_video(self, meta: VideoMeta) -> None:
@@ -104,13 +108,13 @@ class SQLiteLibraryStore(LibraryStore):
                 """INSERT OR REPLACE INTO videos
                    (run_id, topic, title, duration_sec, quality, created_at,
                     thumb_path, script, effort, audience, tone,
-                    theme, template, speed, status)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    theme, template, speed, status, narrator)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     meta.run_id, meta.topic, meta.title, meta.duration_sec, meta.quality,
                     meta.created_at, meta.thumb_path, meta.script,
                     meta.effort, meta.audience, meta.tone, meta.theme,
-                    meta.template, meta.speed, meta.status,
+                    meta.template, meta.speed, meta.status, meta.narrator,
                 ),
             )
             await db.commit()
