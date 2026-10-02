@@ -16,3 +16,5 @@ docs/superpowers/
 .superpowers/media/
 docker/media/
 bench/
+.venv/
+.pytest_cache/

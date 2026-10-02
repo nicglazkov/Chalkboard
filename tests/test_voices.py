@@ -17,7 +17,6 @@ def test_unknown_narrator_is_rejected():
 
 
 def test_every_narrator_names_a_real_backend():
-    from pipeline.tts.base import get_backend
     for spec in voices.NARRATORS.values():
         assert spec["backend"] in ("kokoro", "elevenlabs", "openai")
 

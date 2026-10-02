@@ -19,7 +19,7 @@ except ImportError:
     from docker.chalkboard_components import EquationGroup  # noqa: F401
     from docker.chalkboard_moves import _on_screen, derivation_step, emphasize_term
 
-from manim import FadeIn, FadeOut, UP, VGroup
+from manim import FadeIn, FadeOut, UP
 
 _MAX_W = 12.4
 _BOTTOM_Y = -2.7   # derivation stays above the caption band

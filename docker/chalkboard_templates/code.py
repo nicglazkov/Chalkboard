@@ -25,7 +25,7 @@ except ImportError:
         reveal_with_emphasis, annotate_and_pause,
     )
 
-from manim import DOWN, FadeOut, LaggedStart, LEFT, RIGHT, UP
+from manim import FadeOut, LaggedStart, LEFT, RIGHT, UP
 
 # Code occupies the LEFT zone: its right edge must stay < -0.5 so callouts
 # in the right column never collide with it.
