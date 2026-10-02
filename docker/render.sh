@@ -37,6 +37,7 @@ if [ ! -f "$MANIFEST" ]; then
   exit 1
 fi
 
+export CHALKBOARD_REPORT_DIR="$RUN_DIR"
 SCENE_CLASS=$(python3 -c "import json,sys; d=json.load(open('${MANIFEST}')); print(d['scene_class_name'])")
 QUALITY=$(python3 -c "import json,sys; d=json.load(open('${MANIFEST}')); print(d.get('quality','medium'))")
 
@@ -44,6 +45,7 @@ case "$QUALITY" in
   low)    QUALITY_FLAG="-ql"; SUBDIR="480p15" ;;
   medium) QUALITY_FLAG="-qm"; SUBDIR="720p30" ;;
   high)   QUALITY_FLAG="-qh"; SUBDIR="1080p60" ;;
+  4k)     QUALITY_FLAG="-qk"; SUBDIR="2160p60" ;;
   *)      QUALITY_FLAG="-qm"; SUBDIR="720p30" ;;
 esac
 
