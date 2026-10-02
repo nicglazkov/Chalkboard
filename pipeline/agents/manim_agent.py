@@ -44,6 +44,7 @@ STRICT REQUIREMENTS:
     _d = _d + [2.0] * max(0, N - len(_d))
   Replace N with the exact integer from "Total segments: N" in the request.
 - Never hardcode a float literal as the argument to self.wait() — always use _d[i]
+- On-screen text never uses em dashes (—); use a colon, comma or parentheses.
 - IMPORTANT: self.wait(0) raises ValueError — Manim requires duration > 0. Always guard
   computed waits (if _w > 0.05: self.wait(_w)); NEVER write self.wait(max(0.0, ...)).
 

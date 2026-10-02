@@ -118,6 +118,17 @@ def _flatten_plain_groups(mobjects: list) -> list:
     return out
 
 
+def _has_round_trip(animations) -> bool:
+    """True if any animation must return to its start (its own rate_func matters)."""
+    try:
+        from manim import (ApplyWave, Circumscribe, Flash, FocusOn, Indicate,
+                           ShowPassingFlash, Wiggle)
+    except ImportError:
+        return False
+    kinds = (Indicate, Wiggle, Circumscribe, Flash, FocusOn, ApplyWave, ShowPassingFlash)
+    return any(isinstance(a, kinds) for a in animations)
+
+
 class ChalkboardSceneBase:
     """
     Validation mixin for ChalkboardScene. No Manim parent — use as:
@@ -230,6 +241,11 @@ class ChalkboardSceneBase:
         )
         if run_time is not None:
             kwargs["run_time"] = run_time
+        if "rate_func" in kwargs and _has_round_trip(animations):
+            # Indicate/Wiggle/Circumscribe/Flash... rely on their own
+            # there-and-back rate_func; a scene-wide ease (resolve_motion)
+            # would freeze the object in its highlighted state.
+            kwargs.pop("rate_func")
         result = super().play(*animations, **kwargs)
         if not is_internal_wait:
             # Manim records the real run time of the last play() in self.duration
