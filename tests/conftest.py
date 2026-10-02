@@ -49,3 +49,9 @@ def _fresh_llm_clients():
     yield
     llm._clients.clear()
     kokoro_tts._pipeline.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_default_narrator(monkeypatch):
+    """Tests must not inherit a NARRATOR from the developer's .env."""
+    monkeypatch.setattr("pipeline.render_trigger.NARRATOR", "")

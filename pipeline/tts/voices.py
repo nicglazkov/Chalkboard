@@ -6,8 +6,9 @@ Leaving it unset keeps the legacy behaviour: TTS_BACKEND with that backend's
 default voice.
 
 The ElevenLabs voices came out of a blind listening test (April 2026) across
-OpenAI, Fish, ElevenLabs and Gemini; voice ids are pinned because the
-ElevenLabs library can rename voices.
+OpenAI, Fish, ElevenLabs and Gemini, then a v4 vs v3 audition (October 2026)
+that kept Aria (Skye) and Milo (Bradley) on eleven_v4. Voice ids are pinned
+because the ElevenLabs library can rename voices.
 """
 from __future__ import annotations
 
@@ -34,10 +35,6 @@ NARRATORS: dict[str, NarratorSpec] = {
                "label": "Aria", "tagline": "Young, bright female with a little nerdy charm (Skye)."},
     "milo":   {"backend": "elevenlabs", "voice": "RexqLjNzkCjWogguKyff", "model": _ELEVEN_MODEL,
                "label": "Milo", "tagline": "Earnest male narrator (Bradley)."},
-    "reid":   {"backend": "elevenlabs", "voice": "yr43K8H5LoTp6S1QFSGg", "model": _ELEVEN_MODEL,
-               "label": "Reid", "tagline": "Natural conversational male (Matt)."},
-    "grace":  {"backend": "elevenlabs", "voice": "WQhVGGVQ8EhNpBYHFE8c", "model": _ELEVEN_MODEL,
-               "label": "Grace", "tagline": "Warm, clear female (Layla)."},
     # OpenAI (needs OPENAI_API_KEY)
     "alloy":  {"backend": "openai", "voice": "alloy", "model": "gpt-4o-mini-tts",
                "label": "Alloy", "tagline": "OpenAI gpt-4o-mini-tts."},

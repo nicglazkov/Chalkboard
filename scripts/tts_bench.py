@@ -38,8 +38,8 @@ SCRIPT = [
 ]
 
 DEFAULT_TAKES = [
-    "aria", "milo", "reid", "grace",                                   # eleven_v4
-    "aria@eleven_v3", "milo@eleven_v3", "reid@eleven_v3", "grace@eleven_v3",
+    "aria", "milo",                                   # eleven_v4
+    "aria@eleven_v3", "milo@eleven_v3",
     "kokoro",
 ]
 
