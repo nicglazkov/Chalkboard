@@ -451,9 +451,10 @@ async def _qa_regenerate_scene(
     topic = manifest["topic"]
     script = (run_dir / "script.txt").read_text()
     # segments.json carries measured durations; the prompt formatter reads estimates.
+    raw_segments = json.loads((run_dir / "segments.json").read_text())
     segments = [
         {**s, "estimated_duration_sec": s.get("actual_duration_sec", 0.0)}
-        for s in json.loads((run_dir / "segments.json").read_text())
+        for s in raw_segments
     ]
     current_code = (run_dir / "scene.py").read_text()
 
@@ -493,7 +494,16 @@ async def _qa_regenerate_scene(
     if problems:
         print(f"  [qa] regenerated scene failed static checks; keeping the current one ({problems[:200]})")
         return False
-    (run_dir / "scene.py").write_text(result["manim_code"])
+    # Headless dry-run catches runtime crashes before a full re-render. It writes
+    # scene.py + segments.json itself (segments carry the real durations here).
+    from pipeline.agents.layout_checker import layout_checker
+    check = await layout_checker({**state, "manim_code": result["manim_code"], "code_attempts": 0})
+    if not check.get("layout_renderable"):
+        print("  [qa] regenerated scene crashed in the dry-run; keeping the current one")
+        (run_dir / "scene.py").write_text(current_code)
+        (run_dir / "segments.json").write_text(json.dumps(raw_segments, indent=2))
+        return False
+    (run_dir / "segments.json").write_text(json.dumps(raw_segments, indent=2))
     return True
 
 

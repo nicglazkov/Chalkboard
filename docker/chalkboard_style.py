@@ -19,7 +19,9 @@ import os
 import shutil
 import subprocess
 
-from manim import Code, MarkupText, MathTex, Paragraph, Tex, TexTemplate, Text
+import manim
+import manim.utils.color.core as _color_core
+from manim import Code, ManimColor, MarkupText, MathTex, Paragraph, Tex, TexTemplate, Text
 
 PREAMBLE = r"""
 \usepackage[english]{babel}
@@ -77,8 +79,23 @@ TEXT_FONT = _pick("CHALKBOARD_TEXT_FONT", "Inter", "Source Sans 3", "DejaVu Sans
 CODE_FONT = _pick("CHALKBOARD_CODE_FONT", "JetBrains Mono NL", "DejaVu Sans Mono")
 
 
+_orig_interpolate_color = _color_core.interpolate_color
+
+
+def _interpolate_color(color1, color2, alpha):
+    """interpolate_color that also takes hex strings (design tokens are strings;
+    Manim 0.21 only accepts ManimColor and crashes with "'str' object has no
+    attribute 'interpolate'")."""
+    return _orig_interpolate_color(ManimColor(color1), ManimColor(color2), alpha)
+
+
 def apply() -> None:
     """Install the house defaults on Manim's text and TeX classes (idempotent)."""
+    # Scenes do `from manim import *` after importing chalkboard_base, so patching
+    # the package attribute is enough for generated code.
+    if manim.interpolate_color is not _interpolate_color:
+        manim.interpolate_color = _interpolate_color
+        _color_core.interpolate_color = _interpolate_color
     Tex.set_default(tex_template=TEX_TEMPLATE)
     MathTex.set_default(tex_template=TEX_TEMPLATE)
     if TEXT_FONT:
