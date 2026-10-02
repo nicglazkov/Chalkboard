@@ -1,4 +1,6 @@
 # pipeline/tts/kokoro_tts.py
+import functools
+import os
 import numpy as np
 import soundfile as sf
 from pathlib import Path
@@ -11,13 +13,19 @@ except ImportError:
     KPipeline = None  # type: ignore[assignment,misc]
 
 SAMPLE_RATE = 24000
-DEFAULT_VOICE = "af_heart"
+DEFAULT_VOICE = os.getenv("KOKORO_VOICE", "af_heart")
+
+
+@functools.cache
+def _pipeline():
+    """Load the model once per process (on the GPU when CUDA is available)."""
+    return KPipeline(lang_code="a")
 
 
 def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
     if KPipeline is None:
         raise ImportError("Install kokoro: pip install kokoro")
-    pipeline = KPipeline(lang_code="a")
+    pipeline = _pipeline()
     all_audio: list[np.ndarray] = []
     durations: list[float] = []
 

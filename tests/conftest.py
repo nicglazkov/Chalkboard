@@ -43,6 +43,9 @@ def mock_anthropic_client():
 def _fresh_llm_clients():
     """pipeline.llm caches clients; tests that patch anthropic.Anthropic need a fresh one."""
     from pipeline import llm
+    from pipeline.tts import kokoro_tts
     llm._clients.clear()
+    kokoro_tts._pipeline.cache_clear()
     yield
     llm._clients.clear()
+    kokoro_tts._pipeline.cache_clear()

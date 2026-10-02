@@ -2,18 +2,17 @@
 """
 layout_checker — async LangGraph node.
 
-Runs the generated scene.py headlessly in Docker (--check mode) to validate
-layout before committing to a full render. ChalkboardSceneBase writes
+Runs the generated scene.py headlessly (natively, or in Docker --check mode)
+to validate layout before committing to a full render. ChalkboardSceneBase writes
 layout_report.json to the run directory during the dry-run.
 """
 import asyncio
 import json
 from pathlib import Path
 from config import OUTPUT_DIR
+from pipeline import render as render_backend
 from pipeline.retry import TIMEOUT_LAYOUT_CHECKER
 from pipeline.state import PipelineState
-
-DOCKER_IMAGE = "chalkboard-render"
 
 
 async def layout_checker(state: PipelineState) -> dict:
@@ -22,7 +21,7 @@ async def layout_checker(state: PipelineState) -> dict:
     run_dir = Path(OUTPUT_DIR).resolve() / run_id
     report_path = run_dir / "layout_report.json"
 
-    # Write scene.py and a stub segments.json so Docker can find them.
+    # Write scene.py and a stub segments.json so the dry-run can find them.
     # render_trigger hasn't run yet, so we use estimated durations as placeholders.
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "scene.py").write_text(state["manim_code"])
@@ -35,18 +34,14 @@ async def layout_checker(state: PipelineState) -> dict:
     # Remove stale report from a previous attempt
     report_path.unlink(missing_ok=True)
 
-    cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{run_dir}:/output",
-        DOCKER_IMAGE,
-        "--check",
-    ]
+    cmd, env = render_backend.check_cmd(run_dir)
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
     except Exception as e:
         return {
@@ -71,7 +66,8 @@ async def layout_checker(state: PipelineState) -> dict:
         }
 
     if not report_path.exists():
-        stderr_text = stderr.decode(errors="replace")[:600]
+        # The traceback's tail names the failing line; the head is import noise.
+        stderr_text = stderr.decode(errors="replace")[-1500:]
         return {
             "code_feedback": (
                 "Layout check did not produce a report — scene likely crashed "

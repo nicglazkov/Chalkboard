@@ -18,6 +18,13 @@ Respond with valid JSON only:
 Title guidelines: write it like a YouTube video title — specific, descriptive, and punchy.
 Good: "AWD vs 4WD vs RWD Explained" | Bad: "what is the difference between awd 4wd and rwd?"
 Estimate duration as word_count / 2.5 seconds (~150 wpm).
+
+The narration is read aloud by a text-to-speech voice while the animation shows the
+notation. Write every piece of math and code the way a lecturer would SAY it:
+"e to the x", "x squared", "the derivative of f with respect to x", "the integral from
+zero to one", "n log n". Never put symbols, LaTeX, superscripts, slashes, equals signs or
+code syntax in the script or segment text (no "e^x", "x^2", "O(n)", "dy/dx", "a = b").
+Spell out abbreviations the first time and avoid anything a voice would mispronounce.
 Set needs_web_search to true only if the topic requires information beyond your training data."""
 
 AUDIENCE_INSTRUCTIONS = {

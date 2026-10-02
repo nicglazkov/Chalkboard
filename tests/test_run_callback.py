@@ -48,7 +48,8 @@ def test_on_progress_callback_receives_events(tmp_path):
          patch("pipeline.graph.code_validator", new=mock_code_validator), \
          patch("pipeline.graph.layout_checker", new=mock_layout_checker), \
          patch("pipeline.render_trigger.get_backend", return_value=mock_tts), \
-         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)):
+         patch("pipeline.render_trigger.OUTPUT_DIR", str(tmp_path)), \
+         patch("main.CHECKPOINT_DB", str(tmp_path / "state.db")):
 
         asyncio.run(run(
             topic="test",

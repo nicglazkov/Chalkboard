@@ -11,6 +11,13 @@ try:
 except ImportError:  # pragma: no cover
     _FATAL = ()
 
+
+def _is_fatal(e: Exception) -> bool:
+    if isinstance(e, _FATAL):
+        return True
+    # Out-of-credit 429s (OpenAI "insufficient_quota") never clear on retry.
+    return "insufficient_quota" in str(e) or "credit balance is too low" in str(e)
+
 # ---------------------------------------------------------------------------
 # Exception
 # ---------------------------------------------------------------------------
@@ -50,9 +57,9 @@ async def api_call_with_retry(fn, timeout, max_attempts=3, label="API call"):
     for attempt in range(1, max_attempts + 1):
         try:
             return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout)
-        except _FATAL as e:
-            raise TimeoutExhausted(f"{label} failed: {e}") from e
         except (asyncio.TimeoutError, Exception) as e:
+            if _is_fatal(e):
+                raise TimeoutExhausted(f"{label} failed: {e}") from e
             if attempt == max_attempts:
                 raise TimeoutExhausted(
                     f"{label} failed after {max_attempts} attempts: {e}"

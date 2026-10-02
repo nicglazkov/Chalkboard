@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -17,14 +18,13 @@ from config import CHECKPOINT_DB, DEFAULT_AUDIENCE, DEFAULT_EFFORT, DEFAULT_THEM
 from pipeline.graph import build_graph
 from pipeline.retry import TimeoutExhausted
 from pipeline.context import collect_files, load_context_blocks, measure_context
+from pipeline import render as render_backend
 
 EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
 TONE_CHOICES = ["casual", "formal", "socratic"]
 THEME_CHOICES = ["chalkboard", "light", "colorful"]
 TEMPLATE_CHOICES = ["algorithm", "code", "compare", "howto", "timeline"]
-DOCKER_IMAGE = "chalkboard-render"
-QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 
 # ---------------------------------------------------------------------------
 # Render timeout constants
@@ -32,7 +32,7 @@ QUALITY_SUBDIR = {"low": "480p15", "medium": "720p30", "high": "1080p60"}
 RENDER_TIMEOUT_BASE         = 60.0
 RENDER_TIMEOUT_PER_ANIM     = 5.0
 RENDER_TIMEOUT_AUDIO_RATIO  = 3.0
-RENDER_TIMEOUT_QUALITY_MULT = {"low": 0.5, "medium": 1.0, "high": 2.0}
+RENDER_TIMEOUT_QUALITY_MULT = {"low": 0.5, "medium": 1.0, "high": 2.0, "4k": 4.0}
 RENDER_TIMEOUT_MIN          = 90.0
 RENDER_TIMEOUT_MAX          = 1200.0
 
@@ -61,11 +61,12 @@ def _github_to_raw_url(repo: str) -> str:
 
 
 def _check_tools() -> None:
-    missing = [t for t in ("docker", "ffmpeg") if not shutil.which(t)]
+    missing = [t for t in render_backend.required_tools() if not shutil.which(t)]
     if missing:
         raise SystemExit(
             f"Missing required tools: {', '.join(missing)}\n"
-            "Install Docker from https://docker.com and ffmpeg from https://ffmpeg.org"
+            "Install ffmpeg (https://ffmpeg.org) and either a TeX distribution for local\n"
+            "rendering or Docker (https://docker.com). See README > Rendering."
         )
 
 
@@ -113,7 +114,7 @@ def _report_context(blocks: list[dict], _yes: bool = False) -> bool:
 
 
 def subprocess_with_timeout(
-    cmd: list[str], timeout: float, on_line=None
+    cmd: list[str], timeout: float, on_line=None, env: dict | None = None,
 ) -> tuple[int, collections.deque, bool]:
     """
     Run cmd as a subprocess. Kill it after `timeout` seconds.
@@ -122,7 +123,7 @@ def subprocess_with_timeout(
     """
     timed_out = [False]
     process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
     )
 
     def _kill():
@@ -173,19 +174,6 @@ def _compute_render_timeout(run_id: str, output_dir: Path) -> float:
         + audio_duration * RENDER_TIMEOUT_AUDIO_RATIO
     ) * mult
     return max(RENDER_TIMEOUT_MIN, min(RENDER_TIMEOUT_MAX, raw))
-
-
-def _ensure_docker_image() -> None:
-    result = subprocess.run(
-        ["docker", "images", "-q", DOCKER_IMAGE],
-        capture_output=True, text=True, timeout=30,
-    )
-    if not result.stdout.strip():
-        print(f"\nDocker image '{DOCKER_IMAGE}' not found — building now (one-time setup)...")
-        subprocess.run(
-            ["docker", "build", "-f", "docker/Dockerfile", "-t", DOCKER_IMAGE, "."],
-            check=True, timeout=600,
-        )
 
 
 def _count_animations(scene_path: Path) -> int:
@@ -266,14 +254,6 @@ def _parse_manim_line(line: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _docker_render_cmd(run_id: str, output_dir: Path, preview: bool = False) -> list[str]:
-    cmd = ["docker", "run", "--rm", "-v", f"{output_dir}:/output"]
-    if preview:
-        cmd += ["-e", "PREVIEW_MODE=1"]
-    cmd += [DOCKER_IMAGE, run_id]
-    return cmd
-
-
 def _extract_thumbnail(run_dir: Path) -> "Path | None":
     """Extract a JPEG thumbnail from final.mp4 at 10% of video duration.
     Returns path to thumb.jpg on success, None on any failure.
@@ -301,14 +281,18 @@ def _extract_thumbnail(run_dir: Path) -> "Path | None":
 
 def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, burn_captions: bool = False) -> Path:
     """Single render attempt. Raises RenderFailed on timeout or non-zero exit."""
-    docker_cmd = _docker_render_cmd(run_id, output_dir)
+    run_dir = output_dir / run_id
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    quality = manifest.get("quality", "medium")
+    scene_class = manifest.get("scene_class_name", "ChalkboardScene")
+    cmd, env = render_backend.render_cmd(run_dir, quality, scene_class=scene_class)
 
     if verbose:
-        returncode, _, timed_out = subprocess_with_timeout(docker_cmd, timeout)
+        returncode, _, timed_out = subprocess_with_timeout(cmd, timeout, env=env)
         if timed_out:
             raise RenderFailed(f"timed out after {timeout:.0f}s")
         if returncode != 0:
-            raise RenderFailed(f"Docker exited with code {returncode}")
+            raise RenderFailed(f"renderer exited with code {returncode}")
         video_path = None
     else:
         total_anims = _count_animations(output_dir / run_id / "scene.py")
@@ -328,7 +312,7 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, b
                     print(f"\r  [render] animation {anim_count}{suffix}...", end="", flush=True)
 
         returncode, lines_buffer, timed_out = subprocess_with_timeout(
-            docker_cmd, timeout, on_line=on_line
+            cmd, timeout, on_line=on_line, env=env,
         )
         if anim_count:
             print()
@@ -336,21 +320,14 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, b
             raise RenderFailed(f"timed out after {timeout:.0f}s")
         if returncode != 0:
             print("\n".join(list(lines_buffer)[-20:]))
-            raise RenderFailed(f"Docker exited with code {returncode}")
+            raise RenderFailed(f"renderer exited with code {returncode}")
 
     if video_path is None or not video_path.exists():
-        manifest = json.loads((output_dir / run_id / "manifest.json").read_text())
-        quality = manifest.get("quality", "medium")
-        subdir = QUALITY_SUBDIR.get(quality, "720p30")
-        scene_class = manifest.get("scene_class_name", "ChalkboardScene")
-        video_path = (
-            output_dir / run_id / "media" / "videos" / "scene" / subdir / f"{scene_class}.mp4"
-        )
+        video_path = render_backend.video_path(run_dir, quality, scene_class=scene_class)
 
     if not video_path.exists():
         raise RenderFailed(f"rendered video not found at {video_path}")
 
-    run_dir = output_dir / run_id
     final_mp4 = run_dir / "final.mp4"
     wav_path = run_dir / "voiceover.wav"
 
@@ -365,12 +342,13 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, b
         cmd = ["ffmpeg", "-y",
                "-i", str(video_path), "-i", str(wav_path), *extra,
                "-vf", f"subtitles={srt_esc}",
-               "-c:v", "libx264", "-preset", "fast",
-               "-c:a", "aac", "-b:a", "128k", str(final_mp4)]
+               "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+               "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(final_mp4)]
     else:
         cmd = ["ffmpeg", "-y",
                "-i", str(video_path), "-i", str(wav_path), *extra,
-               "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", str(final_mp4)]
+               "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart",
+               str(final_mp4)]
 
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=120)
@@ -388,9 +366,9 @@ def _render(run_id: str, verbose: bool = False, burn_captions: bool = False) -> 
         print(f"\n  [render] already done — {final_mp4}")
         return final_mp4
 
-    _ensure_docker_image()
+    render_backend.ensure_ready()
     timeout = _compute_render_timeout(run_id, output_dir)
-    print(f"\n  [render] rendering animation (timeout: {timeout:.0f}s)...")
+    print(f"\n  [render] rendering animation ({render_backend.backend()}, timeout: {timeout:.0f}s)...")
 
     for attempt in range(1, 4):
         try:
@@ -504,7 +482,8 @@ async def _qa_regenerate_scene(
 
 def _render_preview_once(run_id: str, output_dir: Path, preview_mp4: Path) -> Path:
     """Single preview render attempt. Raises RenderFailed on timeout or non-zero exit."""
-    docker_cmd = _docker_render_cmd(run_id, output_dir, preview=True)
+    run_dir = output_dir / run_id
+    cmd, env = render_backend.render_cmd(run_dir, "low", preview=True)
 
     video_path = None
 
@@ -515,15 +494,17 @@ def _render_preview_once(run_id: str, output_dir: Path, preview_mp4: Path) -> Pa
             video_path = output_dir / Path(container_path).relative_to("/output")
 
     returncode, lines_buffer, timed_out = subprocess_with_timeout(
-        docker_cmd, RENDER_TIMEOUT_MIN, on_line=on_line
+        cmd, RENDER_TIMEOUT_MIN, on_line=on_line, env=env,
     )
     if timed_out:
         raise RenderFailed(f"timed out after {RENDER_TIMEOUT_MIN:.0f}s")
     if returncode != 0:
         print("\n".join(list(lines_buffer)[-20:]))
-        raise RenderFailed(f"Docker exited with code {returncode}")
+        raise RenderFailed(f"renderer exited with code {returncode}")
 
     if video_path is None or not video_path.exists():
+        video_path = render_backend.video_path(run_dir, "low", preview=True)
+    if not video_path.exists():
         raise RenderFailed(f"preview video not found at {video_path}")
 
     wav_path = output_dir / run_id / "voiceover.wav"
@@ -546,7 +527,7 @@ def _render_preview(run_id: str) -> Path:
         print(f"\n  [preview] already done — {preview_mp4}")
         return preview_mp4
 
-    _ensure_docker_image()
+    render_backend.ensure_ready()
     print(f"\n  [preview] rendering preview at low quality (480p15, timeout: {RENDER_TIMEOUT_MIN:.0f}s)...")
 
     for attempt in range(1, 4):
@@ -610,6 +591,16 @@ async def run(
             "speed": speed, "template": template, "interactive": interactive,
         }
 
+        # Resuming a thread that already has a checkpoint: continue from where it
+        # stopped instead of feeding fresh input (which would restart the graph).
+        snapshot = await graph.aget_state(config)
+        if snapshot.values:
+            if not snapshot.next:
+                print("  [pipeline] already complete for this run id; skipping to render")
+                return
+            print(f"  [pipeline] resuming at {', '.join(snapshot.next)}")
+            input_state = None
+
         while True:
             try:
                 async for event in graph.astream(input_state, config=config, stream_mode="updates"):
@@ -623,7 +614,10 @@ async def run(
                 if not interactive:
                     raise
                 print("\nEnter action (retry / abort):")
-                action = (await asyncio.to_thread(input, "  action: ")).strip()
+                try:
+                    action = (await asyncio.to_thread(input, "  action: ")).strip()
+                except EOFError:
+                    raise e from None
                 if action != "retry":
                     return
                 input_state = None  # resume from last checkpoint
@@ -662,7 +656,7 @@ def _run_qa_loop(
             run_id, issues_text, theme, audience, tone, effort_level,
             context_blocks=context_blocks,
         ))
-        # Clear old render artifacts so Docker re-renders the new scene.py
+        # Clear old render artifacts so the renderer re-renders the new scene.py
         run_dir = output_dir / run_id
         final_mp4.unlink(missing_ok=True)
         shutil.rmtree(run_dir / "media", ignore_errors=True)
@@ -746,8 +740,8 @@ def main():
     parser.add_argument("--template", choices=TEMPLATE_CHOICES, default=None,
                         help="Animation template: algorithm, code, compare, howto, timeline")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
-    parser.add_argument("--no-render", action="store_true", help="Skip Docker render and ffmpeg merge")
-    parser.add_argument("--verbose", action="store_true", help="Stream Docker render output to terminal")
+    parser.add_argument("--no-render", action="store_true", help="Skip the render and ffmpeg merge")
+    parser.add_argument("--verbose", action="store_true", help="Stream renderer output to terminal")
     parser.add_argument("--preview", action="store_true", help="Render low-quality preview instead of full HD render")
     parser.add_argument(
         "--context", action="append", dest="context", default=[], metavar="PATH",
@@ -783,7 +777,7 @@ def main():
     )
     parser.add_argument(
         "--yes", action="store_true",
-        help="Skip confirmation prompts (e.g. large-context warning).",
+        help="Never prompt: skip confirmations and abort instead of asking on failures.",
     )
     args = parser.parse_args()
 
@@ -832,11 +826,12 @@ def main():
     elif args.run_id:
         print("Note: resuming without context files. Pass --context or --url to include source material.")
 
+    interactive = sys.stdin.isatty() and not args.yes
     asyncio.run(run(
         args.topic, args.effort, thread_id,
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
-        speed=args.speed, template=args.template,
+        speed=args.speed, template=args.template, interactive=interactive,
     ))
 
     if not args.no_render:
@@ -850,6 +845,8 @@ def main():
                     break
                 except RenderFailed as e:
                     print(f"\n  [render] all 3 attempts failed: {e}")
+                    if not interactive:
+                        raise SystemExit(1)
                     print("\nEnter action (retry_render / abort):")
                     action = input("  action: ").strip()
                     if action == "retry_render":
@@ -871,6 +868,8 @@ def main():
                     break
                 except RenderFailed as e:
                     print(f"\n  [render] all 3 attempts failed: {e}")
+                    if not interactive:
+                        raise SystemExit(1)
                     print("\nEnter action (retry_render / abort):")
                     action = input("  action: ").strip()
                     if action == "retry_render":

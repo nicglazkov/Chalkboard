@@ -28,7 +28,7 @@ def test_openai_generate_audio_writes_wav(tmp_path):
     mock_response.content = fake_audio_bytes
 
     mock_openai = MagicMock()
-    mock_openai.audio.speech.create.return_value = mock_response
+    mock_openai.OpenAI.return_value.audio.speech.create.return_value = mock_response
 
     with patch("pipeline.tts.openai_tts.openai", mock_openai):
         from pipeline.tts.openai_tts import generate_audio
