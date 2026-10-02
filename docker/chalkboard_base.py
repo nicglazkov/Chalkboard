@@ -97,6 +97,27 @@ def _classify_overlap(bb1, bb2, tol=_OVERLAP_TOL):
     return "partial"
 
 
+def _flatten_plain_groups(mobjects: list) -> list:
+    """Replace bare VGroup/Group containers with their members (recursively).
+
+    Scenes often add a row of boxes as one VGroup; checking only top-level
+    mobjects would never compare those boxes with each other, so two cards
+    that collide inside the same group went unreported. Subclasses (design
+    components, MathTex, Code, Axes) stay whole: their parts overlap on purpose.
+    """
+    try:
+        from manim import Group, VGroup
+    except ImportError:  # pure-python unit tests
+        return mobjects
+    out: list = []
+    for m in mobjects:
+        if type(m) in (VGroup, Group) and len(m.submobjects) > 0:
+            out.extend(_flatten_plain_groups(list(m.submobjects)))
+        else:
+            out.append(m)
+    return out
+
+
 class ChalkboardSceneBase:
     """
     Validation mixin for ChalkboardScene. No Manim parent — use as:
@@ -189,7 +210,7 @@ class ChalkboardSceneBase:
                 ),
             })
 
-        mobjects = list(getattr(self, "mobjects", []))
+        mobjects = _flatten_plain_groups(list(getattr(self, "mobjects", [])))
 
         # Cache per-mobject bounding boxes once; the zone checks below
         # iterate over them after the existing per-pair pass.
