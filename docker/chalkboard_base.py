@@ -50,6 +50,9 @@ _OVERLAP_TOL = 0.05   # overlap edge tolerance (avoids flagging exact touches)
 #      array overflow case).
 _ZONE_LEFT_MAX  = -0.5
 _ZONE_RIGHT_MIN =  0.5
+# Elements entirely above this y live in the title band (title_anchor =
+# UP * 3.5, step counter in the top corner) and are not zone content.
+_TITLE_BAND_MIN_Y = 2.9
 
 
 def report_dir_for(override: "str | None" = None) -> str:
@@ -276,6 +279,11 @@ class ChalkboardSceneBase:
         left_elements: list[tuple] = []   # (mobj, bbox)
         right_elements: list[tuple] = []
         for m, bb in bbox_cache:
+            if bb[0][1] > _TITLE_BAND_MIN_Y:
+                # Title-band chrome (persistent title, step counter in the
+                # top corner) sits above the zones; it is not "right-zone
+                # content" a left-zone row could collide with.
+                continue
             x_center = (bb[0][0] + bb[2][0]) / 2
             if x_center < _ZONE_LEFT_MAX:
                 left_elements.append((m, bb))

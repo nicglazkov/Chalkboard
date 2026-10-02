@@ -438,3 +438,17 @@ def test_unwritable_report_dir_does_not_raise(tmp_path, capsys):
     scene.begin_segment(0, duration=5.0)
     scene.end_layout_check()  # must not raise
     assert "could not write" in capsys.readouterr().err
+
+
+def test_zone_collision_ignores_title_band_chrome(tmp_path):
+    """A step counter in the top-right corner is not right-zone content."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-3.0, 0, 0.2, 1, "callout_over_cell"),  # LEFT, right edge crosses -0.5
+        MockMobject(5.0, 3.3, 6.8, 3.8, "step_counter"),    # top-right corner, title band
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    assert [v for v in report["violations"] if v["type"] == "zone_collision"] == []
