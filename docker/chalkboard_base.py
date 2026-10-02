@@ -45,11 +45,14 @@ _OVERLAP_TOL = 0.05   # overlap edge tolerance (avoids flagging exact touches)
 #      ignored to allow text-in-box patterns) BUT the two are
 #      structurally in different zones (cross-zone analogy boxes).
 #   2. zone_collision — when a "left-zone" element's bounding box
-#      crosses past x = -0.5 into the right zone while a right-zone
+#      reaches past x = +0.5 into the right zone while a right-zone
 #      element is also present in the segment (the canonical horizontal-
 #      array overflow case).
 _ZONE_LEFT_MAX  = -0.5
 _ZONE_RIGHT_MIN =  0.5
+# An element is side-zone content only when its center is clearly off to one
+# side; wide centered equations and diagrams sit within +-1.5 of the middle.
+_ZONE_SIDE_CENTER = 1.5
 # Elements entirely above this y live in the title band (title_anchor =
 # UP * 3.5, step counter in the top corner) and are not zone content.
 _TITLE_BAND_MIN_Y = 2.9
@@ -127,6 +130,79 @@ def _has_round_trip(animations) -> bool:
         return False
     kinds = (Indicate, Wiggle, Circumscribe, Flash, FocusOn, ApplyWave, ShowPassingFlash)
     return any(isinstance(a, kinds) for a in animations)
+
+
+_MIN_OVERLAP = 0.1   # Manim units (~1.25% of frame height); smaller = grazing
+
+
+def _measure(m):
+    """Bounding box [min, center, max] of a mobject, or None if it is invisible
+    or has no geometry. Manim 0.21's Cairo mobjects have no get_bounding_box(),
+    so measure from the points (unit-test fakes still provide the method)."""
+    # Check the class: Mobject.__getattr__ fabricates any get_* name, so
+    # hasattr() is always True on real mobjects and the call then fails.
+    if callable(getattr(type(m), "get_bounding_box", None)):
+        try:
+            return m.get_bounding_box()
+        except Exception:
+            return None
+    try:
+        import numpy as np
+        if not _is_visible(m):
+            return None
+        pts = m.get_all_points()
+        if len(pts) == 0:
+            return None
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        return np.array([lo, (lo + hi) / 2, hi])
+    except Exception:
+        return None
+
+
+def _is_visible(m) -> bool:
+    for sm in m.family_members_with_points():
+        try:
+            if sm.get_fill_opacity() > 0.05 or sm.get_stroke_opacity() > 0.05:
+                return True
+        except Exception:
+            return True
+    return False
+
+
+def _is_connector(m) -> bool:
+    """Things whose bounding box says nothing about what they cover: lines,
+    arrows, braces and plotted curves (drawn to touch or pass through other
+    elements), and unfilled outlines such as highlight rings around a term."""
+    try:
+        from manim import Brace, Line, ParametricFunction, TipableVMobject, VMobject
+    except ImportError:
+        return False
+    kinds = (Line, TipableVMobject, Brace, ParametricFunction)
+    if isinstance(m, kinds) or type(m).__name__ == "ChalkArrow":
+        return True
+    subs = getattr(m, "submobjects", [])
+    if len(subs) == 1 and isinstance(subs[0], kinds):
+        return True
+    if isinstance(m, VMobject) and not _has_text(m):
+        try:
+            return all(sm.get_fill_opacity() <= 0.05 for sm in m.family_members_with_points())
+        except Exception:
+            return False
+    return False
+
+
+def _has_text(m) -> bool:
+    try:
+        from manim import MathTex, Paragraph, Tex, Text, MarkupText
+    except ImportError:
+        return False
+    return any(isinstance(sm, (Text, MarkupText, Tex, MathTex, Paragraph)) for sm in m.get_family())
+
+
+def _grazing(bb1, bb2) -> bool:
+    ow = min(bb1[2][0], bb2[2][0]) - max(bb1[0][0], bb2[0][0])
+    oh = min(bb1[2][1], bb2[2][1]) - max(bb1[0][1], bb2[0][1])
+    return ow < _MIN_OVERLAP or oh < _MIN_OVERLAP
 
 
 class ChalkboardSceneBase:
@@ -299,10 +375,9 @@ class ChalkboardSceneBase:
         # iterate over them after the existing per-pair pass.
         bbox_cache: list[tuple] = []  # list of (mobj, bbox) for things we could measure
         for m in mobjects:
-            try:
-                bbox_cache.append((m, m.get_bounding_box()))
-            except Exception:
-                continue
+            bb = _measure(m)
+            if bb is not None:
+                bbox_cache.append((m, bb))
 
         for i, (m1, bb1) in enumerate(bbox_cache):
             # 2. Off-screen check
@@ -324,6 +399,9 @@ class ChalkboardSceneBase:
             # 3. Overlap check against later mobjects
             for j, (m2, bb2) in enumerate(bbox_cache[i + 1:], start=i + 1):
                 rel = _classify_overlap(bb1, bb2)
+                if rel == "partial" and (_is_connector(m1) or _is_connector(m2)
+                                         or _grazing(bb1, bb2)):
+                    rel = "none"   # arrows/lines touch on purpose; slivers are noise
                 if rel == "partial":
                     ox1 = max(bb1[0][0], bb2[0][0])
                     oy1 = max(bb1[0][1], bb2[0][1])
@@ -389,15 +467,18 @@ class ChalkboardSceneBase:
                 # content" a left-zone row could collide with.
                 continue
             x_center = (bb[0][0] + bb[2][0]) / 2
-            if x_center < _ZONE_LEFT_MAX:
+            if x_center < -_ZONE_SIDE_CENTER:
                 left_elements.append((m, bb))
-            elif x_center > _ZONE_RIGHT_MIN:
+            elif x_center > _ZONE_SIDE_CENTER:
                 right_elements.append((m, bb))
-            # Center-zone elements (-0.5 ≤ x_center ≤ +0.5) don't
+            # Centered content (|x_center| <= _ZONE_SIDE_CENTER, e.g. a wide
+            # equation aligned on its "=") doesn't
             # participate in this check.
         if left_elements and right_elements:
             for m, bb in left_elements:
-                if bb[2][0] > _ZONE_LEFT_MAX:
+                # Crossing the center strip is fine (centered diagrams put
+                # nodes at x = +-0.7); reaching into the far zone is not.
+                if bb[2][0] > _ZONE_RIGHT_MIN:
                     self._lc_violations.append({
                         "type": "zone_collision",
                         "segment": n,
@@ -405,14 +486,14 @@ class ChalkboardSceneBase:
                         "description": (
                             f"Segment {n}: {type(m).__name__} has its center in the LEFT zone "
                             f"(x_center={(bb[0][0]+bb[2][0])/2:.2f}) but its right edge "
-                            f"({bb[2][0]:.2f}) crosses into the RIGHT zone (x > {_ZONE_LEFT_MAX}) "
+                            f"({bb[2][0]:.2f}) reaches into the RIGHT zone (x > {_ZONE_RIGHT_MIN}) "
                             f"while right-zone elements are also present in this segment. "
                             f"Horizontal arrays/rows must satisfy "
                             f"right_edge = x_0 + (N − 0.5) × W < {_ZONE_LEFT_MAX} for the LEFT zone."
                         ),
                     })
             for m, bb in right_elements:
-                if bb[0][0] < _ZONE_RIGHT_MIN:
+                if bb[0][0] < _ZONE_LEFT_MAX:
                     self._lc_violations.append({
                         "type": "zone_collision",
                         "segment": n,
@@ -420,7 +501,7 @@ class ChalkboardSceneBase:
                         "description": (
                             f"Segment {n}: {type(m).__name__} has its center in the RIGHT zone "
                             f"(x_center={(bb[0][0]+bb[2][0])/2:.2f}) but its left edge "
-                            f"({bb[0][0]:.2f}) crosses into the LEFT zone (x < {_ZONE_RIGHT_MIN}) "
+                            f"({bb[0][0]:.2f}) reaches into the LEFT zone (x < {_ZONE_LEFT_MAX}) "
                             f"while left-zone elements are also present in this segment."
                         ),
                     })

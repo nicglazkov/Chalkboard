@@ -345,7 +345,7 @@ def test_zone_collision_left_array_overflows_right(tmp_path):
         MockMobject(2, 1, 4, 2, "right_callout"),       # x_center = 3.0 (RIGHT)
     ]
     # Force the left array's center into the LEFT zone explicitly.
-    scene.mobjects[0] = MockMobject(-5.5, -1, 3.5, 0, "wide_array")  # x_center = -1.0
+    scene.mobjects[0] = MockMobject(-6.5, -1, 2.5, 0, "wide_array")  # x_center = -2.0, reaches x = 2.5
     scene.end_layout_check()
 
     report = json.loads((tmp_path / "layout_report.json").read_text())
@@ -361,7 +361,7 @@ def test_zone_collision_right_element_overflows_left(tmp_path):
     # left zone; left-zone element also present.
     scene.mobjects = [
         MockMobject(-4, 0, -2, 1, "left_text"),         # x_center = -3.0 (LEFT)
-        MockMobject(-1, -1, 4, 0, "wide_right"),         # x_center = 1.5 (RIGHT) — left edge -1 is in LEFT
+        MockMobject(-1, -1, 5, 0, "wide_right"),         # x_center = 2.0 (RIGHT); left edge -1 is in LEFT
     ]
     scene.end_layout_check()
 
@@ -493,3 +493,53 @@ def test_lagging_visuals_are_reported(tmp_path):
     s.end_layout_check()
     report = json.loads((tmp_path / "layout_report.json").read_text())
     assert any(v["type"] == "sync_drift" for v in report["violations"])
+
+
+def test_zone_collision_ignores_centered_symmetric_diagram(tmp_path):
+    """Tree / triangle nodes just off center cross the center strip by design."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-1.2, 0, -0.3, 1, "node_left"),    # x_center -0.75, right edge -0.3
+        MockMobject(0.3, 0, 1.2, 1, "node_right"),     # x_center  0.75, left edge 0.3
+    ]
+    scene.end_layout_check()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    assert [v for v in report["violations"] if v["type"] == "zone_collision"] == []
+
+
+def test_measure_uses_points_on_real_mobjects():
+    """Manim 0.21 mobjects have no real get_bounding_box (getattr fabricates it)."""
+    pytest.importorskip("manim")
+    from manim import Square, RIGHT
+    from docker.chalkboard_base import _measure, _classify_overlap
+    a, b = Square(2), Square(2).shift(RIGHT)
+    assert _measure(a)[0][0] == pytest.approx(-1.0)
+    assert _classify_overlap(_measure(a), _measure(b)) == "partial"
+
+
+def test_real_scene_flags_overlapping_text_and_offscreen(tmp_path):
+    """Positive control on real Manim objects: the geometry checks must fire."""
+    pytest.importorskip("manim")
+    import manim
+    from manim import Scene, Text, Square, LEFT, RIGHT, UP
+    from docker.chalkboard_base import ChalkboardSceneBase
+
+    class S(ChalkboardSceneBase, Scene):
+        _REPORT_DIR = str(tmp_path)
+
+        def construct(self):
+            self.begin_segment(0, duration=2.0)
+            a = Text("Overlapping label one", font_size=40)
+            b = Text("Overlapping label two", font_size=40).shift(RIGHT * 1.5 + UP * 0.2)
+            box = Square(2, fill_opacity=1).shift(LEFT * 4)
+            edge = Text("off the edge", font_size=40).shift(RIGHT * 7)
+            self.add(a, b, box, edge)
+            self.wait(2.0)
+            self.end_layout_check()
+
+    with manim.tempconfig({"dry_run": True, "frame_rate": 1, "verbosity": "ERROR"}):
+        S().render()
+    kinds = {v["type"] for v in json.loads((tmp_path / "layout_report.json").read_text())["violations"]}
+    assert "overlap" in kinds
+    assert "off_screen" in kinds

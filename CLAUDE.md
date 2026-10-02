@@ -283,6 +283,10 @@ When rendering fails, read the traceback (renderer output, or the stderr tail in
 
 ---
 
+### How the dry-run measures geometry
+
+`_measure()` in `docker/chalkboard_base.py` takes the bounding box from a mobject's points (`get_all_points()`). Do not use `hasattr(m, "get_bounding_box")`: Manim's `Mobject.__getattr__` fabricates any `get_*` name, so it is always true and the call then fails (this silently disabled every geometry check until 2026-10-02). Invisible mobjects are skipped. Plain `VGroup`/`Group` containers are flattened so members are compared with each other. Partial overlaps are ignored when either side is a connector (`Line`, arrows, `Brace`, `ParametricFunction` curves, unfilled outlines) or the overlap is thinner than `_MIN_OVERLAP` (0.1). `zone_collision` counts an element as side-zone content only when its center is beyond `_ZONE_SIDE_CENTER` (1.5) and flags it only when it reaches into the far zone. Calibration: zero geometry flags on 14 real videos from 2026-10-02; the positive control `test_real_scene_flags_overlapping_text_and_offscreen` must keep passing.
+
 ## Layout discipline (overlap prevention)
 
 `manim_agent`'s prompt contains **LAYOUT RULES** and a **CLEAN SLATE** rule; `chalkboard_base` and the AST guards enforce them.
@@ -536,7 +540,6 @@ pytest tests/test_graph.py    # one file
 ## Known issues / future work
 
 - **Docker render path untested on 0.21.0**: the image was updated with the design system but not re-run end to end.
-- **Layout geometry checks are inert under Manim 0.21**: `_lc_check_segment` calls `m.get_bounding_box()`, which Cairo mobjects do not have (it resolves through Manim's deprecated auto-getter to a missing `bounding_box` attribute, raising `AttributeError`), and the exception is swallowed. So `off_screen`, `overlap`, `zone_boundary_overlap` and `zone_collision` never fire on real scenes; only timing and `sync_drift` do. The unit tests use fake mobjects that define `get_bounding_box`. Fixing it (bounding box from `get_all_points()`) changes how many scenes fail the dry-run, so it is a deliberate decision, not a drive-by fix.
 - **QA regeneration skips the Claude review**: `_qa_regenerate_scene` runs the AST guards and the dry-run, not code_validator's review.
 - **Kokoro multi-voice**: a single voice per run.
 - **High-effort web search gate**: `needs_web_search` is returned by script_agent but `user_approved_search` is never set to `True` by `main.py`.
