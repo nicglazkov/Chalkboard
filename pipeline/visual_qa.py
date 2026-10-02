@@ -100,8 +100,11 @@ def _segment_boundary_timestamps(
             mid_t = cumulative + dur / 2.0
             timestamps.append((round(mid_t, 2), i, text))
 
+        # "End of segment" = the settled frame just before the 0.5s hand-off
+        # fade; sampling the boundary itself catches content mid-fade.
+        end_t = cumulative + max(dur * 0.5, dur - 0.8)
         cumulative += dur
-        timestamps.append((round(cumulative, 2), i, text))
+        timestamps.append((round(end_t, 2), i, text))
 
     # Deduplicate and sort. Float equality is safe here: all timestamps are
     # either the literal 0.5 or cumulative sums rounded to 2 decimal places.
@@ -130,15 +133,28 @@ def _extract_frames_at_timestamps(
     Returns list of (frame_path, timestamp, segment_index, script_text).
     """
     qa_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "csv=p=0", str(video_path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        video_len = float(probe.stdout.strip())
+    except (ValueError, subprocess.SubprocessError, OSError):
+        video_len = None
     results = []
     for i, (t, seg_idx, text) in enumerate(timestamps):
+        if video_len is not None:
+            t = min(t, max(0.0, video_len - 0.2))   # never seek past the last frame
         frame_path = qa_dir / f"frame_{i:02d}.png"
+        frame_path.unlink(missing_ok=True)
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(t), "-i", str(video_path),
              "-frames:v", "1", str(frame_path)],
             capture_output=True, check=True, timeout=30,
         )
-        results.append((frame_path, t, seg_idx, text))
+        if frame_path.exists():          # ffmpeg exits 0 but writes nothing past EOF
+            results.append((frame_path, t, seg_idx, text))
     return results
 
 

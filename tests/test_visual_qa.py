@@ -156,12 +156,13 @@ def test_segment_boundary_timestamps_basic():
         {"actual_duration_sec": 2.0},
     ]
     timestamps = _segment_boundary_timestamps(segments, max_frames=20)
-    # Should include t=0.5, end of each segment, midpoint of 4s segment
+    # Intro sample, then each segment's settled end frame: 0.8s before the
+    # boundary (before the hand-off fade), or the midpoint for short segments.
     ts_values = [t for t, _, _ in timestamps]
     assert 0.5 in ts_values          # intro sample
-    assert 3.0 in ts_values          # end of segment 0
-    assert 7.0 in ts_values          # end of segment 1
-    assert 9.0 in ts_values          # end of segment 2
+    assert 2.2 in ts_values          # end of segment 0 (3.0 - 0.8)
+    assert 6.2 in ts_values          # end of segment 1 (7.0 - 0.8)
+    assert 8.2 in ts_values          # end of segment 2 (9.0 - 0.8)
 
 
 def test_segment_boundary_timestamps_midpoint_for_long_segment():
