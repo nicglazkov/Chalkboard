@@ -248,3 +248,193 @@ def test_wait_after_end_layout_check_not_counted(tmp_path):
     report = json.loads((tmp_path / "layout_report.json").read_text())
     violations = [v for v in report["violations"] if v["type"] == "timing_overrun"]
     assert violations == []
+
+
+# ── Zone-boundary overlap ──────────────────────────────────────
+# `contained` — when one mobject's bounding box fully encloses another — is
+# usually intentional (e.g. text inside a labeled box, label inside a callout).
+# But cross-zone containment indicates a layout regression: an element from
+# the LEFT zone (x_center < -0.5) has grown to cover content nominally in the
+# RIGHT zone (x_center > +0.5), or vice versa. Flag those as their own
+# violation type so the regen prompt knows it's a multi-zone error and not
+# a benign in-zone group.
+
+def test_zone_boundary_overlap_left_contains_right(tmp_path):
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    # Outer "left zone" element actually spans the full canvas; its center
+    # is in the left zone (x_center = -1.0). Inner element is right-zone.
+    scene.mobjects = [
+        MockMobject(-7, -3, 5, 3, "left_outer"),  # x_center = -1.0 (LEFT)
+        MockMobject(2, 0, 4, 1, "right_inner"),   # x_center = 3.0 (RIGHT)
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "zone_boundary_overlap"]
+    assert len(violations) == 1
+    assert violations[0]["segment"] == 0
+    assert "different zones" in violations[0]["description"]
+
+
+def test_zone_boundary_overlap_right_contains_left(tmp_path):
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    # Reversed roles — outer element's x_center is in the right zone but
+    # contains a left-zone inner element.
+    scene.mobjects = [
+        MockMobject(-5, -3, 7, 3, "right_outer"),  # x_center = 1.0 (RIGHT)
+        MockMobject(-4, 0, -2, 1, "left_inner"),   # x_center = -3.0 (LEFT)
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "zone_boundary_overlap"]
+    assert len(violations) == 1
+
+
+def test_zone_boundary_overlap_same_zone_not_flagged(tmp_path):
+    """Containment within the same zone (e.g. text in a left-zone box) is fine."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-5, -1, -1, 1, "left_box"),     # x_center = -3.0 (LEFT)
+        MockMobject(-4, -0.5, -2, 0.5, "left_text"),  # x_center = -3.0 (LEFT)
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "zone_boundary_overlap"]
+    assert violations == []
+
+
+def test_zone_boundary_overlap_center_zone_not_flagged(tmp_path):
+    """Containment with a center-zone element should not flag (no cross-zone)."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-2, -1, 2, 1, "center_box"),     # x_center = 0.0 (CENTER)
+        MockMobject(-1, -0.5, 1, 0.5, "center_text"),  # x_center = 0.0 (CENTER)
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    violations = [v for v in report["violations"] if v["type"] == "zone_boundary_overlap"]
+    assert violations == []
+
+
+# ── Zone collision ──────────────────────────────────────────────
+# When LEFT and RIGHT zones BOTH have ≥1 element AND any LEFT-zone element's
+# bounding box extends past x = -0.5 into the right zone (or vice versa for
+# right-zone elements), flag the collision. Catches the binary-search
+# horizontal-array case where x_0 = -4.5 + 10 cells × 0.85 lands the rightmost
+# cell at x ≈ +3.575, deep into the right zone, while a right-side callout is
+# also present.
+
+def test_zone_collision_left_array_overflows_right(tmp_path):
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    # Wide "left zone" array — center is in the left zone but right edge
+    # extends past x = -0.5. Right-zone callout also present.
+    scene.mobjects = [
+        MockMobject(-4.5, -1, 3.5, 0, "wide_array"),   # x_center = -0.5 (boundary, but right edge crosses)
+        MockMobject(2, 1, 4, 2, "right_callout"),       # x_center = 3.0 (RIGHT)
+    ]
+    # Force the left array's center into the LEFT zone explicitly.
+    scene.mobjects[0] = MockMobject(-5.5, -1, 3.5, 0, "wide_array")  # x_center = -1.0
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    zone_violations = [v for v in report["violations"] if v["type"] == "zone_collision"]
+    assert len(zone_violations) >= 1
+    assert any("LEFT zone" in v["description"] for v in zone_violations)
+
+
+def test_zone_collision_right_element_overflows_left(tmp_path):
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    # Right-zone element whose left edge extends past x = +0.5 into the
+    # left zone; left-zone element also present.
+    scene.mobjects = [
+        MockMobject(-4, 0, -2, 1, "left_text"),         # x_center = -3.0 (LEFT)
+        MockMobject(-1, -1, 4, 0, "wide_right"),         # x_center = 1.5 (RIGHT) — left edge -1 is in LEFT
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    zone_violations = [v for v in report["violations"] if v["type"] == "zone_collision"]
+    assert len(zone_violations) >= 1
+
+
+def test_zone_collision_only_one_zone_populated_not_flagged(tmp_path):
+    """A wide left-zone element with no right-zone element present should not flag."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-5.5, -1, 3.5, 0, "wide_array"),   # x_center = -1.0 (LEFT, but extends into right)
+        # No right-zone mobjects — so no zone collision should fire.
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    zone_violations = [v for v in report["violations"] if v["type"] == "zone_collision"]
+    assert zone_violations == []
+
+
+def test_zone_collision_disjoint_zones_not_flagged(tmp_path):
+    """Properly-separated left + right elements with no overflow should not flag."""
+    scene = _FakeScene(tmp_path)
+    scene.begin_segment(0, duration=5.0)
+    scene.mobjects = [
+        MockMobject(-4, 0, -1, 1, "left_text"),         # x_center = -2.5 (LEFT) — right edge -1 < -0.5 ✓
+        MockMobject(1, 0, 4, 1, "right_text"),          # x_center = 2.5 (RIGHT) — left edge 1 > 0.5 ✓
+    ]
+    scene.end_layout_check()
+
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    zone_violations = [v for v in report["violations"] if v["type"] == "zone_collision"]
+    assert zone_violations == []
+
+
+# ── Report directory resolution ───────────────────────────────────────────────
+
+class _EnvScene(_FakeScene):
+    """Like _FakeScene but without an explicit _REPORT_DIR override."""
+    def __init__(self):
+        super().__init__("unused")
+        del self._REPORT_DIR  # fall back to the class attribute (None)
+
+
+def test_report_dir_from_env_var(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHALKBOARD_REPORT_DIR", str(tmp_path))
+    scene = _EnvScene()
+    scene.begin_segment(0, duration=5.0)
+    scene.end_layout_check()
+    assert json.loads((tmp_path / "layout_report.json").read_text())["passed"] is True
+
+
+def test_explicit_report_dir_beats_env_var(tmp_path, monkeypatch):
+    env_dir = tmp_path / "env"
+    env_dir.mkdir()
+    explicit = tmp_path / "explicit"
+    explicit.mkdir()
+    monkeypatch.setenv("CHALKBOARD_REPORT_DIR", str(env_dir))
+    scene = _FakeScene(explicit)
+    scene.begin_segment(0, duration=5.0)
+    scene.end_layout_check()
+    assert (explicit / "layout_report.json").exists()
+    assert not (env_dir / "layout_report.json").exists()
+
+
+def test_report_dir_defaults_to_output(monkeypatch):
+    from docker.chalkboard_base import report_dir_for
+    monkeypatch.delenv("CHALKBOARD_REPORT_DIR", raising=False)
+    assert report_dir_for(None) == "/output"
+
+
+def test_unwritable_report_dir_does_not_raise(tmp_path, capsys):
+    """A missing report dir (e.g. /output outside Docker) must never kill a render."""
+    scene = _FakeScene(tmp_path / "does" / "not" / "exist")
+    scene.begin_segment(0, duration=5.0)
+    scene.end_layout_check()  # must not raise
+    assert "could not write" in capsys.readouterr().err
