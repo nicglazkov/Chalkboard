@@ -1,4 +1,5 @@
 # pipeline/agents/manim_agent.py
+from pipeline.cues import parse_cues, proportional_cue_times, segment_cue_text
 from pipeline.design_tokens import render_prompt_block
 from pipeline.llm import call_json, get_client, has_pdf
 from pipeline.retry import api_call_with_retry, TIMEOUT_MANIM_AGENT
@@ -34,6 +35,27 @@ STRICT REQUIREMENTS:
         self.wait(_w)
   Budget the animations of a segment to fit inside _d[N]; running long makes the
   visuals lag the voice and the layout check rejects it.
+- WORD-LEVEL SYNC (cue markers): the narration segments in the request contain
+  numbered markers [[1]], [[2]], ... placed right before the word where a visual
+  must land (they are silent; the voice never says them). Call self.cue(k) right
+  before the animation for marker [[k]]: it holds the frame until that word is
+  spoken, so the next self.play / move starts exactly on it. Rules:
+    * Every visual the narration introduces (an equation, a term, a graph, a
+      label, an arrow, a highlight, a derivation step) is revealed right after
+      self.cue(k) for the marker where it is mentioned. Use every marker of a
+      segment, in increasing order.
+    * Never reveal content before it is spoken: nothing new appears between the
+      start of a segment and its cue [[1]] except scaffolding the narration does
+      not name (axes frame, persistent title). Emphasis moves (emphasize_term,
+      .highlight, focus_zoom, Indicate) go on cues too.
+    * Each cued animation must finish before the next cue. The request lists the
+      estimated time of each marker (seconds from the segment start); keep the
+      animations between cue k and cue k+1 shorter than that gap (use
+      motion "snap" for a short gap). If the scene is still busy when a cue's word
+      is spoken, the layout check reports `cue_late`.
+    * Do not wait manually before a cue (self.cue does the waiting) and never use
+      the estimated times as literals: they change once the voice is recorded.
+    * Do not call self.cue(k) for a k the segment does not have (it is ignored).
 - At the END of construct(), call self.end_layout_check() BEFORE the final FadeOut cleanup:
     self.end_layout_check()
     self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
@@ -325,6 +347,27 @@ EXEMPLAR 4 — Calculus: area under a curve, then the derivation:
   derivation_step(self, eq, 2)
   seg_items.extend(eq.lines)
 
+EXEMPLAR 5 — Word-level sync with cue markers. Narration for segment 1:
+  "Start from the [[1]] limit definition of the derivative. Plug in [[2]] e to the x,
+   and [[3]] factor e to the x out of the numerator."
+  (cues at ~0.6s, ~3.2s, ~4.9s)
+
+  self.next_segment(1, duration=_d[1], clear=seg_items)
+  seg_items = []
+  eq = EquationGroup([
+      r"f'(x) &= \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}",
+      r"&= \lim_{h \to 0} \frac{e^{x+h} - e^x}{h}",
+      r"&= e^x \lim_{h \to 0} \frac{e^h - 1}{h}",
+  ], colors={"e^x": "focus_primary"})
+  eq.move_to(ORIGIN)              # build and place BEFORE the cues
+  self.cue(1)                     # "limit definition"
+  derivation_step(self, eq, 0)
+  self.cue(2)                     # "e to the x"
+  derivation_step(self, eq, 1)
+  self.cue(3)                     # "factor": 1.7s after cue 2, so one settle-length move
+  derivation_step(self, eq, 2)
+  seg_items.extend(eq.lines)
+
 KNOWN API PITFALLS (verified on v0.21.0):
 - Brace.get_text(*text) does NOT accept font_size (TypeError) — scale the returned object: lbl = brace.get_text("x"); lbl.scale(0.8). For math labels use brace.get_tex(r"...").
 - VGroup.arrange() returns the group, so `VGroup(*items).arrange(RIGHT, buff=t.space("sm"))` chains fine.
@@ -421,12 +464,12 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
         # ── Segment 0: <title> ──
         self.begin_segment(0, duration=_d[0])
         seg_items = []
-        # ... compose components + moves ...
+        # ... build mobjects, then per marker: self.cue(k); <move or play> ...
 
         # ── Segment 1: <title> ──
         self.next_segment(1, duration=_d[1], clear=seg_items)
         seg_items = []
-        # ... compose components + moves ...
+        # ... build mobjects, then per marker: self.cue(k); <move or play> ...
 
         # ── End ──
         self.end_layout_check()
@@ -435,7 +478,9 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
 When a template drives the whole scene, construct() is just the duration
 loading, `t = T(...)`, the background, `Template(self, theme=..., beats={...}).render_all(_d)`,
 then `self.end_layout_check()` and the final FadeOut (no '# ── Segment N:' blocks
-of your own; the template calls begin_segment).
+of your own; the template calls begin_segment, and it calls self.cue itself:
+each segment's main reveal lands on [[1]], a second element (callout,
+right-hand point, next derivation line) on [[2]]).
 
 Respond with JSON only: {"manim_code": "<complete Python code as string>"}"""
 
@@ -598,12 +643,22 @@ SCHEMA = {
 
 def _format_segments(segments: list[dict]) -> str:
     n = len(segments)
-    header = f"Total segments: {n} (use _d[0] through _d[{max(0, n-1)}])"
+    header = (f"Total segments: {n} (use _d[0] through _d[{max(0, n-1)}]). "
+              f"[[k]] = cue marker: call self.cue(k) right before the animation for it.")
     lines = [header]
     for i, seg in enumerate(segments):  # 0-based
-        duration = seg.get("estimated_duration_sec", 0.0)
-        text = seg.get("text", "")
-        lines.append(f"  Segment {i} — est. {duration:.1f}s — use _d[{i}] at runtime: {text}")
+        duration = seg.get("estimated_duration_sec", seg.get("actual_duration_sec", 0.0))
+        raw = segment_cue_text(seg)
+        clean, offsets = parse_cues(raw)
+        cues = seg.get("cues")
+        if not isinstance(cues, list) or len(cues) < len(offsets):
+            cues = proportional_cue_times(clean, offsets, duration)
+        cue_info = ""
+        if offsets:
+            parts = [f"[[{k}]]~{cues[k - 1]:.1f}s" for k in sorted(offsets)
+                     if k - 1 < len(cues) and cues[k - 1] is not None]
+            cue_info = f" — cues {', '.join(parts)}"
+        lines.append(f"  Segment {i} — est. {duration:.1f}s — use _d[{i}] at runtime{cue_info}: {raw}")
     return "\n".join(lines)
 
 

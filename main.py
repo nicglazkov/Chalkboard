@@ -196,6 +196,30 @@ def _format_srt_time(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def _caption_cues(segments: list[dict]) -> list[tuple[float, float, str]]:
+    """(start, end, text) caption lines: one per sentence (long sentences split
+    at a comma). Times inside a segment follow the cue-marker timings when the
+    segment has them (word-accurate anchors), else character position."""
+    from pipeline.cues import caption_lines, char_time, parse_cues, strip_cues
+    out: list[tuple[float, float, str]] = []
+    t0 = 0.0
+    for seg in segments:
+        dur = seg["actual_duration_sec"]
+        text = strip_cues(seg["text"])
+        _, offsets = parse_cues(seg.get("cue_text") or "")
+        cues = seg.get("cues") or []
+        spans = caption_lines(text)
+        starts = [char_time(offsets, cues, len(text), dur, a) if i else 0.0
+                  for i, (a, _) in enumerate(spans)]
+        for i, (a, b) in enumerate(spans):
+            end = starts[i + 1] if i + 1 < len(spans) else dur
+            line = text[a:b].strip()
+            if line:
+                out.append((t0 + starts[i], t0 + max(end, starts[i]), line))
+        t0 += dur
+    return out
+
+
 def _generate_caption_files(run_dir: Path) -> tuple[Path | None, Path | None]:
     """Write captions.srt and chapters.txt (FFMETADATA1) from segments.json.
     Prints YouTube-compatible chapter list to stdout.
@@ -211,12 +235,10 @@ def _generate_caption_files(run_dir: Path) -> tuple[Path | None, Path | None]:
     # SRT file
     srt_path = run_dir / "captions.srt"
     srt_lines: list[str] = []
-    t = 0.0
-    for i, seg in enumerate(segments, 1):
-        start = _format_srt_time(t)
-        t += seg["actual_duration_sec"]
-        end = _format_srt_time(t)
-        srt_lines.append(f"{i}\n{start} --> {end}\n{seg['text']}\n")
+    n = 0
+    for start_s, end_s, line in _caption_cues(segments):
+        n += 1
+        srt_lines.append(f"{n}\n{_format_srt_time(start_s)} --> {_format_srt_time(end_s)}\n{line}\n")
     srt_path.write_text("\n".join(srt_lines), encoding="utf-8")
 
     # FFMETADATA1 chapter file
