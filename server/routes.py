@@ -132,7 +132,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             tone=req.tone, theme=req.theme, template=req.template, speed=req.speed,
             burn_captions=req.burn_captions, quiz=req.quiz,
             urls=req.urls, github=req.github, qa_density=req.qa_density,
-            quality=req.quality,
+            quality=req.quality, narrator=req.narrator,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         _spawn(run_job(job, output_dir, library_store=library_store))
@@ -151,6 +151,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         quiz: bool = Form(False),
         qa_density: str = Form("normal"),
         quality: str = Form(""),
+        narrator: str = Form(""),
         urls: list[str] = Form(default=[]),
         github: list[str] = Form(default=[]),
         files: list[UploadFile] = File(default=[]),
@@ -176,7 +177,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             tone=tone, theme=theme, template=template or None, speed=speed,
             burn_captions=burn_captions, quiz=quiz,
             urls=urls, github=github, qa_density=qa_density,
-            upload_dir=upload_dir, quality=quality or None,
+            upload_dir=upload_dir, quality=quality or None, narrator=narrator or None,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         _spawn(run_job(job, output_dir, library_store=library_store))

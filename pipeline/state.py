@@ -33,6 +33,7 @@ class PipelineState(TypedDict):
     research_sources: list[str]
     search_warning: str | None
     interactive: bool
+    narrator: str | None  # pipeline/tts/voices.py name; None = NARRATOR / TTS_BACKEND default
     quality: str | None   # "low" | "medium" | "high" | "4k"; None = MANIM_QUALITY
     layout_renderable: bool  # last dry-run completed (only layout violations, no crash)
     claude_review_failures: int     # consecutive advisory rejections by Claude's code review

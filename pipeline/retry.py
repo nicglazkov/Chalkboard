@@ -39,7 +39,7 @@ TIMEOUT_MANIM_AGENT    = 900.0   # manim_agent (streams up to 48k tokens)
 TIMEOUT_CODE_VALIDATOR = 240.0   # code_validator
 TIMEOUT_LAYOUT_CHECKER = 180.0   # layout_checker (headless dry-run — scales with animation count)
 TIMEOUT_VISUAL_QA      = 240.0   # visual_qa (several base64 frames)
-TIMEOUT_TTS_SEGMENT    =  30.0   # OpenAI + ElevenLabs per-segment
+TIMEOUT_TTS_SEGMENT    =  60.0   # OpenAI + ElevenLabs per-segment (eleven_v3 is slower)
 TIMEOUT_TTS_KOKORO     = 120.0   # Kokoro full call (includes model load)
 
 

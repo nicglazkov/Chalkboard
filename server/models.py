@@ -18,6 +18,7 @@ class CreateJobRequest(BaseModel):
     github: list[str] = []
     qa_density: Literal["zero", "normal", "high"] = "normal"
     quality: Literal["low", "medium", "high", "4k"] | None = None   # None = server default
+    narrator: Literal["kokoro", "aria", "milo", "reid", "grace", "alloy"] | None = None  # None = server default
 
 
 class JobResponse(BaseModel):

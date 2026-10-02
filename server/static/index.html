@@ -190,6 +190,19 @@
                 </fieldset>
                 <div class="field-grid">
                   <div class="field">
+                    <div class="field-head"><label class="label" for="narrator">Narrator</label>
+                      <button type="button" class="help" aria-label="About narrators" data-tip="The voice. Aria, Milo, Reid and Grace are ElevenLabs voices (need an ElevenLabs key on the server). Kokoro is free and runs locally. Default uses the server setting.">?</button></div>
+                    <select id="narrator" name="narrator" class="select">
+                      <option value="">Default</option>
+                      <option value="aria">Aria: bright, a little nerdy</option>
+                      <option value="milo">Milo: earnest male</option>
+                      <option value="reid">Reid: conversational male</option>
+                      <option value="grace">Grace: warm, clear female</option>
+                      <option value="kokoro">Kokoro: free, local</option>
+                      <option value="alloy">Alloy: OpenAI</option>
+                    </select>
+                  </div>
+                  <div class="field">
                     <div class="field-head"><label class="label" for="speed">Narration speed</label>
                       <button type="button" class="help" aria-label="About narration speed" data-tip="1.0 is normal; 1.25 talks a little faster.">?</button></div>
                     <input type="number" id="speed" name="speed" class="input" value="1.0" min="0.1" max="4.0" step="0.05" inputmode="decimal" />
@@ -270,7 +283,8 @@
       $('style-sum').textContent = [cap(val('tone')), cap(val('theme')),
         t.value ? t.options[t.selectedIndex].text + ' template' : 'No template'].join(', ');
       const q = form.querySelector('input[name="quality"]:checked');
-      const out = [q && q.value ? q.nextElementSibling.textContent : 'Default resolution', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
+      const nar = form.elements.narrator;
+      const out = [q && q.value ? q.nextElementSibling.textContent : 'Default resolution', nar.value ? nar.options[nar.selectedIndex].text.split(':')[0] : 'Default voice', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
       if ($('burn-captions').checked) out.push('burned captions');
       if ($('quiz').checked) out.push('quiz');
       $('output-sum').textContent = out.join(', ');
@@ -626,6 +640,7 @@
         quiz: $('quiz').checked,
         qa_density: val('qa_density'),
         quality: val('quality'),
+        narrator: val('narrator'),
         urls: getRows('url-list'),
         github: getRows('github-list'),
       };
@@ -646,7 +661,7 @@
           resp = await fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...common, template: common.template || null, quality: common.quality || null }),
+            body: JSON.stringify({ ...common, template: common.template || null, quality: common.quality || null, narrator: common.narrator || null }),
           });
         }
         if (!resp.ok) {
@@ -711,7 +726,7 @@
     // ── Prefill from query params (re-generate from library) ──────────────
     const params = new URLSearchParams(location.search);
     if (params.has('topic')) {
-      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality']) setVal(k, params.get(k));
+      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality', 'narrator']) setVal(k, params.get(k));
       if (params.get('quiz') === 'true') $('quiz').checked = true;
       if (params.get('burn_captions') === 'true') $('burn-captions').checked = true;
       $('style-section').open = true;

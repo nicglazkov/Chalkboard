@@ -95,6 +95,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "search_warning": state.get("search_warning"),
         "interactive": state.get("interactive", True),
         "quality": state.get("quality"),
+        "narrator": state.get("narrator"),
         "claude_review_failures": state.get("claude_review_failures", 0),
         "code_feedback_advisory": state.get("code_feedback_advisory", False),
     }

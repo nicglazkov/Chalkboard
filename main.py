@@ -607,6 +607,7 @@ async def run(
     on_progress: "Callable[[dict], None] | None" = None,
     interactive: bool = True,
     quality: str | None = None,
+    narrator: str | None = None,
 ) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
@@ -618,6 +619,7 @@ async def run(
             "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [],
             "speed": speed, "template": template, "interactive": interactive,
             "quality": quality,
+            "narrator": narrator,
         }
 
         # Resuming a thread that already has a checkpoint: continue from where it
@@ -782,6 +784,10 @@ def main():
     parser.add_argument("--quality", choices=["low", "medium", "high", "4k"], default=None,
                         help="Render resolution: low=480p15, medium=720p30, high=1080p60, 4k=2160p60 "
                              "(default: MANIM_QUALITY)")
+    from pipeline.tts.voices import ALLOWED_NARRATORS
+    parser.add_argument("--narrator", choices=ALLOWED_NARRATORS, default=None,
+                        help="Named voice (see pipeline/tts/voices.py); default: NARRATOR in .env, "
+                             "else TTS_BACKEND's default voice")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip the render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream renderer output to terminal")
@@ -875,7 +881,7 @@ def main():
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
         speed=args.speed, template=args.template, interactive=interactive,
-        quality=args.quality,
+        quality=args.quality, narrator=args.narrator,
     ))
 
     run_dir = Path(OUTPUT_DIR) / thread_id

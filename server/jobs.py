@@ -37,6 +37,7 @@ class Job:
     github: list[str] = field(default_factory=list)
     qa_density: _QADensity = "normal"
     quality: str | None = None
+    narrator: str | None = None
     upload_dir: Path | None = None          # temp dir for uploaded files; deleted after run
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
@@ -69,13 +70,14 @@ class JobStore:
                urls: list[str] | None = None, github: list[str] | None = None,
                qa_density: _QADensity = "normal",
                upload_dir: Path | None = None,
-               quality: str | None = None) -> Job:
+               quality: str | None = None,
+               narrator: str | None = None) -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
                   tone=tone, theme=theme, template=template, speed=speed,
                   burn_captions=burn_captions, quiz=quiz,
                   urls=urls or [], github=github or [],
-                  qa_density=qa_density, upload_dir=upload_dir, quality=quality)
+                  qa_density=qa_density, upload_dir=upload_dir, quality=quality, narrator=narrator)
         self._jobs[job_id] = job
         return job
 
@@ -159,6 +161,7 @@ async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
             on_progress=_on_progress,
             interactive=False,
             quality=job.quality,
+            narrator=job.narrator,
         )
 
         # render_trigger writes manifest.json as its final step.

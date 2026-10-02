@@ -22,7 +22,7 @@ def _pipeline():
     return KPipeline(lang_code="a")
 
 
-def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[float]]:
+def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = None) -> tuple[Path, list[float]]:
     if KPipeline is None:
         raise ImportError("Install kokoro: pip install kokoro")
     pipeline = _pipeline()
@@ -31,7 +31,7 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
 
     for segment in segments:
         seg_chunks: list[np.ndarray] = []
-        for _gs, _ps, audio in pipeline(segment["text"], voice=DEFAULT_VOICE):
+        for _gs, _ps, audio in pipeline(segment["text"], voice=voice or DEFAULT_VOICE):
             seg_chunks.append(audio)
         seg_audio = np.concatenate(seg_chunks) if seg_chunks else np.array([], dtype=np.float32)
         durations.append(len(seg_audio) / SAMPLE_RATE)
@@ -43,9 +43,10 @@ def _generate_sync(segments: list[dict], output_path: Path) -> tuple[Path, list[
     return output_path, durations
 
 
-async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0) -> tuple[Path, list[float]]:
+async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0,
+                         *, voice: str | None = None, model: str | None = None) -> tuple[Path, list[float]]:
     path, durations = await api_call_with_retry(
-        lambda: _generate_sync(segments, output_path),
+        lambda: _generate_sync(segments, output_path, voice),
         timeout=TIMEOUT_TTS_KOKORO,
         label="kokoro_tts",
     )

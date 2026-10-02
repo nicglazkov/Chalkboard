@@ -3,6 +3,8 @@ load_dotenv()
 import os
 
 TTS_BACKEND    = os.getenv("TTS_BACKEND", "kokoro")   # "kokoro" | "openai" | "elevenlabs"
+# Named voice (pipeline/tts/voices.py), e.g. "aria"; overrides TTS_BACKEND when set.
+NARRATOR       = os.getenv("NARRATOR", "")
 MANIM_QUALITY  = os.getenv("MANIM_QUALITY", "medium") # "low" | "medium" | "high" | "4k"
 DEFAULT_EFFORT = os.getenv("DEFAULT_EFFORT", "medium")
 DEFAULT_AUDIENCE = os.getenv("DEFAULT_AUDIENCE", "intermediate")

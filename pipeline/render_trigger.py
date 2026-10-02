@@ -1,9 +1,10 @@
 # pipeline/render_trigger.py
 import json
 from pathlib import Path
-from config import OUTPUT_DIR, TTS_BACKEND, MANIM_QUALITY
+from config import OUTPUT_DIR, TTS_BACKEND, MANIM_QUALITY, NARRATOR
 from pipeline.state import PipelineState
 from pipeline.tts.base import get_backend
+from pipeline.tts.voices import resolve as resolve_narrator
 
 
 async def render_trigger(state: PipelineState) -> dict:
@@ -12,10 +13,15 @@ async def render_trigger(state: PipelineState) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate TTS audio, get actual per-segment durations
-    generate_audio = get_backend(TTS_BACKEND)
+    narrator = state.get("narrator") or NARRATOR or None
+    spec = resolve_narrator(narrator)
+    generate_audio = get_backend(spec["backend"] if spec else TTS_BACKEND)
+    voice_kwargs = {"voice": spec["voice"], "model": spec["model"] or None} if spec else {}
     wav_path = run_dir / "voiceover.wav"
     speed = state.get("speed", 1.0)
-    _, actual_durations = await generate_audio(state["script_segments"], wav_path, speed=speed)
+    _, actual_durations = await generate_audio(
+        state["script_segments"], wav_path, speed=speed, **voice_kwargs
+    )
 
     # Build segments.json with actual durations
     segments_out = [
@@ -39,6 +45,7 @@ async def render_trigger(state: PipelineState) -> dict:
         "theme": state.get("theme", "chalkboard"),
         "template": state.get("template"),
         "speed": state.get("speed", 1.0),
+        "narrator": narrator or TTS_BACKEND,
     }, indent=2))
 
     return {"status": "approved"}

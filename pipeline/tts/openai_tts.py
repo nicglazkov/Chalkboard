@@ -24,7 +24,8 @@ OPENAI_INSTRUCTIONS = os.getenv(
 MAX_CONCURRENT = 6  # segments synthesized in parallel
 
 
-async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0) -> tuple[Path, list[float]]:
+async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0,
+                         *, voice: str | None = None, model: str | None = None) -> tuple[Path, list[float]]:
     if openai is None:
         raise ImportError("Install openai: pip install openai")
 
@@ -32,10 +33,12 @@ async def generate_audio(segments: list[dict], output_path: Path, speed: float =
     client = openai.OpenAI()
     gate = asyncio.Semaphore(MAX_CONCURRENT)
 
+    model_id = model or OPENAI_MODEL
+
     def _call(text: str):
-        kwargs = dict(model=OPENAI_MODEL, voice=OPENAI_VOICE, input=text,
+        kwargs = dict(model=model_id, voice=voice or OPENAI_VOICE, input=text,
                       response_format="wav", speed=speed)
-        if OPENAI_MODEL.startswith("gpt-"):
+        if model_id.startswith("gpt-"):
             kwargs["instructions"] = OPENAI_INSTRUCTIONS
         response = client.audio.speech.create(**kwargs)
         with wave.open(io.BytesIO(response.content)) as wf:
