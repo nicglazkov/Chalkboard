@@ -2,876 +2,427 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Video — Chalkboard</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video · Chalkboard</title>
+  <meta name="color-scheme" content="dark light" />
+  <script>try{if(localStorage.getItem('cb-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #111110;
-      --surface: #1a1918;
-      --border: rgba(255, 255, 255, 0.07);
-      --text: #e8e4db;
-      --muted: #7a7570;
-      --accent: #c8b97a;
-      --chalk: #f0ebe0;
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-
-    body {
-      font-family: 'Lora', Georgia, serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.025;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* ── Nav ── */
-    .top-nav {
-      position: relative;
-      z-index: 10;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .nav-inner {
-      max-width: 1140px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      height: 52px;
-    }
-
-    .nav-brand {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 1.15rem;
-      font-weight: 400;
-      text-decoration: none;
-      letter-spacing: -0.01em;
-      flex-shrink: 0;
-    }
-
-    .nav-links { display: flex; gap: 0.25rem; }
-
-    .nav-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 0.35rem 0.75rem;
-      border-radius: 5px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-    .nav-link.active { color: var(--accent); }
-
-    /* ── Container ── */
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 1140px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    /* ── Back link ── */
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-      text-decoration: none;
-      margin-bottom: 1.5rem;
-      transition: color 0.15s;
-    }
-
-    .back-link:hover { color: var(--text); }
-
-    /* ── Main title ── */
-    .video-title {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 1.85rem;
-      font-weight: 400;
-      line-height: 1.25;
-      letter-spacing: -0.01em;
-      margin-bottom: 0.6rem;
-    }
-
-    .video-date {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-    }
-
-    /* ── Unified page grid ── */
-    .page-grid {
-      display: grid;
-      grid-template-columns: auto 320px;
-      gap: 2rem;
-      align-items: start;
-      width: fit-content;
-    }
-
-    @media (max-width: 900px) {
-      .page-grid { grid-template-columns: 1fr; width: 100%; }
-    }
-
-    /* ── Player cell ── */
-    .player-cell {
-      /* width/height set by syncPlayer() after sidebar renders */
-    }
-
-    /* ── Video player ── */
-    .player-wrap {
-      border-radius: 10px;
-      overflow: hidden;
-      background: #000;
-      min-height: 200px;
-    }
-
-    @media (max-width: 900px) {
-      .player-wrap { width: 100% !important; height: auto !important; aspect-ratio: 16/9; }
-    }
-
-    .player-wrap video {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .player-missing {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 0.5rem;
-      color: var(--muted);
-      height: 100%;
-      min-height: 200px;
-    }
-
-    .player-missing svg { opacity: 0.4; }
-
-    .player-missing p {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.78rem;
-    }
-
-    /* ── Sidebar ── */
-    .sidebar { display: flex; flex-direction: column; gap: 1rem; }
-
-    /* ── Panel cards ── */
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.1rem 1.2rem;
-    }
-
-    .panel-title {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.68rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      margin-bottom: 0.8rem;
-    }
-
-    /* ── Downloads ── */
-    .download-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-    }
-
-    .download-link {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--text);
-      text-decoration: none;
-      padding: 0.4rem 0.5rem;
-      border-radius: 5px;
-      transition: background 0.12s;
-    }
-
-    .download-link:hover { background: rgba(255,255,255,0.05); }
-
-    .download-link svg { color: var(--muted); flex-shrink: 0; }
-
-    .file-ext {
-      display: inline-block;
-      font-size: 0.6rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      background: rgba(255,255,255,0.08);
-      color: var(--muted);
-      padding: 0.1rem 0.35rem;
-      border-radius: 3px;
-      margin-left: auto;
-    }
-
-    /* ── Params ── */
-    .params-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem 0.75rem;
-    }
-
-    .param-item { }
-
-    .param-key {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin-bottom: 0.1rem;
-    }
-
-    .param-val {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.78rem;
-      color: var(--text);
-    }
-
-    /* ── Re-generate button ── */
-    .btn-regen {
-      display: block;
-      width: 100%;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: rgba(200,185,122,0.12);
-      color: var(--accent);
-      border: 1px solid rgba(200,185,122,0.25);
-      border-radius: 6px;
-      padding: 0.65rem 1rem;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      transition: background 0.15s, border-color 0.15s;
-      margin-top: 0.25rem;
-    }
-
-    .btn-regen:hover {
-      background: rgba(200,185,122,0.2);
-      border-color: rgba(200,185,122,0.4);
-    }
-
-    /* ── Delete button ── */
-    .btn-delete {
-      display: block;
-      width: 100%;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: rgba(224,96,96,0.12);
-      color: #e06060;
-      border: 1px solid rgba(224,96,96,0.25);
-      border-radius: 6px;
-      padding: 0.65rem 1rem;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      transition: background 0.15s, border-color 0.15s;
-      margin-top: 0.5rem;
-    }
-
-    .btn-delete:hover {
-      background: rgba(224,96,96,0.2);
-      border-color: rgba(224,96,96,0.4);
-    }
-
-
-    /* ── Script panel ── */
-    /* ── Transcript ── */
-    .transcript {
-      max-height: 420px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-
-    .transcript-row {
-      display: flex;
-      gap: 0.75rem;
-      align-items: baseline;
-      padding: 0.45rem 0.5rem;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.12s;
-      border: none;
-      background: none;
-      width: 100%;
-      text-align: left;
-    }
-
-    .transcript-row:hover { background: rgba(255,255,255,0.05); }
-
-    .transcript-row.active {
-      background: rgba(200,185,122,0.1);
-    }
-
-    .transcript-ts {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--accent);
-      flex-shrink: 0;
-      min-width: 2.8rem;
-      padding-top: 0.1rem;
-    }
-
-    .transcript-text {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.86rem;
-      line-height: 1.65;
-      color: var(--text);
-    }
-
-    .transcript-row.active .transcript-text {
-      color: var(--chalk);
-    }
-
-    /* Fallback plain script (when no segments.json) */
-    .script-text {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.88rem;
-      line-height: 1.75;
-      color: var(--text);
-      white-space: pre-wrap;
-      max-height: 420px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-
-    /* ── Related videos ── */
-    .related-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .related-card {
-      display: flex;
-      gap: 0.7rem;
-      text-decoration: none;
-      color: inherit;
-      padding: 0.5rem;
-      border-radius: 6px;
-      transition: background 0.12s;
-    }
-
-    .related-card:hover { background: rgba(255,255,255,0.04); }
-
-    .related-thumb {
-      width: 80px;
-      height: 45px;
-      border-radius: 4px;
-      overflow: hidden;
-      flex-shrink: 0;
-      background: rgba(255,255,255,0.04);
-      position: relative;
-    }
-
-    .related-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .related-thumb-fallback {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .related-thumb-fallback[data-theme="chalkboard"] { background: linear-gradient(135deg, #1c2a1e, #2d3b2e); }
-    .related-thumb-fallback[data-theme="light"]       { background: linear-gradient(135deg, #2a2830, #3a3545); }
-    .related-thumb-fallback[data-theme="colorful"]    { background: linear-gradient(135deg, #1e1a2e, #2a1a3e); }
-    .related-thumb-fallback:not([data-theme]),
-    .related-thumb-fallback[data-theme=""]            { background: linear-gradient(135deg, #1c2a1e, #2d3b2e); }
-
-    .related-meta { display: flex; flex-direction: column; justify-content: center; }
-
-    .related-topic {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.78rem;
-      color: var(--chalk);
-      line-height: 1.3;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .related-date {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem;
-      color: var(--muted);
-      margin-top: 0.2rem;
-    }
-
-    /* ── Loading / error ── */
-    .page-loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 50vh;
-      color: var(--muted);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-    }
-
-    .hidden { display: none !important; }
-  </style>
-  <script src="/job-status.js?v=3"></script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css?v=1" />
+  <script src="/app.js?v=1"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="nav" data-page="library"></header>
 
-  <!-- Top nav -->
-  <nav class="top-nav">
-    <div class="nav-inner">
-      <a class="nav-brand" href="/">Chalkboard</a>
-      <div class="nav-links">
-        <a class="nav-link" href="/">Generate</a>
-        <a class="nav-link active" href="/library">Library</a>
+  <main id="main" class="wrap">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/library">
+        <svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Library
+      </a>
+    </nav>
+
+    <!-- Loading skeleton -->
+    <div id="loading" class="v-skel" aria-busy="true" aria-label="Loading video">
+      <div class="skeleton" style="height:2.2rem;width:min(520px,80%)"></div>
+      <div class="skeleton" style="height:0.9rem;width:220px;margin-top:12px"></div>
+      <div class="v-grid" style="margin-top:28px">
+        <div class="skeleton" style="aspect-ratio:16/9;border-radius:var(--r-lg)"></div>
+        <div class="skeleton" style="height:260px;border-radius:var(--r-lg)"></div>
       </div>
-      <div id="job-status" style="margin-left:auto;position:relative"></div>
     </div>
-  </nav>
 
-  <div class="container">
+    <!-- Not found / failed to load -->
+    <div id="problem" hidden></div>
 
-    <a class="back-link" href="/library">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M7 2L3 6l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Library
-    </a>
+    <article id="content" hidden>
+      <header class="v-head">
+        <h1 class="page-title" id="video-title"></h1>
+        <p class="v-topic" id="video-topic" hidden></p>
+        <p class="v-meta" id="video-meta"></p>
+      </header>
 
-    <!-- Loading state -->
-    <div class="page-loading" id="loading">Loading…</div>
+      <div class="v-grid">
+        <div class="v-main">
+          <div class="player" id="player-wrap"></div>
 
-    <!-- Content (hidden until loaded) -->
-    <div id="content" class="hidden">
-
-      <h1 class="video-title" id="video-title"></h1>
-      <div class="video-date" id="video-date"></div>
-
-      <!-- Unified grid: video | sidebar on row 1, script | related on row 2 -->
-      <div class="page-grid">
-
-        <!-- Player -->
-        <div class="player-cell">
-          <div class="player-wrap" id="player-wrap">
-            <div class="player-missing" id="player-missing">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="4" y="10" width="40" height="28" rx="3" stroke="currentColor" stroke-width="2"/>
-                <path d="M20 18l12 6-12 6V18z" fill="currentColor" opacity="0.4"/>
-              </svg>
-              <p>Video not yet rendered</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sidebar -->
-        <div class="sidebar">
-
-          <!-- Downloads -->
-          <div class="panel" id="downloads-panel">
-            <div class="panel-title">Downloads</div>
-            <div class="download-list" id="download-list"></div>
+          <div class="tabs" role="tablist" aria-label="Video text" id="tabs" hidden>
+            <button class="tab" role="tab" id="tab-transcript" aria-controls="panel-transcript" aria-selected="true">Transcript</button>
+            <button class="tab" role="tab" id="tab-quiz" aria-controls="panel-quiz" aria-selected="false" tabindex="-1" hidden>Quiz <span class="tab-n" id="quiz-count"></span></button>
           </div>
 
-          <!-- Settings -->
-          <div class="panel">
-            <div class="panel-title">Settings</div>
-            <div class="params-grid" id="params-grid"></div>
-            <a class="btn-regen" id="regen-btn" href="/">Re-generate with same settings</a>
-            <button class="btn-delete" id="delete-btn">Delete video</button>
-          </div>
-
+          <section class="tab-panel" id="panel-transcript" role="tabpanel" aria-labelledby="tab-transcript">
+            <div class="transcript" id="script-text"></div>
+          </section>
+          <section class="tab-panel" id="panel-quiz" role="tabpanel" aria-labelledby="tab-quiz" hidden>
+            <p class="quiz-score" id="quiz-score" aria-live="polite"></p>
+            <ol class="quiz" id="quiz-list"></ol>
+          </section>
         </div>
 
-        <!-- Transcript / script -->
-        <div class="panel" id="script-panel">
-          <div class="panel-title">Transcript</div>
-          <div class="script-text" id="script-text"></div>
-        </div>
+        <aside class="v-side">
+          <a class="btn btn-primary btn-block" id="dl-video" hidden download="final.mp4">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11"/></svg>
+            Download video
+          </a>
 
-        <!-- Related -->
-        <div class="panel" id="related-panel">
-          <div class="panel-title">Related videos</div>
-          <div class="related-list" id="related-list"></div>
-        </div>
+          <section class="side-block" id="downloads-panel">
+            <h2 class="panel-title">Files</h2>
+            <ul class="files" id="download-list"></ul>
+          </section>
 
+          <section class="side-block">
+            <h2 class="panel-title">Settings</h2>
+            <dl class="params" id="params-grid"></dl>
+            <a class="btn btn-block" id="regen-btn" href="/">Generate again with these settings</a>
+          </section>
+
+          <section class="side-block" id="related-panel" hidden>
+            <h2 class="panel-title">Related videos</h2>
+            <div class="related" id="related-list"></div>
+          </section>
+
+          <button class="btn btn-quiet btn-sm v-delete" id="delete-btn" type="button">Delete video</button>
+        </aside>
       </div>
-
-    </div><!-- /#content -->
-
-  </div>
+    </article>
+  </main>
 
   <script>
-    function escHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    function formatDate(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (isNaN(d)) return '';
-      return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-    }
-
-    function formatDuration(sec) {
-      if (!sec || sec < 1) return '—';
-      const m = Math.floor(sec / 60);
-      const s = Math.round(sec % 60);
-      return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `0:${String(s).padStart(2, '0')}`;
-    }
-
-    const FILE_ICONS = {
-      mp4: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 5l4 2-4 2V5z" fill="currentColor" opacity="0.7"/></svg>`,
-      srt: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 5h7M3.5 7h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-      txt: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3.5 5h7M3.5 7h7M3.5 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-      json: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 5.5C4 5.5 3.5 6 3.5 6.5v1c0 .5-.5.5-.5.5s.5 0 .5.5v1c0 .5.5 1 1 1M9.5 5.5c.5 0 1 .5 1 1v1c0 .5.5.5.5.5s-.5 0-.5.5v1c0 .5-.5 1-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>`,
-      py: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 9V5.5a1.5 1.5 0 013 0v1H4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-      default: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/></svg>`,
-    };
+  (function () {
+    const { esc, fmtDuration, fmtClock, fmtDate, fileUrl, thumbInner, setMathText, resLabel } = window.CB;
+    const $ = (id) => document.getElementById(id);
+    const runId = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
 
     const FILE_LABELS = {
-      'final.mp4':    'Final video',
-      'scene.py':     'Manim source',
-      'script.txt':   'Script',
+      'scene.py': 'Manim source',
+      'script.txt': 'Script',
       'captions.srt': 'Captions',
-      'segments.json':'Segments',
-      'manifest.json':'Manifest',
-      'quiz.json':    'Quiz',
+      'segments.json': 'Segments',
+      'manifest.json': 'Manifest',
+      'quiz.json': 'Quiz',
       'chapters.txt': 'Chapters',
-      'voiceover.wav':'Voiceover',
+      'voiceover.wav': 'Voiceover',
     };
+    const FILE_ORDER = ['captions.srt', 'script.txt', 'quiz.json', 'chapters.txt', 'segments.json', 'manifest.json', 'scene.py'];
+    const cap = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : s);
 
-    function fileIcon(name) {
-      const ext = name.split('.').pop();
-      return FILE_ICONS[ext] || FILE_ICONS.default;
+    function problem(title, body, action) {
+      $('loading').remove();
+      $('problem').hidden = false;
+      $('problem').innerHTML = `<div class="state">
+        <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" stroke="currentColor" stroke-width="2"/><path d="M19 19l10 10M29 19L19 29" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <p class="state-title">${title}</p><p>${body}</p>${action}</div>`;
     }
 
-    function thumbFallbackHtml(topic, theme, cls) {
-      return `<div class="${cls}" data-theme="${escHtml(theme || 'chalkboard')}"></div>`;
+    // Browsers only play WebVTT tracks, so convert captions.srt on the fly.
+    async function addCaptions(videoEl, v) {
+      try {
+        const r = await fetch(fileUrl(v.run_id, 'captions.srt'));
+        if (!r.ok) return;
+        const srt = (await r.text()).replace(/\r/g, '');
+        const vtt = 'WEBVTT\n\n' + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = 'English';
+        track.srclang = 'en';
+        track.src = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
+        videoEl.appendChild(track);
+      } catch { /* captions are optional */ }
     }
 
-    const runId = location.pathname.split('/').filter(Boolean).pop();
-
-    async function load() {
-      const [metaRes] = await Promise.all([
-        fetch(`/api/library/${runId}`),
-      ]);
-
-      if (!metaRes.ok) {
-        document.getElementById('loading').textContent = 'Video not found.';
-        return;
+    function renderPlayer(v, files) {
+      const wrap = $('player-wrap');
+      if (!files.includes('final.mp4')) {
+        wrap.classList.add('player-missing');
+        wrap.innerHTML = `<div class="state"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" stroke="currentColor" stroke-width="2"/><path d="M21 19l9 5-9 5z" fill="currentColor"/></svg>
+          <p class="state-title">No rendered video</p><p>The render did not finish for this run. The script and other files are still available.</p></div>`;
+        return null;
       }
+      const video = document.createElement('video');
+      video.controls = true;
+      video.preload = 'metadata';
+      video.playsInline = true;
+      video.src = fileUrl(v.run_id, 'final.mp4');
+      if (v.thumb_path) video.poster = fileUrl(v.run_id, 'thumb.jpg');
+      wrap.appendChild(video);
+      if (files.includes('captions.srt')) addCaptions(video, v);
+      const dl = $('dl-video');
+      dl.href = video.src;
+      dl.hidden = false;
+      return video;
+    }
 
-      const v = await metaRes.json();
-
-      // Update page title
-      document.title = `${v.title || v.topic} — Chalkboard`;
-
-      // Hide loading, show content
-      document.getElementById('loading').classList.add('hidden');
-      document.getElementById('content').classList.remove('hidden');
-
-      // Size player after all panels have rendered
-      requestAnimationFrame(() => requestAnimationFrame(syncPlayer));
-
-      // Title + date
-      document.getElementById('video-title').textContent = v.title || v.topic;
-      document.getElementById('video-date').textContent = formatDate(v.created_at);
-
-      // Video player
-      const hasVideo = v.output_files && v.output_files.includes('final.mp4');
-      const hasSrt   = v.output_files && v.output_files.includes('captions.srt');
-      const playerWrap = document.getElementById('player-wrap');
-      let videoEl = null;
-      if (hasVideo) {
-        document.getElementById('player-missing').remove();
-        videoEl = document.createElement('video');
-        videoEl.controls = true;
-        videoEl.preload = 'metadata';
-        videoEl.style.cssText = 'width:100%;height:100%;display:block;';
-        const src = document.createElement('source');
-        src.src = `/api/jobs/${v.run_id}/files/final.mp4`;
-        src.type = 'video/mp4';
-        videoEl.appendChild(src);
-        if (hasSrt) {
-          const track = document.createElement('track');
-          track.kind = 'subtitles';
-          track.label = 'English';
-          track.srclang = 'en';
-          track.src = `/api/jobs/${v.run_id}/files/captions.srt`;
-          videoEl.appendChild(track);
-        }
-        playerWrap.appendChild(videoEl);
-      }
-
-      // Downloads
-      const files = v.output_files || [];
-      const downloadList = document.getElementById('downloads-panel');
-      if (files.length === 0) {
-        downloadList.remove();
-      } else {
-        // Sort: final.mp4 first, then alphabetical
-        const sorted = [...files].sort((a, b) => {
-          if (a === 'final.mp4') return -1;
-          if (b === 'final.mp4') return 1;
-          return a.localeCompare(b);
+    function renderFiles(v, files) {
+      const list = files
+        .filter((f) => f !== 'final.mp4' && !f.endsWith('.jpg'))
+        .sort((a, b) => {
+          const ia = FILE_ORDER.indexOf(a), ib = FILE_ORDER.indexOf(b);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
         });
-        const list = document.getElementById('download-list');
-        sorted
-          .filter(f => !f.endsWith('.jpg')) // skip thumbnail
-          .forEach(f => {
-            const ext = f.split('.').pop();
-            const label = FILE_LABELS[f] || f;
-            list.insertAdjacentHTML('beforeend', `
-              <a class="download-link" href="/api/jobs/${v.run_id}/files/${encodeURIComponent(f)}" download="${escHtml(f)}">
-                ${fileIcon(f)}
-                <span>${escHtml(label)}</span>
-                <span class="file-ext">${escHtml(ext)}</span>
-              </a>`);
-          });
-      }
+      if (!list.length) { $('downloads-panel').remove(); return; }
+      $('download-list').innerHTML = list.map((f) => {
+        const ext = f.split('.').pop();
+        return `<li><a class="file-link" href="${fileUrl(v.run_id, f)}" download="${esc(f)}">
+          <span>${esc(FILE_LABELS[f] || f)}</span><span class="file-ext">${esc(ext)}</span></a></li>`;
+      }).join('');
+    }
 
-      // Params
-      const params = [
-        { key: 'Effort',   val: v.effort   || '—' },
-        { key: 'Audience', val: v.audience || '—' },
-        { key: 'Tone',     val: v.tone     || '—' },
-        { key: 'Theme',    val: v.theme    || '—' },
-        { key: 'Quality',  val: v.quality  || '—' },
-        { key: 'Speed',    val: v.speed != null ? `${v.speed}×` : '—' },
-        { key: 'Duration', val: formatDuration(v.duration_sec) },
-        { key: 'Template', val: v.template || 'none' },
+    function renderParams(v) {
+      const rows = [
+        ['Effort', cap(v.effort)],
+        ['Audience', cap(v.audience)],
+        ['Tone', cap(v.tone)],
+        ['Theme', cap(v.theme)],
+        ['Template', v.template ? cap(v.template) : 'None'],
+        ['Speed', v.speed != null ? `${v.speed}x` : ''],
+        ['Resolution', resLabel(v.quality)],
+        ['Length', fmtDuration(v.duration_sec)],
       ];
-      const paramsGrid = document.getElementById('params-grid');
-      params.forEach(p => {
-        paramsGrid.insertAdjacentHTML('beforeend', `
-          <div class="param-item">
-            <div class="param-key">${escHtml(p.key)}</div>
-            <div class="param-val">${escHtml(p.val)}</div>
-          </div>`);
-      });
-
-      // Re-generate link — pass all params as query string
-      const regenParams = new URLSearchParams({
-        topic:    v.topic,
-        effort:   v.effort   || 'medium',
+      $('params-grid').innerHTML = rows.map(([k, val]) =>
+        `<div><dt>${k}</dt><dd>${esc(val || 'Unknown')}</dd></div>`).join('');
+      const p = new URLSearchParams({
+        topic: v.topic,
+        effort: v.effort || 'medium',
         audience: v.audience || 'intermediate',
-        tone:     v.tone     || 'casual',
-        theme:    v.theme    || 'chalkboard',
-        speed:    v.speed    != null ? v.speed : 1.0,
-        ...(v.template ? { template: v.template } : {}),
+        tone: v.tone || 'casual',
+        theme: v.theme || 'chalkboard',
+        speed: v.speed != null ? v.speed : 1.0,
       });
-      document.getElementById('regen-btn').href = `/?${regenParams}`;
+      if (v.template) p.set('template', v.template);
+      if (['low', 'medium', 'high', '4k'].includes(v.quality)) p.set('quality', v.quality);
+      $('regen-btn').href = `/?${p}`;
+    }
 
-      // Delete button
-      document.getElementById('delete-btn').addEventListener('click', async () => {
-        if (!confirm('Delete this video and all its files? This cannot be undone.')) return;
+    // ── Transcript ──────────────────────────────────────────────────────
+    async function renderTranscript(v, files, video) {
+      const box = $('script-text');
+      let segs = null;
+      if (files.includes('segments.json')) {
         try {
-          const res = await fetch(`/api/library/${runId}?files=true`, { method: 'DELETE' });
-          if (res.ok) {
-            window.location.href = '/library';
-          } else {
-            alert('Failed to delete video.');
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Failed to delete video.');
-        }
-      });
-
-      // Interactive transcript (from segments.json) or plain script fallback
-      const scriptPanel = document.getElementById('script-panel');
-      const scriptContainer = document.getElementById('script-text');
-      const hasSegments = v.output_files && v.output_files.includes('segments.json');
-
-      if (hasSegments) {
-        try {
-          const segRes = await fetch(`/api/jobs/${v.run_id}/files/segments.json`);
-          const segs = segRes.ok ? await segRes.json() : null;
-          if (segs && segs.length) {
-            // Build cumulative start times
-            let cursor = 0;
-            const rows = segs.map((seg, i) => {
-              const start = cursor;
-              cursor += seg.actual_duration_sec;
-              return { start, text: seg.text };
-            });
-
-            // Render transcript
-            scriptContainer.className = 'transcript';
-            scriptContainer.innerHTML = rows.map((r, i) => {
-              const m = Math.floor(r.start / 60);
-              const s = Math.floor(r.start % 60);
-              const ts = `${m}:${String(s).padStart(2, '0')}`;
-              return `<button class="transcript-row" data-start="${r.start}" data-index="${i}">
-                <span class="transcript-ts">${ts}</span>
-                <span class="transcript-text">${escHtml(r.text)}</span>
-              </button>`;
-            }).join('');
-
-            // Click to seek
-            scriptContainer.addEventListener('click', e => {
-              const row = e.target.closest('.transcript-row');
-              if (!row || !videoEl) return;
-              videoEl.currentTime = parseFloat(row.dataset.start);
-              videoEl.play();
-            });
-
-            // Highlight active segment on timeupdate
-            if (videoEl) {
-              const rowEls = scriptContainer.querySelectorAll('.transcript-row');
-              videoEl.addEventListener('timeupdate', () => {
-                const t = videoEl.currentTime;
-                let active = 0;
-                for (let i = 0; i < rows.length; i++) {
-                  if (t >= rows[i].start) active = i;
-                }
-                rowEls.forEach((el, i) => {
-                  const isActive = i === active;
-                  if (isActive === el.classList.contains('active')) return;
-                  el.classList.toggle('active', isActive);
-                  // Scroll only within the transcript box — never touch page scroll
-                  if (isActive) {
-                    const box = scriptContainer;
-                    const rowTop = el.offsetTop;
-                    const rowBottom = rowTop + el.offsetHeight;
-                    const boxTop = box.scrollTop;
-                    const boxBottom = boxTop + box.clientHeight;
-                    if (rowTop < boxTop) {
-                      box.scrollTop = rowTop - 8;
-                    } else if (rowBottom > boxBottom) {
-                      box.scrollTop = rowBottom - box.clientHeight + 8;
-                    }
-                  }
-                });
-              });
-            }
-          } else {
-            throw new Error('empty');
-          }
-        } catch {
-          // Fall back to plain script text
-          if (v.script && v.script.trim()) {
-            scriptContainer.textContent = v.script;
-          } else {
-            scriptPanel.remove();
-          }
-        }
-      } else if (v.script && v.script.trim()) {
-        scriptContainer.textContent = v.script;
-      } else {
-        scriptPanel.remove();
+          const r = await fetch(fileUrl(v.run_id, 'segments.json'));
+          if (r.ok) segs = await r.json();
+        } catch {}
       }
+      if (Array.isArray(segs) && segs.length) {
+        let t = 0;
+        const rows = segs.map((s) => { const start = t; t += s.actual_duration_sec || 0; return { start, text: s.text || '' }; });
+        box.innerHTML = '';
+        rows.forEach((r, i) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'tx-row';
+          b.dataset.start = r.start;
+          b.innerHTML = `<span class="tx-ts">${fmtClock(r.start)}</span><span class="tx-text"></span>`;
+          b.setAttribute('aria-label', `Play from ${fmtClock(r.start)}`);
+          setMathText(b.querySelector('.tx-text'), r.text);
+          box.appendChild(b);
+        });
+        if (!video) box.classList.add('no-seek');
+        box.addEventListener('click', (e) => {
+          const row = e.target.closest('.tx-row');
+          if (!row || !video) return;
+          video.currentTime = parseFloat(row.dataset.start);
+          video.play().catch(() => {});
+        });
+        if (video) {
+          const els = box.querySelectorAll('.tx-row');
+          let active = -1;
+          video.addEventListener('timeupdate', () => {
+            const now = video.currentTime;
+            let idx = 0;
+            for (let i = 0; i < rows.length; i++) if (now >= rows[i].start) idx = i;
+            if (idx === active) return;
+            if (active >= 0) els[active].classList.remove('active');
+            els[idx].classList.add('active');
+            active = idx;
+            // Scroll inside the transcript box only, never the page.
+            const el = els[idx];
+            if (el.offsetTop < box.scrollTop) box.scrollTop = el.offsetTop - 8;
+            else if (el.offsetTop + el.offsetHeight > box.scrollTop + box.clientHeight)
+              box.scrollTop = el.offsetTop + el.offsetHeight - box.clientHeight + 8;
+          });
+        }
+        return true;
+      }
+      if (v.script && v.script.trim()) {
+        box.classList.add('script-plain');
+        setMathText(box, v.script);
+        return true;
+      }
+      return false;
+    }
 
-      // Related videos (by topic similarity — fetch library, exclude self)
-      const relPanel = document.getElementById('related-panel');
-      const relList = document.getElementById('related-list');
+    // ── Quiz ────────────────────────────────────────────────────────────
+    async function renderQuiz(v, files) {
+      if (!files.includes('quiz.json')) return false;
+      let qs;
+      try {
+        const r = await fetch(fileUrl(v.run_id, 'quiz.json'));
+        if (!r.ok) return false;
+        const data = await r.json();
+        qs = Array.isArray(data) ? data : data.questions;
+      } catch { return false; }
+      if (!Array.isArray(qs) || !qs.length) return false;
+
+      const LETTERS = 'ABCDEFGH';
+      const list = $('quiz-list');
+      let answered = 0, correct = 0;
+      const score = () => {
+        $('quiz-score').textContent = answered
+          ? `${correct} of ${answered} correct${answered === qs.length && correct === qs.length ? '. Perfect score.' : ''}`
+          : `${qs.length} questions. Pick an answer to check it.`;
+      };
+      qs.forEach((q, qi) => {
+        const li = document.createElement('li');
+        li.className = 'q';
+        const opts = (q.options || []).map((o) => String(o).replace(/^\s*[A-H][).:]\s+/, ''));
+        const answer = String(q.answer || '').trim();
+        let correctIdx = LETTERS.indexOf(answer.charAt(0).toUpperCase());
+        if (answer.length > 1 || correctIdx < 0) {
+          const byText = opts.findIndex((o) => o.trim() === answer.replace(/^\s*[A-H][).:]\s+/, '').trim());
+          if (byText >= 0) correctIdx = byText;
+        }
+        li.innerHTML = `<p class="q-text"></p><div class="q-opts" role="group"></div><p class="q-why" hidden></p>`;
+        setMathText(li.querySelector('.q-text'), q.question || '');
+        const group = li.querySelector('.q-opts');
+        group.setAttribute('aria-label', `Answers for question ${qi + 1}`);
+        opts.forEach((o, oi) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'q-opt';
+          b.innerHTML = `<span class="q-letter">${LETTERS[oi]}</span><span class="q-o"></span>`;
+          setMathText(b.querySelector('.q-o'), o);
+          b.addEventListener('click', () => {
+            if (li.classList.contains('answered')) return;
+            li.classList.add('answered');
+            answered++;
+            const right = oi === correctIdx;
+            if (right) correct++;
+            group.querySelectorAll('.q-opt').forEach((x, xi) => {
+              x.disabled = true;
+              if (xi === correctIdx) x.classList.add('is-right');
+              else if (xi === oi) x.classList.add('is-wrong');
+            });
+            const why = li.querySelector('.q-why');
+            why.hidden = false;
+            setMathText(why, (right ? 'Correct. ' : `Not quite. The answer is ${LETTERS[correctIdx] || answer}. `) + (q.explanation || ''));
+            score();
+          });
+          group.appendChild(b);
+        });
+        list.appendChild(li);
+      });
+      $('quiz-count').textContent = qs.length;
+      score();
+      return true;
+    }
+
+    function setupTabs(hasTranscript, hasQuiz) {
+      const tTab = $('tab-transcript'), qTab = $('tab-quiz');
+      if (!hasTranscript) { tTab.hidden = true; $('panel-transcript').hidden = true; }
+      if (hasQuiz) qTab.hidden = false;
+      if (!hasTranscript && !hasQuiz) return;
+      $('tabs').hidden = false;
+      const tabs = [tTab, qTab].filter((t) => !t.hidden);
+      const select = (tab) => {
+        for (const t of tabs) {
+          const on = t === tab;
+          t.setAttribute('aria-selected', String(on));
+          t.tabIndex = on ? 0 : -1;
+          $(t.getAttribute('aria-controls')).hidden = !on;
+        }
+      };
+      select(tabs[0]);
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => select(t));
+        t.addEventListener('keydown', (e) => {
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+          const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+          select(n); n.focus();
+        });
+      });
+    }
+
+    async function renderRelated(v) {
       try {
         const words = v.topic.split(/\s+/).slice(0, 3).join(' ');
-        const relRes = await fetch(`/api/library?q=${encodeURIComponent(words)}&limit=5&sort=newest`);
-        if (relRes.ok) {
-          const relData = await relRes.json();
-          const others = relData.videos.filter(r => r.run_id !== v.run_id).slice(0, 4);
-          if (others.length === 0) {
-            relPanel.remove();
-          } else {
-            others.forEach(r => {
-              const thumbHtml = r.thumb_path
-                ? `<img src="/api/jobs/${r.run_id}/files/thumb.jpg" alt="" loading="lazy"
-                       onerror="this.parentNode.innerHTML='<div class=\\'related-thumb-fallback\\' data-theme=\\'${escHtml(r.theme || '')}\\' ></div>'">`
-                : `<div class="related-thumb-fallback" data-theme="${escHtml(r.theme || '')}"></div>`;
-              relList.insertAdjacentHTML('beforeend', `
-                <a class="related-card" href="/library/${r.run_id}">
-                  <div class="related-thumb">${thumbHtml}</div>
-                  <div class="related-meta">
-                    <span class="related-topic">${escHtml(r.topic)}</span>
-                    <span class="related-date">${formatDate(r.created_at)}</span>
-                  </div>
-                </a>`);
-            });
-          }
-        } else {
-          relPanel.remove();
-        }
-      } catch {
-        relPanel.remove();
+        const r = await fetch(`/api/library?q=${encodeURIComponent(words)}&limit=5&sort=newest`);
+        if (!r.ok) return;
+        const others = (await r.json()).videos.filter((x) => x.run_id !== v.run_id).slice(0, 4);
+        if (!others.length) return;
+        $('related-list').innerHTML = others.map((x) => `
+          <a class="rel" href="/library/${encodeURIComponent(x.run_id)}">
+            <div class="thumb">${thumbInner(x)}</div>
+            <div class="rel-text"><span class="rel-title">${esc(x.title || x.topic)}</span>
+            <span class="rel-date">${esc(fmtDate(x.created_at))}</span></div>
+          </a>`).join('');
+        $('related-panel').hidden = false;
+      } catch {}
+    }
+
+    $('delete-btn').addEventListener('click', async () => {
+      if (!confirm('Delete this video and all its files? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`/api/library/${encodeURIComponent(runId)}?files=true`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        location.href = '/library';
+      } catch (err) {
+        alert(`Could not delete the video (${err.message}).`);
       }
-
-      // Re-sync now that sidebar final height is known
-      requestAnimationFrame(syncPlayer);
-    }
-
-    function syncPlayer() {
-      const sidebar = document.querySelector('.sidebar');
-      const wrap = document.getElementById('player-wrap');
-      if (!sidebar || !wrap) return;
-      // On narrow screens the media query handles sizing — skip
-      if (window.innerWidth <= 900) { wrap.style.width = ''; wrap.style.height = ''; return; }
-      const h = sidebar.offsetHeight;
-      wrap.style.height = h + 'px';
-      wrap.style.width = Math.round(h * 16 / 9) + 'px';
-    }
-
-    window.addEventListener('resize', syncPlayer);
-
-    load().catch(err => {
-      document.getElementById('loading').textContent = 'Failed to load video.';
-      console.error(err);
     });
-  </script>
 
+    async function load() {
+      let res;
+      try {
+        res = await fetch(`/api/library/${encodeURIComponent(runId)}`);
+      } catch {
+        problem('Could not load this video', 'The server did not respond. Check that it is running.',
+          '<button class="btn" type="button" onclick="location.reload()">Try again</button>');
+        return;
+      }
+      if (res.status === 404) {
+        problem('Video not found', 'It may have been deleted, or the link is wrong.',
+          '<a class="btn" href="/library">Back to the library</a>');
+        return;
+      }
+      if (!res.ok) {
+        problem('Could not load this video', `The server answered HTTP ${res.status}.`,
+          '<button class="btn" type="button" onclick="location.reload()">Try again</button>');
+        return;
+      }
+      const v = await res.json();
+      const files = v.output_files || [];
+      const title = v.title || v.topic;
+      document.title = `${title} · Chalkboard`;
+
+      $('loading').remove();
+      $('content').hidden = false;
+      setMathText($('video-title'), title);
+      if (v.title && v.topic && v.title !== v.topic) {
+        $('video-topic').hidden = false;
+        setMathText($('video-topic'), v.topic);
+      }
+      $('video-meta').innerHTML = [fmtDuration(v.duration_sec), fmtDate(v.created_at, true)]
+        .filter(Boolean).map((s) => `<span>${esc(s)}</span>`).join('');
+
+      const video = renderPlayer(v, files);
+      renderFiles(v, files);
+      renderParams(v);
+      const [hasTx, hasQuiz] = await Promise.all([renderTranscript(v, files, video), renderQuiz(v, files)]);
+      setupTabs(hasTx, hasQuiz);
+      renderRelated(v);
+    }
+
+    load().catch((err) => {
+      console.error(err);
+      if ($('loading')) problem('Could not load this video', esc(err.message), '<button class="btn" type="button" onclick="location.reload()">Try again</button>');
+    });
+  })();
+  </script>
 </body>
 </html>

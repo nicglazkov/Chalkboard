@@ -2,859 +2,252 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Library — Chalkboard</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Library · Chalkboard</title>
+  <meta name="color-scheme" content="dark light" />
+  <script>try{if(localStorage.getItem('cb-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #111110;
-      --surface: #1a1918;
-      --border: rgba(255, 255, 255, 0.07);
-      --text: #e8e4db;
-      --muted: #7a7570;
-      --accent: #c8b97a;
-      --chalk: #f0ebe0;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body { height: 100%; }
-
-    body {
-      font-family: 'Lora', Georgia, serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.025;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* ── Nav ── */
-    .top-nav {
-      position: relative;
-      z-index: 10;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .nav-inner {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      height: 52px;
-    }
-
-    .nav-brand {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 1.15rem;
-      font-weight: 400;
-      text-decoration: none;
-      letter-spacing: -0.01em;
-      flex-shrink: 0;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 0.25rem;
-    }
-
-    .nav-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 0.35rem 0.75rem;
-      border-radius: 5px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-link:hover {
-      color: var(--text);
-      background: rgba(255,255,255,0.04);
-    }
-
-    .nav-link.active {
-      color: var(--accent);
-    }
-
-    /* ── Page layout ── */
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    /* ── Toolbar ── */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1.75rem;
-    }
-
-    .search-wrap {
-      position: relative;
-      flex: 1;
-    }
-
-    .search-wrap svg {
-      position: absolute;
-      left: 0.7rem;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted);
-      pointer-events: none;
-    }
-
-    .search-input {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.82rem;
-      border-radius: 6px;
-      padding: 0.5rem 0.75rem 0.5rem 2.2rem;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    .search-input::placeholder { color: var(--muted); }
-    .search-input:focus { border-color: var(--accent); }
-
-    .sort-select {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.78rem;
-      border-radius: 6px;
-      padding: 0.5rem 2rem 0.5rem 0.75rem;
-      outline: none;
-      cursor: pointer;
-      transition: border-color 0.15s;
-      appearance: none;
-      -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7570' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.6rem center;
-      flex-shrink: 0;
-    }
-
-    .sort-select:focus { border-color: var(--accent); }
-
-    .total-label {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    /* ── Grid ── */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1.25rem;
-    }
-
-    @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
-    @media (max-width: 780px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 480px)  { .grid { grid-template-columns: 1fr; } }
-
-    /* ── Card ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      transition: border-color 0.15s, transform 0.12s;
-    }
-
-    .card:hover {
-      border-color: rgba(200,185,122,0.3);
-      transform: translateY(-2px);
-    }
-
-    /* ── Card menu ── */
-    .card { position: relative; }
-
-    .card-menu-btn {
-      position: absolute;
-      top: 0.4rem;
-      right: 0.4rem;
-      z-index: 5;
-      width: 28px;
-      height: 28px;
-      border: none;
-      border-radius: 6px;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-size: 1.1rem;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.15s, background 0.12s;
-      backdrop-filter: blur(4px);
-    }
-
-    .card:hover .card-menu-btn { opacity: 1; }
-    .card-menu-btn:hover { background: rgba(0,0,0,0.8); }
-
-    .card-dropdown {
-      position: absolute;
-      top: 2rem;
-      right: 0.4rem;
-      z-index: 10;
-      min-width: 140px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-      overflow: hidden;
-      display: none;
-    }
-
-    .card-dropdown.open { display: block; }
-
-    .card-dropdown button {
-      width: 100%;
-      padding: 0.55rem 0.75rem;
-      border: none;
-      background: none;
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      text-align: left;
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-
-    .card-dropdown button:hover {
-      background: rgba(255,255,255,0.06);
-    }
-
-    .card-dropdown .delete-opt {
-      color: #e06060;
-    }
-
-    .card-dropdown .delete-opt:hover {
-      background: rgba(224,96,96,0.1);
-    }
-
-    /* ── Thumbnail ── */
-    .thumb-wrap {
-      position: relative;
-      width: 100%;
-      padding-bottom: 56.25%; /* 16:9 */
-      overflow: hidden;
-      background: var(--bg);
-      flex-shrink: 0;
-    }
-
-    .thumb-wrap img {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    /* CSS fallback thumbnails keyed by theme */
-    .thumb-fallback {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.75rem;
-    }
-
-    .thumb-fallback[data-theme="chalkboard"] {
-      background: linear-gradient(135deg, #1c2a1e 0%, #2d3b2e 100%);
-    }
-    .thumb-fallback[data-theme="light"] {
-      background: linear-gradient(135deg, #2a2830 0%, #3a3545 100%);
-    }
-    .thumb-fallback[data-theme="colorful"] {
-      background: linear-gradient(135deg, #1e1a2e 0%, #2a1a3e 50%, #1a2e2a 100%);
-    }
-    .thumb-fallback:not([data-theme]),
-    .thumb-fallback[data-theme=""] {
-      background: linear-gradient(135deg, #1c2a1e 0%, #2d3b2e 100%);
-    }
-
-    .thumb-fallback-text {
-      font-family: 'DM Serif Display', serif;
-      font-size: 0.75rem;
-      color: rgba(240,235,224,0.6);
-      text-align: center;
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .duration-badge {
-      position: absolute;
-      bottom: 0.4rem;
-      right: 0.4rem;
-      background: rgba(0,0,0,0.7);
-      color: #fff;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.68rem;
-      font-weight: 500;
-      padding: 0.15rem 0.4rem;
-      border-radius: 3px;
-    }
-
-    /* ── Card body ── */
-    .card-body {
-      padding: 0.65rem 0.75rem 0.8rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-      flex: 1;
-    }
-
-    .card-title {
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.82rem;
-      font-weight: 500;
-      color: var(--chalk);
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .card-meta {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      margin-top: auto;
-      padding-top: 0.3rem;
-    }
-
-    .badge {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 0.15rem 0.45rem;
-      border-radius: 3px;
-    }
-
-    .badge-quality {
-      background: rgba(200,185,122,0.12);
-      color: var(--accent);
-    }
-
-    .badge-theme {
-      background: rgba(255,255,255,0.05);
-      color: var(--muted);
-    }
-
-    .card-date {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem;
-      color: var(--muted);
-      margin-left: auto;
-      white-space: nowrap;
-    }
-
-    /* ── Pagination ── */
-    .pagination {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-      margin-top: 2rem;
-    }
-
-    .page-btn {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      min-width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0 0.5rem;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-    }
-
-    .page-btn:hover:not(:disabled):not(.active) {
-      color: var(--text);
-      border-color: rgba(255,255,255,0.2);
-    }
-
-    .page-btn.active {
-      color: var(--chalk);
-      border-color: var(--accent);
-      background: rgba(200,185,122,0.1);
-    }
-
-    .page-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .page-ellipsis {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      padding: 0 0.15rem;
-    }
-
-    .per-page-wrap {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin-left: auto;
-    }
-
-    .per-page-label {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.68rem;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .per-page-select {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      border-radius: 5px;
-      padding: 0.3rem 1.5rem 0.3rem 0.5rem;
-      outline: none;
-      cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7570' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.4rem center;
-      transition: border-color 0.15s;
-    }
-
-    .per-page-select:focus { border-color: var(--accent); }
-
-    /* ── Empty state ── */
-    .empty-state {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 5rem 2rem;
-      color: var(--muted);
-    }
-
-    .empty-state svg {
-      opacity: 0.3;
-      margin-bottom: 1rem;
-    }
-
-    .empty-state p {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.82rem;
-    }
-
-    .empty-state .empty-hint {
-      font-family: 'Lora', Georgia, serif;
-      font-style: italic;
-      font-size: 0.85rem;
-      margin-top: 0.4rem;
-      color: rgba(122,117,112,0.7);
-    }
-
-    /* ── Loading skeleton ── */
-    .skeleton-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .skeleton-thumb {
-      width: 100%;
-      padding-bottom: 56.25%;
-      background: rgba(255,255,255,0.04);
-      position: relative;
-    }
-
-    .skeleton-body {
-      padding: 0.65rem 0.75rem 0.8rem;
-    }
-
-    .skeleton-line {
-      height: 0.7rem;
-      background: rgba(255,255,255,0.05);
-      border-radius: 3px;
-      margin-bottom: 0.45rem;
-    }
-
-    .skeleton-line:last-child { width: 55%; }
-
-    @keyframes shimmer {
-      0%   { opacity: 0.5; }
-      50%  { opacity: 1; }
-      100% { opacity: 0.5; }
-    }
-
-    .skeleton-card { animation: shimmer 1.5s ease-in-out infinite; }
-  </style>
-  <script src="/job-status.js?v=3"></script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css?v=1" />
+  <script src="/app.js?v=1"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="nav" data-page="library"></header>
 
-  <!-- Top nav -->
-  <nav class="top-nav">
-    <div class="nav-inner">
-      <a class="nav-brand" href="/">Chalkboard</a>
-      <div class="nav-links">
-        <a class="nav-link" href="/">Generate</a>
-        <a class="nav-link active" href="/library">Library</a>
+  <main id="main" class="wrap">
+    <div class="lib-head">
+      <div>
+        <h1 class="page-title">Library</h1>
+        <p class="lib-count" id="total-label" aria-live="polite">&nbsp;</p>
       </div>
-      <div id="job-status" style="margin-left:auto;position:relative"></div>
-    </div>
-  </nav>
-
-  <div class="container">
-
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <div class="search-wrap">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        <input class="search-input" type="search" id="search" placeholder="Search videos…" autocomplete="off" />
+      <div class="lib-tools" role="search">
+        <div class="search">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <label for="search" class="sr-only">Search videos</label>
+          <input class="input" type="search" id="search" placeholder="Search videos" autocomplete="off" />
+          <kbd class="search-key" aria-hidden="true">/</kbd>
+        </div>
+        <label for="sort" class="sr-only">Sort by</label>
+        <select class="select sort" id="sort">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="longest">Longest</option>
+          <option value="shortest">Shortest</option>
+        </select>
       </div>
-      <select class="sort-select" id="sort">
-        <option value="newest">Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="longest">Longest</option>
-        <option value="shortest">Shortest</option>
-      </select>
-      <span class="total-label" id="total-label"></span>
     </div>
 
-    <!-- Video grid -->
-    <div class="grid" id="grid"></div>
-
-    <!-- Pagination -->
-    <div class="pagination" id="pagination" style="display:none"></div>
-
-  </div>
+    <div class="grid" id="grid" aria-live="polite"></div>
+    <nav class="pagination" id="pagination" aria-label="Pages" hidden></nav>
+  </main>
 
   <script>
-    let perPage = 25;
-    let currentPage = 1;
+  (function () {
+    const { esc, fmtDuration, fmtDate, thumbInner, resLabel } = window.CB;
+    const $ = (id) => document.getElementById(id);
+    const grid = $('grid');
+    const searchEl = $('search');
+    const sortEl = $('sort');
+    const totalLabel = $('total-label');
+    const pager = $('pagination');
+
+    // State lives in the URL so reloads and back navigation keep it.
+    const qs = new URLSearchParams(location.search);
+    let perPage = [25, 50, 100].includes(+qs.get('per')) ? +qs.get('per') : 25;
+    let page = Math.max(1, parseInt(qs.get('page'), 10) || 1);
+    let query = qs.get('q') || '';
+    let sort = ['newest', 'oldest', 'longest', 'shortest'].includes(qs.get('sort')) ? qs.get('sort') : 'newest';
     let total = 0;
-    let currentQuery = '';
-    let currentSort = 'newest';
-    let loading = false;
+    let reqId = 0;
+    searchEl.value = query;
+    sortEl.value = sort;
 
-    const grid = document.getElementById('grid');
-    const searchEl = document.getElementById('search');
-    const sortEl = document.getElementById('sort');
-    const totalLabel = document.getElementById('total-label');
-    const paginationEl = document.getElementById('pagination');
-
-    function formatDuration(sec) {
-      if (!sec || sec < 1) return '';
-      const m = Math.floor(sec / 60);
-      const s = Math.round(sec % 60);
-      return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `0:${String(s).padStart(2, '0')}`;
+    function saveUrl() {
+      const p = new URLSearchParams();
+      if (query) p.set('q', query);
+      if (sort !== 'newest') p.set('sort', sort);
+      if (page > 1) p.set('page', page);
+      if (perPage !== 25) p.set('per', perPage);
+      history.replaceState(null, '', '/library' + (p.toString() ? '?' + p : ''));
     }
 
-    function formatDate(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (isNaN(d)) return '';
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    }
+    const MORE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>';
 
-    function makeThumbFallback(topic, theme) {
-      return `<div class="thumb-fallback" data-theme="${theme || 'chalkboard'}">
-        <span class="thumb-fallback-text">${escHtml(topic)}</span>
-      </div>`;
-    }
-
-    // Called from img onerror — avoids embedding HTML with double quotes inside an attribute
-    function thumbError(img, topic, theme) {
-      img.parentNode.innerHTML = makeThumbFallback(topic, theme);
-    }
-
-    function escHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    function makeCard(v) {
-      const dur = formatDuration(v.duration_sec);
-      const date = formatDate(v.created_at);
-      const thumbHtml = v.thumb_path
-        ? `<img src="/api/jobs/${v.run_id}/files/thumb.jpg" alt="${escHtml(v.topic)}" loading="lazy"
-               onerror="thumbError(this,'${escHtml(v.topic).replace(/'/g,"&#39;")}','${escHtml(v.theme||'chalkboard')}')">`
-        : makeThumbFallback(v.topic, v.theme);
-
-      return `<a class="card" href="/library/${v.run_id}" data-run-id="${escHtml(v.run_id)}">
-        <button class="card-menu-btn" aria-label="More options" onclick="toggleMenu(event, this)">&#8942;</button>
-        <div class="card-dropdown">
-          <button onclick="openVideo(event, '${escHtml(v.run_id)}')">Open</button>
-          <button class="delete-opt" onclick="deleteVideo(event, '${escHtml(v.run_id)}', '${escHtml(v.title || v.topic).replace(/'/g,"&#39;")}')">Delete</button>
+    function card(v) {
+      const title = v.title || v.topic;
+      const dur = fmtDuration(v.duration_sec);
+      const id = esc(v.run_id);
+      return `<article class="card" data-run-id="${id}">
+        <a class="card-link" href="/library/${encodeURIComponent(v.run_id)}">
+          <div class="thumb">${thumbInner(v)}${dur ? `<span class="duration">${dur}</span>` : ''}</div>
+          <h2 class="card-title">${esc(title)}</h2>
+        </a>
+        <p class="card-meta"><span>${esc(fmtDate(v.created_at))}</span><span class="card-q">${esc(resLabel(v.quality))}</span></p>
+        <button class="icon-btn card-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Options for ${esc(title)}">${MORE}</button>
+        <div class="menu" hidden>
+          <a href="/library/${encodeURIComponent(v.run_id)}">Open</a>
+          <button type="button" class="danger" data-delete="${id}" data-title="${esc(title)}">Delete</button>
         </div>
-        <div class="thumb-wrap">
-          ${thumbHtml}
-          ${dur ? `<span class="duration-badge">${escHtml(dur)}</span>` : ''}
-        </div>
-        <div class="card-body">
-          <div class="card-title">${escHtml(v.title || v.topic)}</div>
-          <div class="card-meta">
-            <span class="badge badge-quality">${escHtml(v.quality)}</span>
-            <span class="badge badge-theme">${escHtml(v.theme || 'chalkboard')}</span>
-            <span class="card-date">${escHtml(date)}</span>
-          </div>
-        </div>
-      </a>`;
+      </article>`;
     }
 
-    function makeSkeletons(n) {
-      return Array.from({ length: n }, () => `
-        <div class="skeleton-card">
-          <div class="skeleton-thumb"></div>
-          <div class="skeleton-body">
-            <div class="skeleton-line" style="width:85%"></div>
-            <div class="skeleton-line" style="width:65%"></div>
-            <div class="skeleton-line"></div>
-          </div>
-        </div>`).join('');
+    function skeletons(n) {
+      return Array.from({ length: n }, () => `<div class="card card-skel" aria-hidden="true">
+        <div class="thumb skeleton"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>`).join('');
     }
 
-    async function fetchVideos() {
-      if (loading) return;
-      loading = true;
+    function stateHtml(icon, title, body, action) {
+      return `<div class="state">${icon}<p class="state-title">${title}</p>${body ? `<p>${body}</p>` : ''}${action || ''}</div>`;
+    }
+    const ICON_FILM = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" stroke="currentColor" stroke-width="2"/><path d="M21 19l9 5-9 5z" fill="currentColor"/></svg>';
+    const ICON_SEARCH = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="21" cy="21" r="12" stroke="currentColor" stroke-width="2"/><path d="M30 30l10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    const ICON_WARN = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="24" cy="24" r="17" stroke="currentColor" stroke-width="2"/><path d="M24 15v11M24 32v1" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
-      grid.innerHTML = makeSkeletons(8);
-      paginationEl.style.display = 'none';
-      totalLabel.textContent = '';
+    async function load() {
+      const my = ++reqId;
+      saveUrl();
+      grid.setAttribute('aria-busy', 'true');
+      if (!grid.querySelector('.card') || grid.querySelector('.state')) grid.innerHTML = skeletons(8);
+      else grid.classList.add('is-loading');
 
-      const offset = (currentPage - 1) * perPage;
-      const params = new URLSearchParams({
-        q: currentQuery,
-        sort: currentSort,
-        limit: perPage,
-        offset,
-      });
-
+      const params = new URLSearchParams({ q: query, sort, limit: perPage, offset: (page - 1) * perPage });
       try {
         const res = await fetch(`/api/library?${params}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`The server answered HTTP ${res.status}.`);
         const data = await res.json();
-
-        grid.innerHTML = '';
+        if (my !== reqId) return;
         total = data.total;
-        totalLabel.textContent = total === 1 ? '1 video' : `${total} videos`;
+        // Deleted the last item on the last page: step back a page.
+        if (data.videos.length === 0 && total > 0 && page > 1) { page = Math.ceil(total / perPage); return load(); }
+        totalLabel.textContent = query
+          ? `${total} ${total === 1 ? 'match' : 'matches'} for "${query}"`
+          : `${total} ${total === 1 ? 'video' : 'videos'}`;
 
         if (data.videos.length === 0) {
-          grid.innerHTML = `
-            <div class="empty-state">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="4" y="10" width="40" height="28" rx="3" stroke="currentColor" stroke-width="2"/>
-                <path d="M20 18l12 6-12 6V18z" fill="currentColor" opacity="0.5"/>
-              </svg>
-              ${currentQuery
-                ? `<p>No videos matching "<em>${escHtml(currentQuery)}</em>"</p>`
-                : `<p>No videos yet</p>
-                   <p class="empty-hint">Generate your first video to see it here.</p>`}
-            </div>`;
+          grid.innerHTML = query
+            ? stateHtml(ICON_SEARCH, 'Nothing matches that search', `No titles or topics contain "${esc(query)}".`,
+                '<button class="btn" type="button" id="clear-search">Clear search</button>')
+            : stateHtml(ICON_FILM, 'No videos yet', 'Videos you generate are saved here with their script, captions and downloads.',
+                '<a class="btn btn-primary" href="/">Generate a video</a>');
+          const clear = $('clear-search');
+          if (clear) clear.addEventListener('click', () => { searchEl.value = ''; query = ''; page = 1; load(); searchEl.focus(); });
         } else {
-          data.videos.forEach(v => {
-            grid.insertAdjacentHTML('beforeend', makeCard(v));
-          });
+          grid.innerHTML = data.videos.map(card).join('');
         }
-
-        renderPagination();
-
+        renderPager();
       } catch (err) {
-        grid.innerHTML = `<div class="empty-state"><p>Failed to load library.</p></div>`;
-        console.error(err);
+        if (my !== reqId) return;
+        totalLabel.innerHTML = '&nbsp;';
+        grid.innerHTML = stateHtml(ICON_WARN, 'Could not load the library', esc(err.message || 'Network error.') + ' Check that the server is running.',
+          '<button class="btn" type="button" id="retry">Try again</button>');
+        $('retry').addEventListener('click', load);
+        pager.hidden = true;
+      } finally {
+        if (my === reqId) { grid.removeAttribute('aria-busy'); grid.classList.remove('is-loading'); }
       }
-
-      loading = false;
     }
 
-    // ── Pagination rendering ──────────────────────────────────────────────────
-    function renderPagination() {
-      const totalPages = Math.max(1, Math.ceil(total / perPage));
-      if (total <= 0) { paginationEl.style.display = 'none'; return; }
-
-      paginationEl.style.display = 'flex';
-      let html = '';
-
-      // Prev button
-      html += `<button class="page-btn" ${currentPage <= 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">&#8249;</button>`;
-
-      // Page numbers with ellipsis
-      const pages = buildPageNumbers(currentPage, totalPages);
-      for (const p of pages) {
-        if (p === '...') {
-          html += `<span class="page-ellipsis">…</span>`;
-        } else {
-          html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
-        }
-      }
-
-      // Next button
-      html += `<button class="page-btn" ${currentPage >= totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">&#8250;</button>`;
-
-      // Per-page selector
-      html += `
-        <div class="per-page-wrap">
-          <span class="per-page-label">per page</span>
-          <select class="per-page-select" onchange="changePerPage(Number(this.value))">
-            <option value="25" ${perPage===25?'selected':''}>25</option>
-            <option value="50" ${perPage===50?'selected':''}>50</option>
-            <option value="100" ${perPage===100?'selected':''}>100</option>
-          </select>
-        </div>`;
-
-      paginationEl.innerHTML = html;
+    function pageList(cur, n) {
+      if (n <= 7) return Array.from({ length: n }, (_, i) => i + 1);
+      const out = [1];
+      if (cur > 3) out.push('…');
+      for (let i = Math.max(2, cur - 1); i <= Math.min(n - 1, cur + 1); i++) out.push(i);
+      if (cur < n - 2) out.push('…');
+      out.push(n);
+      return out;
     }
 
-    function buildPageNumbers(current, totalPages) {
-      if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-      const pages = [];
-      pages.push(1);
-      if (current > 3) pages.push('...');
-      for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) {
-        pages.push(i);
+    function renderPager() {
+      const pages = Math.max(1, Math.ceil(total / perPage));
+      if (total <= 25) { pager.hidden = true; return; }
+      pager.hidden = false;
+      let html = '<div class="pages">';
+      html += `<button class="page-btn" type="button" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">&#8249;</button>`;
+      for (const p of pageList(page, pages)) {
+        html += p === '…'
+          ? '<span class="page-gap" aria-hidden="true">…</span>'
+          : `<button class="page-btn" type="button" data-page="${p}" ${p === page ? 'aria-current="page"' : ''}>${p}</button>`;
       }
-      if (current < totalPages - 2) pages.push('...');
-      pages.push(totalPages);
-      return pages;
+      html += `<button class="page-btn" type="button" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="Next page">&#8250;</button></div>`;
+      html += `<label class="per-page">Per page <select class="select" id="per-page">
+        ${[25, 50, 100].map((n) => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
+      pager.innerHTML = html;
+      $('per-page').addEventListener('change', (e) => { perPage = +e.target.value; page = 1; load(); });
     }
 
-    function goToPage(page) {
-      const totalPages = Math.max(1, Math.ceil(total / perPage));
-      if (page < 1 || page > totalPages || page === currentPage) return;
-      currentPage = page;
-      fetchVideos();
+    pager.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-page]');
+      if (!b || b.disabled) return;
+      const pages = Math.max(1, Math.ceil(total / perPage));
+      const p = +b.dataset.page;
+      if (p < 1 || p > pages || p === page) return;
+      page = p;
+      load();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    });
 
-    function changePerPage(n) {
-      perPage = n;
-      currentPage = 1;
-      fetchVideos();
-    }
-
-    // Search debounce
     let searchTimer = null;
     searchEl.addEventListener('input', () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        currentQuery = searchEl.value.trim();
-        currentPage = 1;
-        fetchVideos();
-      }, 300);
+      searchTimer = setTimeout(() => { query = searchEl.value.trim(); page = 1; load(); }, 250);
     });
+    sortEl.addEventListener('change', () => { sort = sortEl.value; page = 1; load(); });
 
-    // Sort
-    sortEl.addEventListener('change', () => {
-      currentSort = sortEl.value;
-      currentPage = 1;
-      fetchVideos();
-    });
-
-    // ── Card context menu ────────────────────────────────────────────────────
-    function closeAllMenus() {
-      document.querySelectorAll('.card-dropdown.open').forEach(d => d.classList.remove('open'));
-    }
-
-    function toggleMenu(e, btn) {
-      e.preventDefault();
-      e.stopPropagation();
-      const dropdown = btn.nextElementSibling;
-      const wasOpen = dropdown.classList.contains('open');
-      closeAllMenus();
-      if (!wasOpen) dropdown.classList.add('open');
-    }
-
-    function openVideo(e, runId) {
-      e.preventDefault();
-      e.stopPropagation();
-      closeAllMenus();
-      window.location.href = `/library/${runId}`;
-    }
-
-    async function deleteVideo(e, runId, title) {
-      e.preventDefault();
-      e.stopPropagation();
-      closeAllMenus();
-      if (!confirm(`Delete "${title}" and all its files? This cannot be undone.`)) return;
-      try {
-        const res = await fetch(`/api/library/${runId}?files=true`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        fetchVideos();
-      } catch (err) {
-        alert('Failed to delete video.');
-        console.error(err);
+    // "/" jumps to search
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+        e.preventDefault();
+        searchEl.focus();
       }
+    });
+
+    // ── Card menus ───────────────────────────────────────────────────────
+    function closeMenus(except) {
+      grid.querySelectorAll('.card-menu-btn[aria-expanded="true"]').forEach((b) => {
+        if (b === except) return;
+        b.setAttribute('aria-expanded', 'false');
+        b.nextElementSibling.hidden = true;
+        b.closest('.card').classList.remove('menu-open');
+      });
     }
+    grid.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.card-menu-btn');
+      if (btn) {
+        e.stopPropagation();
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        closeMenus(btn);
+        btn.setAttribute('aria-expanded', String(open));
+        btn.nextElementSibling.hidden = !open;
+        btn.closest('.card').classList.toggle('menu-open', open);
+        if (open) btn.nextElementSibling.querySelector('a, button').focus();
+        return;
+      }
+      const del = e.target.closest('[data-delete]');
+      if (del) {
+        closeMenus();
+        if (!confirm(`Delete "${del.dataset.title}" and all its files? This cannot be undone.`)) return;
+        try {
+          const res = await fetch(`/api/library/${encodeURIComponent(del.dataset.delete)}?files=true`, { method: 'DELETE' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          load();
+        } catch (err) {
+          alert(`Could not delete the video (${err.message}).`);
+        }
+      }
+    });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeMenus(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const open = grid.querySelector('.card-menu-btn[aria-expanded="true"]');
+      if (open) { closeMenus(); open.focus(); }
+    });
 
-    // Close menus on outside click
-    document.addEventListener('click', closeAllMenus);
-
-    // Initial load
-    fetchVideos();
+    load();
+  })();
   </script>
-
 </body>
 </html>

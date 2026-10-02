@@ -2,979 +2,316 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chalkboard</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <meta name="color-scheme" content="dark light" />
+  <script>try{if(localStorage.getItem('cb-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #111110;
-      --surface: #1a1918;
-      --border: rgba(255, 255, 255, 0.07);
-      --text: #e8e4db;
-      --muted: #7a7570;
-      --accent: #c8b97a;
-      --chalk: #f0ebe0;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      height: 100%;
-    }
-
-    body {
-      font-family: 'Lora', Georgia, serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.025;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      position: relative;
-      z-index: 1;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    header {
-      margin-bottom: 2.5rem;
-      text-align: center;
-    }
-
-    h1 {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 2.5rem;
-      font-weight: 400;
-      letter-spacing: -0.01em;
-      margin-bottom: 0.4rem;
-    }
-
-    .tagline {
-      font-family: 'Lora', Georgia, serif;
-      font-style: italic;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    /* Form */
-    .form-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.75rem;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group:last-of-type {
-      margin-bottom: 0;
-    }
-
-    label {
-      display: block;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.4rem;
-    }
-
-    textarea, input[type="text"], input[type="number"], select {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.95rem;
-      border-radius: 6px;
-      padding: 0.55rem 0.75rem;
-      outline: none;
-      transition: border-color 0.15s;
-      appearance: none;
-      -webkit-appearance: none;
-    }
-
-    textarea {
-      background: var(--bg);
-      resize: vertical;
-      min-height: 80px;
-      line-height: 1.5;
-    }
-
-    input[type="text"] {
-      font-family: 'DM Mono', monospace;
-    }
-
-    select {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.85rem;
-      cursor: pointer;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7570' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.75rem center;
-      padding-right: 2rem;
-    }
-
-    textarea:focus, input:focus, select:focus {
-      border-color: var(--accent);
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem 1.25rem;
-    }
-
-    .form-grid .form-group {
-      margin-bottom: 0;
-    }
-
-    .btn-submit {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      padding: 0.7rem 1.75rem;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 1.5rem;
-      transition: opacity 0.15s, background 0.15s;
-    }
-
-    .btn-submit:hover:not(:disabled) {
-      opacity: 0.88;
-    }
-
-    .btn-submit:disabled {
-      background: var(--muted);
-      color: var(--bg);
-      cursor: not-allowed;
-      opacity: 0.7;
-    }
-
-    /* Advanced section */
-    details.advanced {
-      margin-top: 1.25rem;
-    }
-
-    details.advanced summary {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      cursor: pointer;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      user-select: none;
-      padding: 0.2rem 0;
-    }
-
-    details.advanced summary::-webkit-details-marker { display: none; }
-
-    details.advanced summary::before {
-      content: '▶';
-      font-size: 0.55rem;
-      transition: transform 0.15s;
-      display: inline-block;
-    }
-
-    details[open].advanced summary::before {
-      transform: rotate(90deg);
-    }
-
-    details.advanced .advanced-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem 1.25rem;
-      margin-top: 1rem;
-    }
-
-    details.advanced .advanced-grid .form-group {
-      margin-bottom: 0;
-    }
-
-    .advanced-grid--3 {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-
-    /* Section label within the form card */
-    .form-section-label {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.65rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin: 1.5rem 0 0.85rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid var(--border);
-      opacity: 0.7;
-    }
-
-    .checkbox-group {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding-top: 0.3rem;
-    }
-
-    .checkbox-group input[type="checkbox"] {
-      width: 15px;
-      height: 15px;
-      accent-color: var(--accent);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .checkbox-group span {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--text);
-    }
-
-    /* Repeatable input rows */
-    .repeatable-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .repeatable-row {
-      display: flex;
-      gap: 0.4rem;
-      align-items: center;
-    }
-
-    .repeatable-row input {
-      flex: 1;
-    }
-
-    .btn-remove {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 4px;
-      padding: 0.3rem 0.5rem;
-      cursor: pointer;
-      flex-shrink: 0;
-      line-height: 1;
-    }
-
-    .btn-remove:hover { border-color: #c0392b; color: #c0392b; }
-
-    .btn-add {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 4px;
-      padding: 0.3rem 0.65rem;
-      cursor: pointer;
-      align-self: flex-start;
-    }
-
-    .btn-add:hover { border-color: var(--accent); color: var(--accent); }
-
-    /* ── File upload zone ─────────────────────────────────────── */
-    .upload-zone {
-      border: 1.5px dashed var(--border);
-      border-radius: 6px;
-      padding: 1.25rem 1rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .upload-zone:hover,
-    .upload-zone.drag-over {
-      border-color: var(--accent);
-      background: rgba(200, 185, 122, 0.04);
-    }
-    .upload-zone p {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin: 0;
-      pointer-events: none;
-    }
-    .upload-zone input[type="file"] {
-      display: none;
-    }
-    .file-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-top: 0.5rem;
-    }
-    .file-item {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      align-items: center;
-      gap: 0.4rem 0.5rem;
-      padding: 0.35rem 0.5rem;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.025);
-      border: 1px solid var(--border);
-    }
-    .file-item--error {
-      border-color: #c0392b;
-    }
-    .file-name {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-    }
-    .file-size {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-    .file-error {
-      grid-column: 1 / -1;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: #e74c3c;
-    }
-    .upload-total {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--muted);
-      margin-top: 0.4rem;
-      text-align: right;
-    }
-    .upload-total--error {
-      color: #e74c3c;
-    }
-
-    .repeatable-full {
-      grid-column: 1 / -1;
-    }
-
-    /* Progress panel */
-    #progress-panel {
-      display: none;
-    }
-
-    .panel-title {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 0.75rem;
-    }
-
-    .stages {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    .stage-item {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.65rem 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .stage-item:last-child {
-      border-bottom: none;
-    }
-
-    .stage-dot {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.06);
-      border: 1.5px solid var(--muted);
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .stage-dot.running {
-      background: rgba(200,185,122,0.15);
-      border-color: var(--accent);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-
-    .stage-dot.done {
-      background: rgba(200,185,122,0.15);
-      border-color: var(--accent);
-    }
-
-    .stage-dot.failed {
-      background: rgba(192,57,43,0.15);
-      border-color: #c0392b;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(0.88); }
-    }
-
-    .stage-name {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--text);
-      flex: 1;
-    }
-
-    .stage-item.pending .stage-name { color: var(--muted); }
-    .stage-item.running .stage-name { color: var(--chalk); }
-    .stage-item.done   .stage-name  { color: var(--text); }
-
-    /* ── Completion card ── */
-    #completion-card {
-      display: none;
-      margin-top: 1.25rem;
-      background: rgba(200,185,122,0.07);
-      border: 1px solid rgba(200,185,122,0.2);
-      border-radius: 8px;
-      padding: 1.25rem 1.25rem 1rem;
-    }
-
-    .completion-heading {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.1rem;
-      color: var(--chalk);
-      margin-bottom: 0.25rem;
-    }
-
-    .completion-topic {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin-bottom: 1rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .completion-actions {
-      display: flex;
-      gap: 0.65rem;
-    }
-
-    .btn-watch {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      padding: 0.6rem 1.25rem;
-      cursor: pointer;
-      text-decoration: none;
-      transition: opacity 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .btn-watch:hover { opacity: 0.88; }
-
-    .btn-again {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.6rem 1.25rem;
-      cursor: pointer;
-      text-decoration: none;
-      transition: color 0.15s, border-color 0.15s;
-    }
-
-    .btn-again:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
-
-    /* Error panel */
-    #error-panel {
-      display: none;
-      background: rgba(192, 57, 43, 0.1);
-      border: 1px solid rgba(192, 57, 43, 0.3);
-      border-radius: 8px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 2rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: #e07070;
-    }
-
-    /* Result video */
-    #result-video {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      display: none;
-      background: #000;
-    }
-
-    /* Downloads panel */
-    #downloads-panel {
-      display: none;
-      margin-top: 1.25rem;
-    }
-
-    .downloads {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .download-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--accent);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 0.4rem 0.8rem;
-      text-decoration: none;
-      transition: border-color 0.15s;
-    }
-
-    .download-link:hover {
-      border-color: var(--accent);
-    }
-
-    /* ── Top nav ─────────────────────────────────────────────────── */
-    .top-nav {
-      position: relative;
-      z-index: 10;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .nav-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      height: 52px;
-    }
-
-    .nav-brand {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 1.15rem;
-      font-weight: 400;
-      text-decoration: none;
-      letter-spacing: -0.01em;
-      flex-shrink: 0;
-    }
-
-    .nav-links { display: flex; gap: 0.25rem; }
-
-    .nav-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 0.35rem 0.75rem;
-      border-radius: 5px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-    .nav-link.active { color: var(--accent); }
-
-    /* ── App layout ──────────────────────────────────────────────── */
-    .app-body {
-      max-width: 640px;
-      margin: 0 auto;
-    }
-
-    .app-left {
-      display: none;
-    }
-
-    /* Generating: progress left | form right */
-    .app-body.is-active {
-      max-width: 1200px;
-      display: grid;
-      grid-template-columns: 1fr 440px;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .app-body.is-active .app-left {
-      display: block;
-    }
-
-    /* Complete: video 2/3 | controls 1/3 */
-    .app-body.is-complete {
-      max-width: 1680px;
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .app-body.is-complete .app-left {
-      display: block;
-    }
-
-    @media (max-width: 900px) {
-      .app-body.is-active,
-      .app-body.is-complete {
-        grid-template-columns: 1fr;
-        max-width: 640px;
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css?v=1" />
+  <script src="/app.js?v=1"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="nav" data-page="generate"></header>
+
+  <main id="main" class="wrap">
+    <div class="gen" id="app-body">
+
+      <!-- Progress + result (shown once a job starts) -->
+      <section class="run" id="progress-panel" hidden aria-labelledby="run-topic">
+        <div class="run-head">
+          <div class="run-head-text">
+            <p class="label" id="run-status" aria-live="polite">Generating</p>
+            <h2 class="run-topic" id="run-topic"></h2>
+          </div>
+          <span class="run-clock mono" id="run-clock" aria-label="Elapsed time"></span>
+        </div>
+
+        <div class="result" id="result" hidden>
+          <video id="result-video" controls preload="metadata" playsinline></video>
+        </div>
+
+        <div class="alert" id="run-error" role="alert" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
+          <div><p class="alert-title" id="run-error-title">The job failed</p><p class="alert-body" id="run-error-body"></p></div>
+        </div>
+
+        <div class="run-actions" id="completion-card" hidden>
+          <a class="btn btn-primary" id="btn-watch" href="#">
+            <svg viewBox="0 0 14 14" aria-hidden="true"><polygon points="3,1.5 12,7 3,12.5" fill="currentColor"/></svg>
+            Open in library
+          </a>
+          <button class="btn" id="btn-again" type="button">Generate another</button>
+        </div>
+
+        <div class="downloads" id="downloads-panel" hidden>
+          <p class="label">Downloads</p>
+          <div class="download-chips" id="downloads-list"></div>
+        </div>
+
+        <ol class="stages" id="stages-list" aria-label="Pipeline steps"></ol>
+      </section>
+
+      <!-- Form -->
+      <section class="gen-form" aria-labelledby="gen-title">
+        <div class="gen-intro">
+          <h1 class="page-title" id="gen-title">New video</h1>
+          <p class="page-lede">Describe a topic. Chalkboard writes the script, animates it and narrates it.</p>
+        </div>
+
+        <div class="alert" id="error-panel" role="alert" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
+          <div><p class="alert-title">Could not start the job</p><p class="alert-body" id="error-text"></p></div>
+        </div>
+
+        <form id="job-form" novalidate>
+          <fieldset class="form-fields" id="form-fields">
+
+            <div class="board">
+              <div class="board-head">
+                <label for="topic" class="board-label">Topic</label>
+                <button type="button" class="help" aria-label="About the topic" data-tip="What the video should explain. Specific beats broad: 'How merge sort works' gets a better video than 'sorting'.">?</button>
+              </div>
+              <textarea id="topic" name="topic" rows="3" placeholder="How merge sort works" required aria-describedby="topic-hint"></textarea>
+              <p class="board-hint" id="topic-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to generate</p>
+            </div>
+
+            <div class="field-grid">
+              <fieldset class="field">
+                <legend class="field-head"><span class="label">Effort</span>
+                  <button type="button" class="help" aria-label="About effort" data-tip="How thorough the pipeline is. Low is fastest and skips research. High adds web research and stricter fact-checking, which takes several extra minutes.">?</button></legend>
+                <div class="seg">
+                  <label><input type="radio" name="effort" value="low" /><span>Low</span></label>
+                  <label><input type="radio" name="effort" value="medium" checked /><span>Medium</span></label>
+                  <label><input type="radio" name="effort" value="high" /><span>High</span></label>
+                </div>
+              </fieldset>
+              <fieldset class="field">
+                <legend class="field-head"><span class="label">Audience</span>
+                  <button type="button" class="help" aria-label="About audience" data-tip="Sets vocabulary and depth. Beginner gets analogies and plain language. Expert skips the fundamentals.">?</button></legend>
+                <div class="seg">
+                  <label><input type="radio" name="audience" value="beginner" /><span>Beginner</span></label>
+                  <label><input type="radio" name="audience" value="intermediate" checked /><span>Intermediate</span></label>
+                  <label><input type="radio" name="audience" value="expert" /><span>Expert</span></label>
+                </div>
+              </fieldset>
+            </div>
+
+            <!-- Source material -->
+            <details class="section" id="sources-section">
+              <summary><span class="section-name">Source material</span><span class="section-sum" id="sources-sum">Optional</span></summary>
+              <div class="section-body">
+                <div class="field">
+                  <div class="field-head"><span class="label" id="files-label">Files</span>
+                    <button type="button" class="help" aria-label="About files" data-tip="PDF, DOCX, images, or code and text files. Limits per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.">?</button></div>
+                  <button type="button" class="drop" id="upload-zone" aria-describedby="files-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                    <span>Drop files or folders, or <u>browse</u></span>
+                    <span class="drop-sub">PDF, DOCX, images, code and text</span>
+                  </button>
+                  <input type="file" id="file-input" multiple hidden
+                    accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
+                  <ul class="file-list" id="file-list"></ul>
+                  <p class="upload-total" id="upload-total" hidden></p>
+                </div>
+
+                <div class="field">
+                  <div class="field-head"><span class="label">Web pages</span>
+                    <button type="button" class="help" aria-label="About web pages" data-tip="Public pages Claude fetches and reads, such as docs or articles.">?</button></div>
+                  <div class="rows" id="url-list"></div>
+                  <button type="button" class="btn btn-sm" id="add-url">Add URL</button>
+                </div>
+
+                <div class="field">
+                  <div class="field-head"><span class="label">GitHub repos</span>
+                    <button type="button" class="help" aria-label="About GitHub repos" data-tip="Use owner/repo, for example nicglazkov/Chalkboard. Chalkboard reads the README.">?</button></div>
+                  <div class="rows" id="github-list"></div>
+                  <button type="button" class="btn btn-sm" id="add-github">Add repo</button>
+                </div>
+              </div>
+            </details>
+
+            <!-- Style -->
+            <details class="section" id="style-section">
+              <summary><span class="section-name">Style</span><span class="section-sum" id="style-sum"></span></summary>
+              <div class="section-body">
+                <fieldset class="field">
+                  <legend class="field-head"><span class="label">Tone</span>
+                    <button type="button" class="help" aria-label="About tone" data-tip="How the narration sounds. Casual is conversational, formal is structured, Socratic asks questions as it goes.">?</button></legend>
+                  <div class="seg">
+                    <label><input type="radio" name="tone" value="casual" checked /><span>Casual</span></label>
+                    <label><input type="radio" name="tone" value="formal" /><span>Formal</span></label>
+                    <label><input type="radio" name="tone" value="socratic" /><span>Socratic</span></label>
+                  </div>
+                </fieldset>
+                <fieldset class="field">
+                  <legend class="field-head"><span class="label">Theme</span>
+                    <button type="button" class="help" aria-label="About theme" data-tip="Colors of the video. Chalkboard is dark with chalk-white text, light is bright, colorful uses vivid accents.">?</button></legend>
+                  <div class="seg">
+                    <label><input type="radio" name="theme" value="chalkboard" checked /><span>Chalkboard</span></label>
+                    <label><input type="radio" name="theme" value="light" /><span>Light</span></label>
+                    <label><input type="radio" name="theme" value="colorful" /><span>Colorful</span></label>
+                  </div>
+                </fieldset>
+                <div class="field">
+                  <div class="field-head"><label class="label" for="template">Template</label>
+                    <button type="button" class="help" aria-label="About templates" data-tip="A ready-made layout. Algorithm shows array cells and pointers, code reveals lines step by step, compare uses two columns, how-to builds a numbered list, timeline places events on an axis.">?</button></div>
+                  <select id="template" name="template" class="select">
+                    <option value="">None</option>
+                    <option value="algorithm">Algorithm</option>
+                    <option value="code">Code</option>
+                    <option value="compare">Compare</option>
+                    <option value="howto">How-to</option>
+                    <option value="timeline">Timeline</option>
+                  </select>
+                </div>
+              </div>
+            </details>
+
+            <!-- Output -->
+            <details class="section" id="output-section">
+              <summary><span class="section-name">Output</span><span class="section-sum" id="output-sum"></span></summary>
+              <div class="section-body">
+                <fieldset class="field">
+                  <legend class="field-head"><span class="label">Resolution</span>
+                    <button type="button" class="help" aria-label="About resolution" data-tip="Render size and frame rate: 480p at 15 fps, 720p at 30, 1080p at 60, 4K at 60. Higher takes longer to render. Default uses the server setting.">?</button></legend>
+                  <div class="seg">
+                    <label><input type="radio" name="quality" value="" checked /><span>Default</span></label>
+                    <label><input type="radio" name="quality" value="low" /><span>480p</span></label>
+                    <label><input type="radio" name="quality" value="medium" /><span>720p</span></label>
+                    <label><input type="radio" name="quality" value="high" /><span>1080p</span></label>
+                    <label><input type="radio" name="quality" value="4k" /><span>4K</span></label>
+                  </div>
+                </fieldset>
+                <div class="field-grid">
+                  <div class="field">
+                    <div class="field-head"><label class="label" for="speed">Narration speed</label>
+                      <button type="button" class="help" aria-label="About narration speed" data-tip="1.0 is normal; 1.25 talks a little faster.">?</button></div>
+                    <input type="number" id="speed" name="speed" class="input" value="1.0" min="0.1" max="4.0" step="0.05" inputmode="decimal" />
+                  </div>
+                  <fieldset class="field">
+                    <legend class="field-head"><span class="label">Visual QA</span>
+                      <button type="button" class="help" aria-label="About visual QA" data-tip="After rendering, Claude looks at frames for visual mistakes. Normal checks about 10 frames, high about 20. Off saves time.">?</button></legend>
+                    <div class="seg">
+                      <label><input type="radio" name="qa_density" value="zero" /><span>Off</span></label>
+                      <label><input type="radio" name="qa_density" value="normal" checked /><span>Normal</span></label>
+                      <label><input type="radio" name="qa_density" value="high" /><span>High</span></label>
+                    </div>
+                  </fieldset>
+                </div>
+                <div class="checks">
+                  <label class="check"><input type="checkbox" id="burn-captions" name="burn_captions" /> Burn captions into the video
+                    <button type="button" class="help" aria-label="About burned captions" data-tip="Draws subtitles into the video frames. Needs a re-encode, so rendering takes a bit longer.">?</button></label>
+                  <label class="check"><input type="checkbox" id="quiz" name="quiz" /> Write a quiz
+                    <button type="button" class="help" aria-label="About the quiz" data-tip="Writes multiple-choice questions about the video. Saved as quiz.json and shown on the video page.">?</button></label>
+                </div>
+              </div>
+            </details>
+
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-go" id="submit-btn">Generate video</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <div class="tip" id="help-tip" role="tooltip" hidden></div>
+
+  <script>
+  (function () {
+    const { esc, fmtBytes, fmtClock, stageLabel, nextStage, fileUrl } = window.CB;
+    const $ = (id) => document.getElementById(id);
+
+    const DOWNLOADABLE = [
+      ['final.mp4', 'Video', 'MP4'],
+      ['captions.srt', 'Captions', 'SRT'],
+      ['quiz.json', 'Quiz', 'JSON'],
+      ['script.txt', 'Script', 'TXT'],
+    ];
+
+    const form = $('job-form');
+    const fields = $('form-fields');
+    const submitBtn = $('submit-btn');
+    const appBody = $('app-body');
+    const progressPanel = $('progress-panel');
+    const stagesList = $('stages-list');
+    const resultBox = $('result');
+    const resultVideo = $('result-video');
+    const downloadsPanel = $('downloads-panel');
+    const downloadsList = $('downloads-list');
+    const completion = $('completion-card');
+    const runStatus = $('run-status');
+    const runClock = $('run-clock');
+
+    const val = (name) => form.elements[name].value;
+    function setVal(name, v) {
+      if (v == null) return;
+      const el = form.elements[name];
+      if (!el) return;
+      if (el instanceof RadioNodeList) {
+        for (const r of el) r.checked = r.value === v;
+      } else {
+        el.value = v;
       }
     }
 
-    /* ── Help tooltips ────────────────────────────────────────── */
-    label.label-row {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
+    // ── Section summaries (what is set without opening the section) ──────
+    const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+    function updateSummaries() {
+      const t = form.elements.template;
+      $('style-sum').textContent = [cap(val('tone')), cap(val('theme')),
+        t.value ? t.options[t.selectedIndex].text + ' template' : 'No template'].join(', ');
+      const q = form.querySelector('input[name="quality"]:checked');
+      const out = [q && q.value ? q.nextElementSibling.textContent : 'Default resolution', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
+      if ($('burn-captions').checked) out.push('burned captions');
+      if ($('quiz').checked) out.push('quiz');
+      $('output-sum').textContent = out.join(', ');
+      const parts = [];
+      if (selectedFiles.length) parts.push(`${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`);
+      const urls = getRows('url-list').length, repos = getRows('github-list').length;
+      if (urls) parts.push(`${urls} URL${urls > 1 ? 's' : ''}`);
+      if (repos) parts.push(`${repos} repo${repos > 1 ? 's' : ''}`);
+      $('sources-sum').textContent = parts.length ? parts.join(', ') : 'Optional';
     }
+    form.addEventListener('change', updateSummaries);
+    form.addEventListener('input', (e) => { if (e.target.id === 'speed' || e.target.closest('.rows')) updateSummaries(); });
 
-    .help-btn {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: none;
-      color: var(--muted);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.58rem;
-      font-weight: 500;
-      line-height: 1;
-      cursor: pointer;
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      opacity: 0.65;
-      transition: border-color 0.15s, color 0.15s, opacity 0.15s;
-      vertical-align: middle;
-    }
-
-    .help-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      opacity: 1;
-    }
-
-    #help-tip {
-      display: none;
-      position: fixed;
-      z-index: 9999;
-      max-width: 250px;
-      background: var(--surface);
-      border: 1px solid rgba(200, 185, 122, 0.2);
-      border-radius: 8px;
-      padding: 0.65rem 0.85rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.74rem;
-      line-height: 1.55;
-      color: var(--text);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      pointer-events: none;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-  </style>
-  <script src="/job-status.js?v=3"></script>
-</head>
-<body>
-
-  <!-- Top nav -->
-  <nav class="top-nav">
-    <div class="nav-inner">
-      <a class="nav-brand" href="/">Chalkboard</a>
-      <div class="nav-links">
-        <a class="nav-link active" href="/">Generate</a>
-        <a class="nav-link" href="/library">Library</a>
-      </div>
-      <div id="job-status" style="margin-left:auto;position:relative"></div>
-    </div>
-  </nav>
-
-  <div class="container">
-    <header>
-      <h1>Chalkboard</h1>
-      <p class="tagline">Turn any topic into a narrated animation</p>
-    </header>
-
-    <div class="app-body" id="app-body">
-
-      <div class="app-left" id="app-left">
-        <div id="progress-panel">
-          <p class="panel-title">Pipeline progress</p>
-          <div class="stages" id="stages-list"></div>
-          <div id="completion-card">
-            <div class="completion-heading">Your video is ready!</div>
-            <div class="completion-actions">
-              <a class="btn-watch" id="btn-watch" href="#">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <polygon points="3,1.5 11.5,6.5 3,11.5" fill="currentColor"/>
-                </svg>
-                Watch now
-              </a>
-              <button class="btn-again" id="btn-again" type="button">Generate another</button>
-            </div>
-          </div>
-        </div>
-        <video id="result-video" controls></video>
-      </div>
-
-      <div class="app-right" id="app-right">
-
-        <div id="error-panel"></div>
-
-        <div class="form-card">
-      <form id="job-form">
-
-        <!-- Topic -->
-        <div class="form-group">
-          <label for="topic" class="label-row">Topic <button type="button" class="help-btn" data-tip="The subject of your video. Be specific — 'How merge sort works' gets better results than 'sorting'.">?</button></label>
-          <textarea id="topic" name="topic" placeholder="e.g. How merge sort works" required></textarea>
-        </div>
-
-        <!-- Core -->
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="effort" class="label-row">Effort <button type="button" class="help-btn" data-tip="Controls pipeline thoroughness. Low is fastest (no research). High adds web research and deeper fact-checking — expect several extra minutes.">?</button></label>
-            <select id="effort" name="effort">
-              <option value="low">low</option>
-              <option value="medium" selected>medium</option>
-              <option value="high">high</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="audience" class="label-row">Audience <button type="button" class="help-btn" data-tip="Adjusts vocabulary and depth. Beginner gets analogies and plain language. Expert skips fundamentals.">?</button></label>
-            <select id="audience" name="audience">
-              <option value="beginner">beginner</option>
-              <option value="intermediate" selected>intermediate</option>
-              <option value="expert">expert</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Source Material (always visible) -->
-        <p class="form-section-label">Source Material <button type="button" class="help-btn" data-tip="Optional context fed to the AI before it writes the script. Attach files, paste URLs, or add GitHub repos.">?</button></p>
-
-        <div class="form-group">
-          <label class="label-row">Local files <button type="button" class="help-btn" data-tip="PDFs, DOCX, images, or code files the AI reads for context. Per-file limits: text 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB. 24 MB total.">?</button></label>
-          <div class="upload-zone" id="upload-zone">
-            <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
-            <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
-            <input type="file" id="file-input" multiple
-              accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
-          </div>
-          <div class="file-list" id="file-list"></div>
-          <div class="upload-total" id="upload-total" style="display:none;"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="label-row">URLs <button type="button" class="help-btn" data-tip="Public webpages the AI will fetch and read as source material. Useful for documentation, articles, or any reference page.">?</button></label>
-          <div class="repeatable-list" id="url-list"></div>
-          <button type="button" class="btn-add" id="add-url">+ Add URL</button>
-        </div>
-
-        <div class="form-group">
-          <label class="label-row">GitHub repos <button type="button" class="help-btn" data-tip="Enter as owner/repo (e.g. nicglazkov/Chalkboard). Chalkboard fetches the README as context.">?</button></label>
-          <div class="repeatable-list" id="github-list"></div>
-          <button type="button" class="btn-add" id="add-github">+ Add repo</button>
-        </div>
-
-        <!-- Style -->
-        <details class="advanced">
-          <summary>Style <button type="button" class="help-btn" data-tip="Tone, visual theme, and animation template for the output video.">?</button></summary>
-          <div class="advanced-grid advanced-grid--3">
-            <div class="form-group">
-              <label for="tone" class="label-row">Tone <button type="button" class="help-btn" data-tip="How the narration sounds. Casual is conversational, Formal is structured, Socratic is question-driven.">?</button></label>
-              <select id="tone" name="tone">
-                <option value="casual" selected>casual</option>
-                <option value="formal">formal</option>
-                <option value="socratic">socratic</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="theme" class="label-row">Theme <button type="button" class="help-btn" data-tip="Color palette for the animation. Chalkboard is dark with chalk-white text, Light is bright, Colorful uses vibrant accents.">?</button></label>
-              <select id="theme" name="theme">
-                <option value="chalkboard" selected>chalkboard</option>
-                <option value="light">light</option>
-                <option value="colorful">colorful</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="template" class="label-row">Template <button type="button" class="help-btn" data-tip="Pre-built animation layout. Algorithm shows array cells and pointers, Code reveals lines step-by-step, Compare uses two side-by-side columns, Howto builds a numbered step list, Timeline shows chronological events on an axis.">?</button></label>
-              <select id="template" name="template">
-                <option value="">none</option>
-                <option value="algorithm">algorithm</option>
-                <option value="code">code</option>
-                <option value="compare">compare</option>
-                <option value="howto">howto</option>
-                <option value="timeline">timeline</option>
-              </select>
-            </div>
-          </div>
-        </details>
-
-        <!-- Output -->
-        <details class="advanced">
-          <summary>Output <button type="button" class="help-btn" data-tip="Controls for the final rendered video file.">?</button></summary>
-          <div class="advanced-grid">
-            <div class="form-group">
-              <label for="speed" class="label-row">Speed <button type="button" class="help-btn" data-tip="Narration playback speed multiplier. 1.0 is normal, 1.25 talks slightly faster. Applies to the TTS audio output.">?</button></label>
-              <input type="number" id="speed" name="speed" value="1.0" min="0.1" max="4.0" step="0.1" />
-            </div>
-            <div class="form-group">
-              <label for="qa-density" class="label-row">Visual QA <button type="button" class="help-btn" data-tip="After rendering, Claude reviews video frames for visual errors. Normal checks ~10 frames, High checks ~20. Off skips entirely and saves time.">?</button></label>
-              <select id="qa-density" name="qa_density">
-                <option value="zero">off</option>
-                <option value="normal" selected>normal</option>
-                <option value="high">high</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label aria-hidden="true">&nbsp;</label>
-              <div class="checkbox-group">
-                <label for="burn-captions" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                  <input type="checkbox" id="burn-captions" name="burn_captions" />
-                  <span>Burn captions</span>
-                  <button type="button" class="help-btn" data-tip="Bakes subtitle text into the video frames. Requires re-encoding so renders a bit slower.">?</button>
-                </label>
-              </div>
-            </div>
-            <div class="form-group">
-              <label aria-hidden="true">&nbsp;</label>
-              <div class="checkbox-group">
-                <label for="quiz" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                  <input type="checkbox" id="quiz" name="quiz" />
-                  <span>Generate quiz</span>
-                  <button type="button" class="help-btn" data-tip="After scripting, Claude generates comprehension questions saved as quiz.json alongside the video.">?</button>
-                </label>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <button type="submit" class="btn-submit" id="submit-btn">Generate Video</button>
-      </form>
-    </div>
-
-        <div id="downloads-panel">
-          <p class="panel-title">Downloads</p>
-          <div class="downloads" id="downloads-list"></div>
-        </div>
-
-      </div><!-- /app-right -->
-
-    </div><!-- /app-body -->
-  </div>
-
-  <div id="help-tip"></div>
-
-  <script>
-    const STAGE_LABELS = {
-      init:              'Initializing',
-      research_agent:    'Researching topic',
-      script_agent:      'Writing script',
-      fact_validator:    'Fact-checking',
-      manim_agent:       'Generating animation code',
-      code_validator:    'Validating code',
-      layout_checker:    'Checking layout',
-      render_trigger:    'Synthesizing voiceover',
-      escalate_to_user:  'Waiting for user input',
-    };
-
-    const DOWNLOADABLE = ['final.mp4', 'captions.srt', 'quiz.json', 'script.txt'];
-
-    function addRepeatableRow(listId, placeholder) {
-      const list = document.getElementById(listId);
+    // ── Repeatable URL / repo rows ────────────────────────────────────────
+    function addRow(listId, placeholder, label) {
+      const list = $(listId);
       const row = document.createElement('div');
-      row.className = 'repeatable-row';
-      row.innerHTML = `<input type="text" placeholder="${placeholder}" />
-                       <button type="button" class="btn-remove">✕</button>`;
-      row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+      row.className = 'row';
+      const n = list.children.length + 1;
+      row.innerHTML = `<input type="text" class="input" placeholder="${esc(placeholder)}" aria-label="${esc(label)} ${n}" autocomplete="off" spellcheck="false" />
+        <button type="button" class="icon-btn" aria-label="Remove ${esc(label)} ${n}">${CB.ICONS.close}</button>`;
+      row.querySelector('button').addEventListener('click', () => { row.remove(); updateSummaries(); });
       list.appendChild(row);
       row.querySelector('input').focus();
     }
-
-    function getRepeatableValues(listId) {
-      return Array.from(document.querySelectorAll(`#${listId} input`))
-        .map(el => el.value.trim())
-        .filter(Boolean);
+    function getRows(listId) {
+      return Array.from($(listId).querySelectorAll('input')).map((el) => el.value.trim()).filter(Boolean);
     }
+    $('add-url').addEventListener('click', () => addRow('url-list', 'https://example.com/article', 'URL'));
+    $('add-github').addEventListener('click', () => addRow('github-list', 'owner/repo', 'Repo'));
 
-    // ── File upload ──────────────────────────────────────────────────────────
-
-    const FILE_LIMITS = { text: 2*1024*1024, image: 5*1024*1024, pdf: 20*1024*1024, docx: 10*1024*1024 };
+    // ── File upload ───────────────────────────────────────────────────────
+    const FILE_LIMITS = { text: 2 * 1024 * 1024, image: 5 * 1024 * 1024, pdf: 20 * 1024 * 1024, docx: 10 * 1024 * 1024 };
     const TOTAL_LIMIT = 24 * 1024 * 1024;
-    const TEXT_EXTS = new Set(['.txt','.md','.py','.js','.ts','.jsx','.tsx','.go','.rs',
-      '.java','.c','.cpp','.h','.hpp','.rb','.swift','.kt','.sh','.bash','.zsh','.bat','.ps1',
-      '.yaml','.yml','.json','.toml','.csv','.html','.css','.scss','.xml','.ini',
-      '.env','.sql','.graphql','.proto','.tf','.hcl','.vue','.php','.scala','.dart','.elm']);
-    const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp']);
+    const TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs',
+      '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1',
+      '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini',
+      '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
+    const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+    let selectedFiles = []; // [{file, error}]
 
-    let selectedFiles = []; // [{file: File, error: string|null}]
-
-    function getFileCategory(file) {
+    function fileCategory(file) {
       const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
       if (IMAGE_EXTS.has(ext)) return 'image';
       if (ext === '.pdf') return 'pdf';
@@ -982,511 +319,422 @@
       if (TEXT_EXTS.has(ext)) return 'text';
       return 'unsupported';
     }
-
-    function formatBytes(n) {
-      if (n < 1024) return n + ' B';
-      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-      return (n / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
     function validateFile(file) {
-      const cat = getFileCategory(file);
-      if (cat === 'unsupported') return `Unsupported type — use PDF, DOCX, images, or text/code files`;
-      const limit = FILE_LIMITS[cat];
-      if (file.size > limit) {
-        return `${formatBytes(file.size)} exceeds the ${formatBytes(limit)} limit for ${cat} files`;
-      }
+      const cat = fileCategory(file);
+      if (cat === 'unsupported') return 'Unsupported type. Use PDF, DOCX, images, or text and code files.';
+      if (file.size > FILE_LIMITS[cat]) return `${fmtBytes(file.size)} is over the ${fmtBytes(FILE_LIMITS[cat])} limit for ${cat} files.`;
       return null;
     }
+    const totalSize = () => selectedFiles.reduce((s, { file }) => s + file.size, 0);
+    const filesInvalid = () => totalSize() > TOTAL_LIMIT || selectedFiles.some(({ error }) => error);
 
     function renderFileList() {
-      const listEl = document.getElementById('file-list');
-      const totalEl = document.getElementById('upload-total');
-      listEl.innerHTML = '';
-
-      selectedFiles.forEach(({file, error}, i) => {
-        const item = document.createElement('div');
-        item.className = 'file-item' + (error ? ' file-item--error' : '');
-
-        const nameEl = document.createElement('span');
-        nameEl.className = 'file-name';
-        nameEl.textContent = file.name;
-
-        const sizeEl = document.createElement('span');
-        sizeEl.className = 'file-size';
-        sizeEl.textContent = formatBytes(file.size);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'btn-remove';
-        removeBtn.textContent = '✕';
-        removeBtn.addEventListener('click', () => {
-          selectedFiles.splice(i, 1);
-          renderFileList();
-        });
-
-        item.appendChild(nameEl);
-        item.appendChild(sizeEl);
-        item.appendChild(removeBtn);
-
-        if (error) {
-          const errEl = document.createElement('span');
-          errEl.className = 'file-error';
-          errEl.textContent = error;
-          item.appendChild(errEl);
-        }
-
-        listEl.appendChild(item);
+      const list = $('file-list');
+      list.innerHTML = '';
+      selectedFiles.forEach(({ file, error }, i) => {
+        const li = document.createElement('li');
+        li.className = 'file' + (error ? ' file-bad' : '');
+        li.innerHTML = `<span class="file-name">${esc(file.name)}</span><span class="file-size">${fmtBytes(file.size)}</span>
+          <button type="button" class="icon-btn" aria-label="Remove ${esc(file.name)}">${CB.ICONS.close}</button>
+          ${error ? `<span class="file-error">${esc(error)}</span>` : ''}`;
+        li.querySelector('button').addEventListener('click', () => { selectedFiles.splice(i, 1); renderFileList(); });
+        list.appendChild(li);
       });
-
-      // Total size counter
-      const total = selectedFiles.reduce((s, {file}) => s + file.size, 0);
-      const overTotal = total > TOTAL_LIMIT;
-      if (selectedFiles.length > 0) {
-        totalEl.style.display = '';
-        totalEl.textContent = `Total: ${formatBytes(total)} / ${formatBytes(TOTAL_LIMIT)}`;
-        totalEl.className = 'upload-total' + (overTotal ? ' upload-total--error' : '');
-      } else {
-        totalEl.style.display = 'none';
-      }
-
-      // Disable submit if any per-file error or total exceeded
-      const hasErrors = overTotal || selectedFiles.some(({error}) => error);
-      document.getElementById('submit-btn').disabled = hasErrors;
+      const total = totalSize();
+      const t = $('upload-total');
+      t.hidden = selectedFiles.length === 0;
+      t.textContent = `${fmtBytes(total)} of ${fmtBytes(TOTAL_LIMIT)}`;
+      t.classList.toggle('bad', total > TOTAL_LIMIT);
+      submitBtn.disabled = running || filesInvalid();
+      updateSummaries();
     }
-
-    function addFiles(newFiles) {
-      for (const file of newFiles) {
-        // Skip duplicates (same name + size)
-        const isDupe = selectedFiles.some(
-          ({file: f}) => f.name === file.name && f.size === file.size
-        );
-        if (isDupe) continue;
-        selectedFiles.push({file, error: validateFile(file)});
+    function addFiles(files) {
+      for (const file of files) {
+        if (selectedFiles.some(({ file: f }) => f.name === file.name && f.size === file.size)) continue;
+        selectedFiles.push({ file, error: validateFile(file) });
       }
       renderFileList();
     }
 
-    const uploadZone = document.getElementById('upload-zone');
-    const fileInput  = document.getElementById('file-input');
+    const drop = $('upload-zone');
+    const fileInput = $('file-input');
+    drop.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); if (!fields.disabled) drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 
-    document.getElementById('upload-browse-trigger').addEventListener('click', (e) => {
-      e.stopPropagation();
-      fileInput.click();
-    });
-    uploadZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => {
-      addFiles(Array.from(fileInput.files));
-      fileInput.value = ''; // allow re-selecting the same file
-    });
-    uploadZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadZone.classList.add('drag-over');
-    });
-    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-    // Recursively collect all File objects from a FileSystemEntry (file or directory)
-    async function getAllFilesFromEntry(entry) {
-      if (entry.isFile) {
-        return new Promise((resolve, reject) => entry.file(resolve, reject));
-      }
-      // Directory: readEntries returns up to 100 at a time; loop until empty
+    async function filesFromEntry(entry) {
+      if (entry.isFile) return [await new Promise((res, rej) => entry.file(res, rej))];
       const reader = entry.createReader();
-      const files = [];
+      const out = [];
       let batch;
       do {
-        batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-        for (const child of batch) {
-          const result = await getAllFilesFromEntry(child);
-          if (Array.isArray(result)) files.push(...result);
-          else files.push(result);
-        }
+        batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        for (const child of batch) out.push(...await filesFromEntry(child));
       } while (batch.length > 0);
-      return files;
+      return out;
     }
-
-    uploadZone.addEventListener('drop', async (e) => {
+    drop.addEventListener('drop', async (e) => {
       e.preventDefault();
-      uploadZone.classList.remove('drag-over');
-      const newFiles = [];
+      drop.classList.remove('over');
+      if (fields.disabled) return;
+      const files = [];
       for (const item of Array.from(e.dataTransfer.items)) {
-        const entry = item.webkitGetAsEntry();
-        if (!entry) continue;
-        const result = await getAllFilesFromEntry(entry);
-        if (Array.isArray(result)) newFiles.push(...result);
-        else newFiles.push(result);
+        const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+        if (entry) files.push(...await filesFromEntry(entry));
+        else if (item.kind === 'file') files.push(item.getAsFile());
       }
-      addFiles(newFiles);
+      addFiles(files);
     });
 
-    document.getElementById('add-url').addEventListener('click', () =>
-      addRepeatableRow('url-list', 'https://example.com/article'));
+    // ── Errors ─────────────────────────────────────────────────────────────
+    function showError(msg) { $('error-text').textContent = msg; $('error-panel').hidden = false; }
+    function hideError() { $('error-panel').hidden = true; }
 
-    document.getElementById('add-github').addEventListener('click', () =>
-      addRepeatableRow('github-list', 'owner/repo'));
-
-    const form           = document.getElementById('job-form');
-    const submitBtn      = document.getElementById('submit-btn');
-    const errorPanel     = document.getElementById('error-panel');
-    const progressPanel  = document.getElementById('progress-panel');
-    const stagesList     = document.getElementById('stages-list');
-    const appBody        = document.getElementById('app-body');
-    const appLeft        = document.getElementById('app-left');
-    const resultVideo    = document.getElementById('result-video');
-    const downloadsPanel = document.getElementById('downloads-panel');
-    const downloadsList  = document.getElementById('downloads-list');
-
-    // State
-    let stageEls = {};    // node name → { item, dot }
-    let seenStages = [];  // ordered list
-    let finalized = false;
-    let activeES = null;
+    // ── Progress state ─────────────────────────────────────────────────────
+    let running = false;
     let currentJobId = null;
+    let handled = 0;          // events from job.events already rendered
+    let current = null;       // the in-progress row
+    let counts = {};          // node -> times seen (for retries)
+    let es = null;
+    let finalized = false;
+    let startedAt = 0;
+    let clockTimer = null;
 
-    function showError(msg) {
-      errorPanel.textContent = msg;
-      errorPanel.style.display = 'block';
+    const ICON_DONE = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const ICON_FAIL = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+    function setRow(li, node, status, attempt) {
+      li.className = `stage ${status}`;
+      li.dataset.node = node;
+      const label = stageLabel(node) + (attempt > 1 ? ` (attempt ${attempt})` : '');
+      const sr = status === 'done' ? 'done' : status === 'failed' ? 'failed' : 'in progress';
+      li.innerHTML = `<span class="stage-mark">${status === 'done' ? ICON_DONE : status === 'failed' ? ICON_FAIL : ''}</span>
+        <span class="stage-name">${esc(label)}</span><span class="sr-only">, ${sr}</span>`;
+    }
+    function newRow() {
+      const li = document.createElement('li');
+      stagesList.appendChild(li);
+      return li;
     }
 
-    function hideError() {
-      errorPanel.style.display = 'none';
+    function handleEvent(ev) {
+      if (!ev || ev.done || !ev.node) return;
+      const node = ev.node;
+      const u = ev.updates || {};
+      counts[node] = (counts[node] || 0) + 1;
+      const failed = u.status === 'failed';
+      setRow(current || newRow(), node, failed ? 'failed' : 'done', counts[node]);
+      current = null;
+      const next = failed ? null : nextStage(node, u);
+      if (next) {
+        current = newRow();
+        setRow(current, next, 'running', (counts[next] || 0) + 1);
+        runStatus.textContent = stageLabel(next);
+      }
+      if (currentJobId) window.jobStatus.updateStage(currentJobId, next || node);
     }
+
+    function tick() { runClock.textContent = fmtClock((Date.now() - startedAt) / 1000); }
 
     function resetUI() {
       hideError();
-      appBody.classList.remove('is-active', 'is-complete');
-      progressPanel.style.display = 'none';
-      downloadsPanel.style.display = 'none';
-      stagesList.innerHTML = '';
-      downloadsList.innerHTML = '';
-      resultVideo.removeAttribute('src');
-      resultVideo.style.display = 'none';
-      document.getElementById('completion-card').style.display = 'none';
-      document.getElementById('btn-watch').style.display = '';
-      stageEls = {};
-      seenStages = [];
+      if (es) { es.close(); es = null; }
+      clearInterval(clockTimer);
+      running = false;
       finalized = false;
+      currentJobId = null;
+      handled = 0;
+      current = null;
+      counts = {};
+      appBody.classList.remove('is-active');
+      progressPanel.hidden = true;
+      progressPanel.classList.remove('is-done', 'is-failed');
+      resultBox.hidden = true;
+      resultVideo.removeAttribute('src');
+      resultVideo.innerHTML = '';
+      resultVideo.load();
+      downloadsPanel.hidden = true;
+      downloadsList.innerHTML = '';
+      completion.hidden = true;
+      $('run-error').hidden = true;
+      stagesList.innerHTML = '';
+      fields.disabled = false;
+      submitBtn.disabled = filesInvalid();
+      submitBtn.textContent = 'Generate video';
     }
 
-    function ensureStage(node) {
-      if (stageEls[node]) return stageEls[node];
-      const label = STAGE_LABELS[node] || node;
-      const item = document.createElement('div');
-      item.className = 'stage-item pending';
-      const dot = document.createElement('span');
-      dot.className = 'stage-dot';
-      const nameEl = document.createElement('span');
-      nameEl.className = 'stage-name';
-      nameEl.textContent = label;
-      item.appendChild(dot);
-      item.appendChild(nameEl);
-      stagesList.appendChild(item);
-      stageEls[node] = { item, dot };
-      seenStages.push(node);
-      return stageEls[node];
+    function beginRun(jobId, topic, since) {
+      running = true;
+      currentJobId = jobId;
+      startedAt = since || Date.now();
+      $('run-topic').textContent = topic;
+      runStatus.textContent = 'Starting';
+      appBody.classList.add('is-active');
+      progressPanel.hidden = false;
+      fields.disabled = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Generating';
+      current = newRow();
+      setRow(current, '_start', 'running', 1);
+      tick();
+      clockTimer = setInterval(tick, 1000);
     }
 
-    const CHECKMARK_SVG = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    const CROSS_SVG     = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2l5 5M7 2l-5 5" stroke="#c0392b" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-
-    function setStageStatus(node, status) {
-      const el = ensureStage(node);
-      el.item.className = `stage-item ${status}`;
-      el.dot.className = `stage-dot ${status}`;
-      if (status === 'done')   el.dot.innerHTML = CHECKMARK_SVG;
-      if (status === 'failed') el.dot.innerHTML = CROSS_SVG;
-      if (status === 'running' || status === 'pending') el.dot.innerHTML = '';
+    // Fetch the job and render any events not shown yet. Idempotent, so it is
+    // safe after reconnects or when another tab drained the SSE queue.
+    async function sync() {
+      const r = await fetch(`/api/jobs/${encodeURIComponent(currentJobId)}`);
+      if (!r.ok) throw new Error(r.status === 404 ? 'This job is gone. The server may have restarted.' : `HTTP ${r.status}`);
+      const job = await r.json();
+      const events = job.events || [];
+      for (; handled < events.length; handled++) handleEvent(events[handled]);
+      return job;
     }
 
-    function markAllPriorDone(currentNode) {
-      // Mark any previously running stage as done
-      for (const n of seenStages) {
-        if (n === currentNode) break;
-        const el = stageEls[n];
-        if (el && el.item.classList.contains('running')) {
-          setStageStatus(n, 'done');
-        }
-      }
-    }
-
-    function handleEvent(data) {
-      if (data.done) return;  // terminal event handled in onmessage
-
-      const node = data.node;
-      if (!node) return;
-
-      const updates = data.updates || {};
-      const status = updates.status;
-
-      ensureStage(node);
-      markAllPriorDone(node);
-
-      if (status === 'failed') {
-        setStageStatus(node, 'failed');
-      } else {
-        setStageStatus(node, 'running');
-      }
-
-      // Keep the status dropdown in sync with the current stage
-      if (currentJobId) window.jobStatus?.updateStage(currentJobId, node);
-    }
-
-    async function finalizeJob(jobId) {
-      if (finalized) return;
-      finalized = true;
-
-      // Mark all running stages as done
-      for (const n of seenStages) {
-        const el = stageEls[n];
-        if (el && el.item.classList.contains('running')) {
-          setStageStatus(n, 'done');
-        }
-      }
-
-      // Fetch final job state
-      let job;
-      try {
-        const r = await fetch(`/api/jobs/${jobId}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        job = await r.json();
-      } catch (e) {
-        showError(`Could not fetch job result: ${e.message}`);
-        submitBtn.disabled = false;
-        return;
-      }
-
-      if (job.status === 'failed') {
-        window.jobStatus?.resolve(jobId, 'failed');
-        showError(job.error || 'Job failed for an unknown reason.');
-        submitBtn.disabled = false;
-        return;
-      }
-
-      window.jobStatus?.resolve(jobId, 'completed');
-
-      const outputFiles = job.output_files || [];
-      const hasVideo = outputFiles.includes('final.mp4');
-
-      // Show completion card (keep progress panel visible)
-      const card = document.getElementById('completion-card');
-      const watchBtn = document.getElementById('btn-watch');
-      const againBtn = document.getElementById('btn-again');
-
-      watchBtn.href = `/library/${jobId}`;
-      card.style.display = 'block';
-
-      if (!hasVideo) {
-        watchBtn.style.display = 'none';
-      }
-
-      againBtn.addEventListener('click', () => {
-        card.style.display = 'none';
-        resetUI();
-        submitBtn.disabled = false;
-      }, { once: true });
-
-      submitBtn.disabled = false;
+    let syncQueued = false;
+    function queueSync() {
+      if (syncQueued) return;
+      syncQueued = true;
+      setTimeout(() => { syncQueued = false; sync().catch(() => {}); }, 150);
     }
 
     function startSSE(jobId) {
-      if (activeES) {
-        activeES.close();
-        activeES = null;
-      }
-
-      progressPanel.style.display = 'block';
-      appBody.classList.add('is-active');
-
-      const es = new EventSource(`/api/jobs/${jobId}/events`);
-      activeES = es;
-
+      if (es) es.close();
+      es = new EventSource(`/api/jobs/${encodeURIComponent(jobId)}/events`);
       es.onmessage = (evt) => {
         let data;
         try { data = JSON.parse(evt.data); } catch { return; }
-
-        if (data.done) {
-          es.close();
-          activeES = null;
-          finalizeJob(jobId);
-          return;
-        }
-        handleEvent(data);
+        if (data.done) { es.close(); es = null; finalizeJob(); return; }
+        queueSync();
       };
-
-      es.onerror = () => {
-        es.close();
-        activeES = null;
-        finalizeJob(jobId);
+      es.onerror = async () => {
+        if (es) { es.close(); es = null; }
+        // The stream dropped. Only finish if the job really finished.
+        try {
+          const job = await sync();
+          if (job.status === 'completed' || job.status === 'failed') finalizeJob(job);
+          else setTimeout(() => { if (running && currentJobId === jobId) startSSE(jobId); }, 3000);
+        } catch (e) {
+          finalizeJob(null, e.message);
+        }
       };
     }
 
+    function renderDownloads(jobId, files) {
+      const items = DOWNLOADABLE.filter(([f]) => files.includes(f));
+      downloadsList.innerHTML = items.map(([f, name, ext]) =>
+        `<a class="chip" href="${fileUrl(jobId, f)}" download="${esc(f)}">${esc(name)}<span class="chip-ext">${ext}</span></a>`).join('');
+      downloadsPanel.hidden = items.length === 0;
+    }
+
+    async function finalizeJob(job, fetchError) {
+      if (finalized) return;
+      finalized = true;
+      if (es) { es.close(); es = null; }
+      clearInterval(clockTimer);
+      const jobId = currentJobId;
+      if (!job && !fetchError) {
+        try { job = await sync(); } catch (e) { fetchError = e.message; }
+      } else if (job) {
+        try { await sync(); } catch {}
+      }
+      running = false;
+      fields.disabled = false;
+      submitBtn.textContent = 'Generate video';
+      submitBtn.disabled = filesInvalid();
+      completion.hidden = false;
+      $('btn-watch').hidden = true;
+
+      const fail = (title, body) => {
+        if (current) setRow(current, current.dataset.node, 'failed', (counts[current.dataset.node] || 0) + 1);
+        progressPanel.classList.add('is-failed');
+        runStatus.textContent = 'Failed';
+        $('run-error-title').textContent = title;
+        $('run-error-body').textContent = body;
+        $('run-error').hidden = false;
+        $('btn-again').textContent = 'Try again';
+      };
+
+      if (fetchError) {
+        fail('Lost track of the job', fetchError);
+        window.jobStatus.resolve(jobId, 'failed');
+        return;
+      }
+      if (job.status === 'failed') {
+        window.jobStatus.resolve(jobId, 'failed');
+        fail('The job failed', job.error || 'No error message was recorded. Check the server log.');
+        return;
+      }
+
+      window.jobStatus.resolve(jobId, 'completed');
+      if (current) { setRow(current, current.dataset.node, 'done', (counts[current.dataset.node] || 0) + 1); current = null; }
+      progressPanel.classList.add('is-done');
+      runStatus.textContent = `Finished in ${runClock.textContent}`;
+      runClock.textContent = '';
+      $('btn-again').textContent = 'Generate another';
+
+      const files = job.output_files || [];
+      if (files.includes('final.mp4')) {
+        resultVideo.src = fileUrl(jobId, 'final.mp4');
+        resultBox.hidden = false;
+        const watch = $('btn-watch');
+        watch.href = `/library/${encodeURIComponent(jobId)}`;
+        watch.hidden = false;
+      }
+      if (job.error) {
+        $('run-error-title').textContent = 'Finished with a problem';
+        $('run-error-body').textContent = job.error;
+        $('run-error').hidden = false;
+      }
+      renderDownloads(jobId, files);
+    }
+
+    $('btn-again').addEventListener('click', () => {
+      resetUI();
+      $('topic').focus();
+    });
+
+    // ── Submit ─────────────────────────────────────────────────────────────
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (running) return;
+      const topic = $('topic').value.trim();
+      if (!topic) {
+        showError('Add a topic first. One clear sentence is enough.');
+        $('topic').focus();
+        return;
+      }
+      if (totalSize() > TOTAL_LIMIT) {
+        showError(`Files add up to ${fmtBytes(totalSize())}, over the ${fmtBytes(TOTAL_LIMIT)} limit. Remove some and try again.`);
+        return;
+      }
       resetUI();
       submitBtn.disabled = true;
 
-      const topic   = document.getElementById('topic').value.trim();
-
-      const hasFiles = selectedFiles.length > 0 && !selectedFiles.some(({error}) => error);
-      const totalSize = selectedFiles.reduce((s, {file}) => s + file.size, 0);
-      if (totalSize > TOTAL_LIMIT) {
-        showError(`Total file size (${formatBytes(totalSize)}) exceeds the ${formatBytes(TOTAL_LIMIT)} limit`);
-        submitBtn.disabled = false;
-        return;
-      }
-
-      let resp, job;
-      try {
-        if (hasFiles) {
-          // Multipart path: files + form fields → /api/jobs/upload
-          const fd = new FormData();
-          fd.append('topic',         topic);
-          fd.append('effort',        document.getElementById('effort').value);
-          fd.append('audience',      document.getElementById('audience').value);
-          fd.append('tone',          document.getElementById('tone').value);
-          fd.append('theme',         document.getElementById('theme').value);
-          fd.append('template',      document.getElementById('template').value);
-          fd.append('speed',         document.getElementById('speed').value);
-          fd.append('burn_captions', document.getElementById('burn-captions').checked ? 'true' : 'false');
-          fd.append('quiz',          document.getElementById('quiz').checked ? 'true' : 'false');
-          fd.append('qa_density',    document.getElementById('qa-density').value);
-          for (const url of getRepeatableValues('url-list'))    fd.append('urls', url);
-          for (const repo of getRepeatableValues('github-list')) fd.append('github', repo);
-          for (const {file} of selectedFiles)                   fd.append('files', file);
-
-          resp = await fetch('/api/jobs/upload', { method: 'POST', body: fd });
-        } else {
-          // JSON path: no files → /api/jobs
-          const body = {
-            topic,
-            effort:        document.getElementById('effort').value,
-            audience:      document.getElementById('audience').value,
-            tone:          document.getElementById('tone').value,
-            theme:         document.getElementById('theme').value,
-            template:      document.getElementById('template').value || null,
-            speed:         parseFloat(document.getElementById('speed').value) || 1.0,
-            burn_captions: document.getElementById('burn-captions').checked,
-            quiz:          document.getElementById('quiz').checked,
-            qa_density:    document.getElementById('qa-density').value,
-            urls:          getRepeatableValues('url-list'),
-            github:        getRepeatableValues('github-list'),
-          };
-          resp = await fetch('/api/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-        }
-
-        if (!resp.ok) {
-          const text = await resp.text();
-          throw new Error(`HTTP ${resp.status}: ${text}`);
-        }
-        job = await resp.json();
-      } catch (err) {
-        showError(`Failed to start job: ${err.message}`);
-        submitBtn.disabled = false;
-        return;
-      }
-
-      currentJobId = job.id;
-      window.jobStatus?.set(job.id, topic);
-      startSSE(job.id);
-    });
-
-    // ── Help tooltips ──────────────────────────────────────────
-    const helpTip = document.getElementById('help-tip');
-
-    function showTip(btn) {
-      const tip = btn.dataset.tip;
-      if (!tip) return;
-      helpTip.textContent = tip;
-      helpTip.style.display = 'block';
-      const rect = btn.getBoundingClientRect();
-      const tipW = helpTip.offsetWidth;
-      const tipH = helpTip.offsetHeight;
-      let top = rect.bottom + 6;
-      let left = rect.left;
-      if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 6;
-      if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
-      helpTip.style.top = Math.max(8, top) + 'px';
-      helpTip.style.left = Math.max(8, left) + 'px';
-    }
-
-    function hideTip() { helpTip.style.display = 'none'; }
-
-    document.querySelectorAll('.help-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation(); // prevent <details> toggle when inside <summary>
-        showTip(btn);
-      });
-    });
-
-    document.addEventListener('click', hideTip);
-
-    // ── Prefill from query params (re-generate from library) ──────
-    (function prefillFromQuery() {
-      const p = new URLSearchParams(location.search);
-      if (!p.has('topic')) return;
-
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val != null) el.value = val;
+      const common = {
+        topic,
+        effort: val('effort'),
+        audience: val('audience'),
+        tone: val('tone'),
+        theme: val('theme'),
+        template: val('template'),
+        speed: parseFloat(val('speed')) || 1.0,
+        burn_captions: $('burn-captions').checked,
+        quiz: $('quiz').checked,
+        qa_density: val('qa_density'),
+        quality: val('quality'),
+        urls: getRows('url-list'),
+        github: getRows('github-list'),
       };
-
-      setVal('topic',    p.get('topic'));
-      setVal('effort',   p.get('effort'));
-      setVal('audience', p.get('audience'));
-      setVal('tone',     p.get('tone'));
-      setVal('theme',    p.get('theme'));
-      setVal('speed',    p.get('speed'));
-      setVal('template', p.get('template'));
-
-      // Open Style section so user can see the pre-filled settings
-      const styleDetails = document.querySelector('details.advanced');
-      if (styleDetails) styleDetails.open = true;
-
-      // Clean up the URL so it doesn't re-trigger on refresh
-      history.replaceState(null, '', '/');
-    })();
-
-    // ── Reconnect to active job on page load ──────────────────────
-    // If there's a running job in localStorage and the user navigated
-    // back to this page, replay past events to rebuild stage state
-    // and reconnect SSE for the live tail.
-    (async function reconnectActiveJob() {
-      // Don't reconnect if this is a re-generate prefill
-      if (new URLSearchParams(location.search).has('topic')) return;
-
-      const stored = window.jobStatus?.get();
-      if (!stored || (stored.status !== 'running' && stored.status !== 'pending')) return;
 
       let job;
       try {
-        const r = await fetch(`/api/jobs/${stored.id}`);
-        if (!r.ok) return;
-        job = await r.json();
-      } catch { return; }
-
-      // Show progress panel and disable form submit
-      currentJobId = stored.id;
-      progressPanel.style.display = 'block';
-      appBody.classList.add('is-active');
-      submitBtn.disabled = true;
-
-      // Replay past events to reconstruct stage checkpoints
-      for (const event of (job.events || [])) {
-        handleEvent(event);
-      }
-
-      // If job already finished while we were away, finalize immediately
-      if (job.status === 'completed' || job.status === 'failed') {
-        finalizeJob(stored.id);
+        let resp;
+        if (selectedFiles.length > 0) {
+          // Multipart: files + fields go to /api/jobs/upload
+          const fd = new FormData();
+          for (const [k, v] of Object.entries(common)) {
+            if (Array.isArray(v)) v.forEach((x) => fd.append(k, x));
+            else fd.append(k, typeof v === 'boolean' ? String(v) : v);
+          }
+          for (const { file } of selectedFiles) fd.append('files', file);
+          resp = await fetch('/api/jobs/upload', { method: 'POST', body: fd });
+        } else {
+          resp = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...common, template: common.template || null, quality: common.quality || null }),
+          });
+        }
+        if (!resp.ok) {
+          let detail = await resp.text();
+          try { const j = JSON.parse(detail); detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
+          throw new Error(`${detail} (HTTP ${resp.status})`);
+        }
+        job = await resp.json();
+      } catch (err) {
+        showError(err.message || 'The server did not respond.');
+        submitBtn.disabled = filesInvalid();
         return;
       }
 
-      // Reconnect SSE for live updates going forward
-      startSSE(stored.id);
+      window.jobStatus.set(job.id, topic);
+      beginRun(job.id, topic);
+      startSSE(job.id);
+      progressPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Ctrl/Cmd + Enter submits from the topic box
+    $('topic').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); }
+    });
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
+      const k = document.querySelector('#topic-hint kbd');
+      if (k) k.textContent = 'Cmd';
+    }
+
+    // ── Help tooltips ──────────────────────────────────────────────────────
+    const tip = $('help-tip');
+    let tipBtn = null;
+    function hideTip() {
+      tip.hidden = true;
+      if (tipBtn) { tipBtn.setAttribute('aria-expanded', 'false'); tipBtn.removeAttribute('aria-describedby'); }
+      tipBtn = null;
+    }
+    function showTip(btn) {
+      if (tipBtn === btn) { hideTip(); return; }
+      hideTip();
+      tipBtn = btn;
+      tip.textContent = btn.dataset.tip;
+      tip.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      btn.setAttribute('aria-describedby', 'help-tip');
+      const r = btn.getBoundingClientRect();
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      let top = r.bottom + 8, left = r.left - 8;
+      if (top + h > innerHeight - 8) top = r.top - h - 8;
+      if (left + w > innerWidth - 8) left = innerWidth - w - 8;
+      tip.style.top = Math.max(8, top) + 'px';
+      tip.style.left = Math.max(8, left) + 'px';
+    }
+    document.querySelectorAll('.help').forEach((btn) => {
+      btn.setAttribute('aria-expanded', 'false');
+      btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showTip(btn); });
+    });
+    document.addEventListener('click', (e) => { if (!tip.contains(e.target)) hideTip(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tipBtn) { const b = tipBtn; hideTip(); b.focus(); } });
+    addEventListener('scroll', hideTip, { passive: true });
+
+    // ── Prefill from query params (re-generate from library) ──────────────
+    const params = new URLSearchParams(location.search);
+    if (params.has('topic')) {
+      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality']) setVal(k, params.get(k));
+      if (params.get('quiz') === 'true') $('quiz').checked = true;
+      if (params.get('burn_captions') === 'true') $('burn-captions').checked = true;
+      $('style-section').open = true;
+      history.replaceState(null, '', '/');
+    }
+    updateSummaries();
+
+    // ── Reconnect to a running job when coming back to this page ──────────
+    (async function reconnect() {
+      if (params.has('topic')) return;
+      const stored = window.jobStatus.get();
+      if (!stored) return;
+      let job;
+      try {
+        const r = await fetch(`/api/jobs/${encodeURIComponent(stored.id)}`);
+        if (!r.ok) { if (r.status === 404) window.jobStatus.resolve(stored.id, 'failed'); return; }
+        job = await r.json();
+      } catch { return; }
+      beginRun(stored.id, stored.topic || job.topic, stored.startedAt);
+      await sync().catch(() => {});
+      if (job.status === 'completed' || job.status === 'failed') finalizeJob();
+      else startSSE(stored.id);
     })();
+  })();
   </script>
 </body>
 </html>
