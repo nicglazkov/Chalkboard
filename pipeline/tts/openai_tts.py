@@ -5,6 +5,7 @@ import io
 import os
 import wave
 from pathlib import Path
+from pipeline.cues import segment_cue_text, strip_cues
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_SEGMENT
 
 try:
@@ -50,7 +51,7 @@ async def generate_audio(segments: list[dict], output_path: Path, speed: float =
     async def _one(seg: dict):
         async with gate:
             return await api_call_with_retry(
-                lambda: _call(seg["text"]), timeout=TIMEOUT_TTS_SEGMENT, label="openai_tts"
+                lambda: _call(strip_cues(segment_cue_text(seg))), timeout=TIMEOUT_TTS_SEGMENT, label="openai_tts"
             )
 
     results = await asyncio.gather(*(_one(s) for s in segments))
@@ -62,4 +63,6 @@ async def generate_audio(segments: list[dict], output_path: Path, speed: float =
         out_wav.setframerate(wav_params.framerate)
         out_wav.writeframes(b"".join(frames for _, frames, _ in results))
 
+    # No timestamps from this API: render_trigger estimates cue times
+    # proportionally from the measured durations.
     return output_path, [duration for _, _, duration in results]

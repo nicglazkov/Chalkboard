@@ -24,7 +24,7 @@ def test_kokoro_generate_audio_returns_wav_and_durations(tmp_path):
     with patch("pipeline.tts.kokoro_tts.KPipeline") as MockPipeline:
         MockPipeline.return_value = _make_mock_pipeline()
         from pipeline.tts.kokoro_tts import generate_audio
-        wav_path, durations = asyncio.run(generate_audio(segments, output_path))
+        wav_path, durations, cues = asyncio.run(generate_audio(segments, output_path))
 
     assert wav_path == output_path
     assert output_path.exists()

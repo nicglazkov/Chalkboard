@@ -7,18 +7,25 @@ support request stitching (eleven_v4, multilingual_v2, ...) segments are made
 in order and each request names the previous ones (previous_request_ids) plus
 the neighbouring text, so intonation carries across segment boundaries.
 eleven_v3 rejects both (verified 2026-10-02), so it runs in parallel without.
+
+Requests go to the /with-timestamps endpoint (same body, JSON response with
+`audio_base64` and a per-character `alignment` of the input text; verified
+2026-10-02 with stitching on eleven_v4), which gives the exact time of every
+[[n]] cue marker in a segment.
 """
 import asyncio
+import base64
 import os
 import wave
 from pathlib import Path
 
 import httpx
 
+from pipeline.cues import cue_times_from_alignment, parse_cues, proportional_cue_times, segment_cue_text
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_SEGMENT
 from pipeline.tts.base import _apply_speed_to_wav
 
-API = "https://api.elevenlabs.io/v1/text-to-speech/{voice}"
+API = "https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps"
 ELEVENLABS_VOICE_ID = "1iNDh1muacMMMHXvS7Ym"  # "Skye" (narrator "aria"); override with ELEVENLABS_VOICE_ID
 ELEVENLABS_MODEL_ID = "eleven_v4"
 SAMPLE_RATE = 24000
@@ -33,6 +40,15 @@ def _supports_stitching(model_id: str) -> bool:
     return STITCH and not model_id.startswith(_NO_STITCH_MODELS)
 
 
+def _decode(r: httpx.Response) -> tuple[bytes, dict | None]:
+    """(pcm, alignment) from a with-timestamps response; raw PCM bodies
+    (plain endpoint, test doubles) come back without alignment."""
+    if "json" in (r.headers.get("content-type") or ""):
+        data = r.json()
+        return base64.b64decode(data.get("audio_base64") or ""), data.get("alignment")
+    return r.content, None
+
+
 async def generate_audio(
     segments: list[dict],
     output_path: Path,
@@ -40,17 +56,18 @@ async def generate_audio(
     *,
     voice: str | None = None,
     model: str | None = None,
-) -> tuple[Path, list[float]]:
+) -> tuple[Path, list[float], list[list[float | None]]]:
     key = os.getenv("ELEVENLABS_API_KEY")
     if not key:
         raise RuntimeError("ELEVENLABS_API_KEY is not set")
     voice_id = voice or os.getenv("ELEVENLABS_VOICE_ID") or ELEVENLABS_VOICE_ID
     model_id = model or os.getenv("ELEVENLABS_MODEL_ID") or ELEVENLABS_MODEL_ID
-    texts = [s["text"] for s in segments]
+    parsed = [parse_cues(segment_cue_text(s)) for s in segments]
+    texts = [clean for clean, _ in parsed]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     client = httpx.Client(timeout=TIMEOUT_TTS_SEGMENT, headers={"xi-api-key": key})
 
-    def _call(i: int, previous_ids: list[str]) -> tuple[bytes, str | None]:
+    def _call(i: int, previous_ids: list[str]) -> tuple[bytes, dict | None, str | None]:
         body: dict = {"text": texts[i], "model_id": model_id}
         if _supports_stitching(model_id):
             if i > 0:
@@ -65,16 +82,17 @@ async def generate_audio(
             raise ValueError(f"ElevenLabs {r.status_code} (not retried): {r.text[:300]}")
         if r.status_code != 200:
             raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:300]}")
-        return r.content, r.headers.get("request-id")
+        pcm, alignment = _decode(r)
+        return pcm, alignment, r.headers.get("request-id")
 
     try:
         if _supports_stitching(model_id):
-            pcms, ids = [], []
+            results, ids = [], []
             for i in range(len(texts)):
-                pcm, rid = await api_call_with_retry(
+                pcm, alignment, rid = await api_call_with_retry(
                     lambda i=i: _call(i, ids), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
                 )
-                pcms.append(pcm)
+                results.append((pcm, alignment))
                 if rid:
                     ids.append(rid)
         else:
@@ -82,15 +100,16 @@ async def generate_audio(
 
             async def _one(i: int):
                 async with gate:
-                    pcm, _ = await api_call_with_retry(
+                    pcm, alignment, _ = await api_call_with_retry(
                         lambda: _call(i, []), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
                     )
-                    return pcm
+                    return pcm, alignment
 
-            pcms = list(await asyncio.gather(*(_one(i) for i in range(len(texts)))))
+            results = list(await asyncio.gather(*(_one(i) for i in range(len(texts)))))
     finally:
         client.close()
 
+    pcms = [pcm for pcm, _ in results]
     with wave.open(str(output_path), "wb") as out_wav:
         out_wav.setnchannels(1)
         out_wav.setsampwidth(2)
@@ -98,8 +117,18 @@ async def generate_audio(
         out_wav.writeframes(b"".join(pcms))
     durations = [len(p) / (SAMPLE_RATE * 2) for p in pcms]
 
+    cue_times = []
+    for (clean, offsets), (_, alignment), dur in zip(parsed, results, durations):
+        if alignment:
+            cue_times.append(cue_times_from_alignment(
+                clean, offsets, alignment.get("characters") or [],
+                alignment.get("character_start_times_seconds") or [], dur))
+        else:
+            cue_times.append(proportional_cue_times(clean, offsets, dur))
+
     if speed != 1.0:
         _apply_speed_to_wav(output_path, speed)
         durations = [d / speed for d in durations]
+        cue_times = [[None if t is None else round(t / speed, 3) for t in c] for c in cue_times]
 
-    return output_path, durations
+    return output_path, durations, cue_times

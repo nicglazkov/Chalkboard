@@ -36,7 +36,8 @@ def fake_api(monkeypatch):
 
 def test_writes_wav_with_measured_durations(tmp_path, fake_api):
     out = tmp_path / "voiceover.wav"
-    path, durations = asyncio.run(elevenlabs_tts.generate_audio(_segments(2), out, model="eleven_v4"))
+    path, durations, cues = asyncio.run(elevenlabs_tts.generate_audio(_segments(2), out, model="eleven_v4"))
+    assert cues == [[], []]
     assert path == out and out.exists()
     assert durations == [1.0, 1.0]
 
