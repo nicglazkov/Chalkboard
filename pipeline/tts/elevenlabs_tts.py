@@ -60,6 +60,9 @@ async def generate_audio(
             if previous_ids:
                 body["previous_request_ids"] = previous_ids[-3:]
         r = client.post(API.format(voice=voice_id), params={"output_format": "pcm_24000"}, json=body)
+        if r.status_code in (401, 403, 422):
+            # Bad key, missing permission, invalid request: retrying won't help.
+            raise ValueError(f"ElevenLabs {r.status_code} (not retried): {r.text[:300]}")
         if r.status_code != 200:
             raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:300]}")
         return r.content, r.headers.get("request-id")

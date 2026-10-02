@@ -46,6 +46,8 @@ class Job:
     _queue: asyncio.Queue = field(default_factory=asyncio.Queue, repr=False)
 
     def append_event(self, event: dict) -> None:
+        # Server-side timestamp so a page reopened mid-job can show step times.
+        event = {**event, "ts": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds")}
         self.events.append(event)
         self._queue.put_nowait(event)
 

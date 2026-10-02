@@ -259,3 +259,19 @@ def test_upload_endpoint_forwards_quality_and_narrator(client):
     assert resp.status_code == 202
     job = store.get(resp.json()["id"])
     assert (job.quality, job.narrator, job.template) == ("4k", "milo", None)
+
+
+def test_job_events_carry_server_timestamps():
+    from server.jobs import Job
+    job = Job(id="j", topic="t", effort="low", audience="beginner", tone="casual",
+              theme="chalkboard", template=None, speed=1.0)
+    job.append_event({"node": "render", "updates": {"status": "running"}})
+    assert job.events[0]["ts"].endswith("+00:00")
+
+
+def test_speed_out_of_range_is_rejected():
+    import pytest
+    from pydantic import ValidationError
+    from server.models import CreateJobRequest
+    with pytest.raises(ValidationError):
+        CreateJobRequest(topic="t", speed=0)

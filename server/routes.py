@@ -109,6 +109,9 @@ def _job_to_response(job: Job) -> JobResponse:
         events=job.events,
         error=job.error,
         output_files=job.output_files,
+        effort=job.effort, quality=job.quality, narrator=job.narrator,
+        qa_density=job.qa_density, quiz=job.quiz, burn_captions=job.burn_captions,
+        template=job.template,
     )
 
 
@@ -221,7 +224,8 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
                 "theme": _cfg.DEFAULT_THEME,
             },
             "narrators": narrators,
-            "render_backend": _render_backend.backend(),
+            # backend() may import manim the first time; keep the event loop free.
+            "render_backend": await asyncio.to_thread(_render_backend.backend),
             "model": _cfg.CLAUDE_MODEL,
             "running_jobs": sum(1 for j in store.list() if j.status in ("pending", "running")),
         }

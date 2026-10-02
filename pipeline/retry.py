@@ -21,6 +21,8 @@ def _is_busy(e: Exception) -> bool:
 def _is_fatal(e: Exception) -> bool:
     if isinstance(e, _FATAL):
         return True
+    if "(not retried)" in str(e):
+        return True
     # Out-of-credit 429s (OpenAI "insufficient_quota") never clear on retry.
     return "insufficient_quota" in str(e) or "credit balance is too low" in str(e)
 
