@@ -3,9 +3,9 @@
 # the same docker/*.py runtime modules natively.
 FROM manimcommunity/manim:v0.21.0
 USER root
-# House typography (docker/chalkboard_style.py): Inter text, JetBrains Mono code.
+# House typography (docker/chalkboard_style.py): Inter text, DejaVu Sans Mono code.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-inter fonts-jetbrains-mono \
+    && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-inter fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 # LaTeX packages used by the shared preamble in chalkboard_style.PREAMBLE.

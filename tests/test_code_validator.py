@@ -100,11 +100,14 @@ def test_code_validator_fails_on_syntax_error_without_claude_call(base_state):
     assert "syntax" in result["code_feedback"].lower()
 
 
-def test_code_validator_increments_attempts_on_semantic_fail(base_state):
+def test_semantic_fail_is_advisory_and_spares_hard_budget(base_state):
     base_state["script"] = "Explain hash tables."
     base_state["code_attempts"] = 1
+    base_state["claude_review_failures"] = 1
     result, _ = _run(base_state, VALID_CODE, "needs_revision", "Scene doesn't show hash tables.")
-    assert result["code_attempts"] == 2
+    assert "code_attempts" not in result          # hard retry budget untouched
+    assert result["claude_review_failures"] == 2
+    assert result["code_feedback_advisory"] is True
     assert "hash tables" in result["code_feedback"]
 
 

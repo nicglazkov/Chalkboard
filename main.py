@@ -24,7 +24,7 @@ EFFORT_CHOICES = ["low", "medium", "high"]
 AUDIENCE_CHOICES = ["beginner", "intermediate", "expert"]
 TONE_CHOICES = ["casual", "formal", "socratic"]
 THEME_CHOICES = ["chalkboard", "light", "colorful"]
-TEMPLATE_CHOICES = ["algorithm", "code", "compare", "howto", "timeline"]
+TEMPLATE_CHOICES = ["algorithm", "code", "compare", "derivation", "howto", "timeline"]
 
 # ---------------------------------------------------------------------------
 # Render timeout constants

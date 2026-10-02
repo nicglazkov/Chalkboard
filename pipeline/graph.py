@@ -22,9 +22,17 @@ def _after_fact_validator(state: PipelineState) -> str:
     return "script_agent"
 
 
+# Claude review rejections allowed before the scene goes to the deterministic
+# layout dry-run anyway (each one still triggers a revision first).
+CLAUDE_REVIEW_ADVISORY_LIMIT = 2
+
+
 def _after_code_validator(state: PipelineState) -> str:
     if not state.get("code_feedback"):  # approved
         return "layout_checker"          # approved by code_validator → check layout
+    if (state.get("code_feedback_advisory")
+            and state.get("claude_review_failures", 0) > CLAUDE_REVIEW_ADVISORY_LIMIT):
+        return "layout_checker"
     if state["code_attempts"] >= 3:
         return "escalate_to_user"
     return "manim_agent"
@@ -87,6 +95,8 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "search_warning": state.get("search_warning"),
         "interactive": state.get("interactive", True),
         "quality": state.get("quality"),
+        "claude_review_failures": state.get("claude_review_failures", 0),
+        "code_feedback_advisory": state.get("code_feedback_advisory", False),
     }
 
 

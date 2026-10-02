@@ -111,6 +111,8 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         return {
             "code_feedback": f"Syntax error: {e}",
             "code_attempts": attempts + 1,
+            "claude_review_failures": 0,
+            "code_feedback_advisory": False,
         }
 
     # Step 1b: Mobject arithmetic (render-time NotImplementedError).
@@ -119,6 +121,8 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         return {
             "code_feedback": mobj_arith_feedback,
             "code_attempts": attempts + 1,
+            "claude_review_failures": 0,
+            "code_feedback_advisory": False,
         }
 
     # Step 1c: deterministic AST guards (scaffold contract, design-system
@@ -129,6 +133,8 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         return {
             "code_feedback": guards_feedback,
             "code_attempts": attempts + 1,
+            "claude_review_failures": 0,
+            "code_feedback_advisory": False,
         }
 
     # Step 2: semantic review via Claude. The structural rules (scene base,
@@ -185,13 +191,19 @@ async def code_validator(state: PipelineState, client=None) -> dict:
 
     result = ValidationResult.model_validate(data)
     if result.verdict == "needs_revision":
+        # Claude's review is advisory: the AST guards above and the headless
+        # layout dry-run are the deterministic gates. Count its rejections
+        # separately so a nit-picking review cannot burn the retry budget meant
+        # for real bugs (graph routing proceeds after CLAUDE_REVIEW_ADVISORY_LIMIT).
         return {
             "code_feedback": result.feedback,
-            "code_attempts": attempts + 1,
+            "claude_review_failures": state.get("claude_review_failures", 0) + 1,
+            "code_feedback_advisory": True,
         }
     else:
         # Clear code_feedback on approval so _after_code_validator routes to render_trigger
         return {
             "code_feedback": None,
             "code_attempts": attempts,
+            "code_feedback_advisory": False,
         }

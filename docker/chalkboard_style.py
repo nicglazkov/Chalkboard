@@ -9,7 +9,7 @@ by the agent comes out in the house style:
     cancel/mathrsfs/dsfont, so derivations, vectors, units, cancellations and
     script letters all typeset without the agent having to manage packages.
   * Text: Inter when installed (clean, very legible at video sizes), falling back
-    to Pango's default sans. Code: JetBrains Mono, else DejaVu Sans Mono.
+    to Pango's default sans. Code: JetBrains Mono NL (no ligatures), else DejaVu Sans Mono.
 
 Swap faces with CHALKBOARD_TEXT_FONT / CHALKBOARD_CODE_FONT.
 """
@@ -72,7 +72,9 @@ def _pick(env: str, *candidates: str) -> str | None:
 
 
 TEXT_FONT = _pick("CHALKBOARD_TEXT_FONT", "Inter", "Source Sans 3", "DejaVu Sans")
-CODE_FONT = _pick("CHALKBOARD_CODE_FONT", "JetBrains Mono", "DejaVu Sans Mono")
+# Ligature fonts (plain "JetBrains Mono", Fira Code) break Manim's per-glyph Code
+# layout on "<=", "->", "==" ("rendered fewer glyphs"), so only ligature-free faces.
+CODE_FONT = _pick("CHALKBOARD_CODE_FONT", "JetBrains Mono NL", "DejaVu Sans Mono")
 
 
 def apply() -> None:
