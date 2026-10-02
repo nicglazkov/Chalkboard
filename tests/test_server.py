@@ -226,3 +226,36 @@ def test_meta_reports_defaults_and_narrators():
     ids = {n["id"] for n in data["narrators"]}
     assert {"aria", "milo", "kokoro"} <= ids
     assert next(n for n in data["narrators"] if n["id"] == "kokoro")["available"] is True
+
+
+@pytest.mark.parametrize("field,value", [
+    ("quality", "8k"), ("narrator", "bob"), ("effort", "extreme"), ("qa_density", "max"),
+])
+def test_upload_endpoint_rejects_invalid_fields(client, field, value):
+    """The multipart route validates like the JSON route (422) before saving files."""
+    tc, store = client
+
+    async def must_not_save(files, tmp_dir):
+        raise AssertionError("validate_and_save called for an invalid request")
+
+    with patch("server.routes.validate_and_save", new=must_not_save):
+        resp = tc.post("/api/jobs/upload", data={"topic": "t", field: value})
+
+    assert resp.status_code == 422
+    assert store.list() == []
+
+
+def test_upload_endpoint_forwards_quality_and_narrator(client):
+    tc, store = client
+
+    async def no_files(files, tmp_dir):
+        return []
+
+    with patch("server.routes.asyncio.create_task"), \
+         patch("server.routes.validate_and_save", new=no_files):
+        resp = tc.post("/api/jobs/upload",
+                       data={"topic": "t", "quality": "4k", "narrator": "milo", "template": ""})
+
+    assert resp.status_code == 202
+    job = store.get(resp.json()["id"])
+    assert (job.quality, job.narrator, job.template) == ("4k", "milo", None)

@@ -9,7 +9,9 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
 from config import OUTPUT_DIR
 from server.jobs import JobStore, run_job, Job
@@ -157,6 +159,18 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         files: list[UploadFile] = File(default=[]),
     ):
         """Create a job from multipart form data, optionally with file uploads."""
+        # Same validation as the JSON route (enum fields, quality, narrator), and
+        # before any upload is written, so a typo fails fast instead of mid-run.
+        try:
+            req = CreateJobRequest(
+                topic=topic, effort=effort, audience=audience, tone=tone, theme=theme,
+                template=template or None, speed=speed, burn_captions=burn_captions,
+                quiz=quiz, urls=urls, github=github, qa_density=qa_density,
+                quality=quality or None, narrator=narrator or None,
+            )
+        except ValidationError as e:
+            raise RequestValidationError(e.errors())
+
         tmp_dir = Path(tempfile.mkdtemp(prefix="chalkboard_upload_"))
         upload_dir: Path | None = None
         try:
@@ -173,11 +187,11 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
         job = store.create(
-            topic=topic, effort=effort, audience=audience,
-            tone=tone, theme=theme, template=template or None, speed=speed,
-            burn_captions=burn_captions, quiz=quiz,
-            urls=urls, github=github, qa_density=qa_density,
-            upload_dir=upload_dir, quality=quality or None, narrator=narrator or None,
+            topic=req.topic, effort=req.effort, audience=req.audience,
+            tone=req.tone, theme=req.theme, template=req.template, speed=req.speed,
+            burn_captions=req.burn_captions, quiz=req.quiz,
+            urls=req.urls, github=req.github, qa_density=req.qa_density,
+            upload_dir=upload_dir, quality=req.quality, narrator=req.narrator,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         _spawn(run_job(job, output_dir, library_store=library_store))

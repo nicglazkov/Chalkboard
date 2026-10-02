@@ -51,10 +51,14 @@ def make_library_router(store: LibraryStore, output_dir: Path | str | None = Non
 
     @router.delete("/library/{run_id}", status_code=204)
     async def delete_video(run_id: str, files: bool = False):
+        # run_id is a single path segment, but "." / ".." (e.g. sent as %2e%2e)
+        # would make rmtree hit the output dir or its parent.
+        run_dir = (_output_dir / run_id).resolve()
+        if run_dir.parent != _output_dir.resolve():
+            raise HTTPException(status_code=404, detail="Video not found")
         await store.delete_video(run_id)
         if files:
-            run_dir = _output_dir / run_id
-            if run_dir.exists():
+            if run_dir.is_dir():
                 await asyncio.to_thread(shutil.rmtree, run_dir)
 
     return router
