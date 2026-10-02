@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>In progress · Chalkboard</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="/app.css?v=5">
+  <script src="/app.js?v=5"></script>
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Main" data-page="progress"></nav>
+  <main class="main" id="main">
+    <div class="page" id="page">
+      <div class="shimmer" style="height:46px;max-width:520px"></div>
+      <div class="shimmer" style="height:320px"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  const { esc, fmtClock, fmtSpan, fmtInt, fmtUsd, fmtAgo, parseTs, getJSON, missingWhy, unknownHtml, buildWorkbench, renderTimeline, fileUrl, errorCard, resFull, getJobs, narratorName, getVoices } = window.CB;
+  const $ = (id) => document.getElementById(id);
+  const page = $('page');
+  const params = new URLSearchParams(location.search);
+  let jobId = params.get('job');
+
+  let job = null;           // last GET /api/jobs/{id}
+  let events = [];          // events, kept current from SSE between syncs
+  let es = null;
+  const liveSince = Date.now();   // peeks that arrive over SSE after this are live
+  let livePeekTs = null;          // ts of the newest peek received over SSE
+  let timeline = null, timelineRes = null;
+  let estimate = null;
+  let cancelPath = null;    // only set when the API actually has a cancel route
+  let voiceList = [];
+
+  const isRunning = () => job && (job.status === 'running' || job.status === 'pending');
+
+  // ── Page skeleton for one job ──────────────────────────────────────────
+  function skeleton() {
+    page.innerHTML = `
+      <div class="split">
+        <section>
+          <div class="eyebrow" id="eyebrow"><span class="pip"></span><span id="eyebrow-text"></span></div>
+          <h1 class="h1" id="headline"></h1>
+          <p class="quote" id="topic"></p>
+          <div id="others" hidden></div>
+          <div id="result" hidden></div>
+          <div class="bench">
+            <div class="bench-head"><span class="label">The workbench</span><span class="right" id="bench-count"></span></div>
+            <ol class="stations" id="stations"></ol>
+          </div>
+          <div class="card">
+            <div class="card-head"><span class="label">Timeline</span><span class="right" id="tl-sum"></span></div>
+            <div class="tl" id="tl"></div>
+          </div>
+          <div class="peek" id="peek" aria-live="off">
+            <div class="peek-head"><span class="dot" id="peek-dot"></span><span class="label" id="peek-title">Live from the workbench</span><span class="stage" id="peek-stage"></span></div>
+            <div id="peek-body"></div>
+          </div>
+        </section>
+        <aside>
+          <div class="card" id="stats-card">
+            <div class="label">Run stats</div>
+            <div id="stats"></div>
+          </div>
+          <div class="card" id="side-card">
+            <div class="label">Something off?</div>
+            <div id="cancel-wrap" hidden><button type="button" class="btn danger" id="cancel" style="width:100%">Cancel run</button></div>
+            <div class="mono faint" id="side-note">You can close this tab. The run keeps going on the server.</div>
+            <a href="/status/" style="font:13px var(--serif)">Check the render box status</a>
+          </div>
+        </aside>
+      </div>`;
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────────────
+  function startTs(wb) {
+    return parseTs(job.created_at) || parseTs(job.started_at) || wb.startTs;
+  }
+  function render() {
+    if (!job) return;
+    const now = Date.now();
+    const wb = buildWorkbench({ ...job, events }, now);
+    const t0 = startTs(wb);
+    const elapsedEnd = isRunning() ? now : (parseTs(job.finished_at) || wb.lastTs || now);
+    const elapsed = t0 ? (elapsedEnd - t0) / 1000 : null;
+    const eb = $('eyebrow');
+    eb.className = 'eyebrow' + (job.status === 'completed' ? ' done' : job.status === 'failed' ? ' failed' : '');
+    const word = job.status === 'pending' ? 'Queued' : job.status === 'running' ? 'Generating' : job.status === 'completed' ? 'Finished' : 'Failed';
+    $('eyebrow-text').textContent = elapsed != null ? `${word} · ${fmtClock(elapsed)}` : word;
+    $('eyebrow-text').title = parseTs(job.created_at) ? 'Measured from when the job was created' : 'Measured from the first pipeline event';
+    const h = job.status === 'completed' ? 'Your <em>video</em> is ready.' : job.status === 'failed' ? 'This run <em>stopped</em>.' : 'Working on your <em>video</em>.';
+    if ($('headline').innerHTML !== h) $('headline').innerHTML = h;
+    $('topic').textContent = `"${job.topic}"`;
+    document.title = `${word}: ${job.topic} · Chalkboard`;
+
+    // Stations
+    const done = wb.stations.filter((s) => s.state === 'done').length;
+    $('bench-count').textContent = `${done} of ${wb.stations.length} complete`;
+    $('stations').innerHTML = wb.stations.map((s) => {
+      const mark = s.state === 'done' ? '✓' : s.state === 'active' ? '●' : s.state === 'failed' ? '✕' : '';
+      const time = s.seconds >= 1 ? fmtClock(s.seconds) : (s.state === 'done' ? '<1s' : '');
+      const detail = s.detail || (s.state === 'active' ? 'Working' : s.state === 'queued' ? 'Waiting' : s.state === 'skipped' ? 'Did not run' : s.state === 'failed' ? 'Stopped here' : '');
+      const sr = { done: 'done', active: 'in progress', failed: 'failed', queued: 'not started', skipped: 'did not run' }[s.state];
+      return `<li class="station ${s.state}"${s.state === 'active' ? ' aria-current="step"' : ''}>
+        <span class="mk" aria-hidden="true">${mark}</span>
+        <span><span class="nm">${esc(s.name)}<span class="sr-only">, ${sr}</span></span><span class="dt">${esc(detail)}</span></span>
+        <span class="badge">${esc(s.badge || '')}</span>
+        <span class="tm">${time}</span></li>`;
+    }).join('');
+
+    renderStats(wb, elapsed);
+    renderPeek(wb);
+    renderTl(wb);
+    renderResult();
+    $('cancel-wrap').hidden = !(cancelPath && isRunning());
+    $('side-note').textContent = isRunning() ? 'You can close this tab. The run keeps going on the server.' : 'This run is over. Nothing else will happen to it.';
+  }
+
+  function statRow(k, vHtml, cls) { return `<div class="stat-row"><span class="k">${esc(k)}</span><span class="v ${cls || ''}">${vHtml}</span></div>`; }
+  function renderStats(wb, elapsed) {
+    const rows = [];
+    rows.push(statRow('Elapsed', elapsed != null ? esc(fmtClock(elapsed)) : unknownHtml('No events with a time yet'), 'gold'));
+    if (estimate && estimate.ok && estimate.data && estimate.data.median_seconds != null) {
+      rows.push(statRow('Typical total', esc('~' + fmtSpan(estimate.data.median_seconds)), ''));
+    } else {
+      const why = estimate && estimate.ok ? 'Fewer than 3 similar runs have finished' : missingWhy(estimate, 'The estimate');
+      rows.push(statRow('Typical total', unknownHtml(why)));
+    }
+    const T = job.totals;
+    const u = wb.usage;
+    const tokens = T ? (T.input_tokens != null && T.output_tokens != null ? T.input_tokens + T.output_tokens : null) : (u.calls ? u.input_tokens + u.output_tokens : null);
+    const tip = T ? `${fmtInt(T.input_tokens)} in, ${fmtInt(T.output_tokens)} out` : `${fmtInt(u.input_tokens)} in, ${fmtInt(u.output_tokens)} out`;
+    rows.push(statRow('Claude tokens', tokens != null ? `<span title="${esc(tip)}">${esc(fmtInt(tokens))}</span>` : unknownHtml(T ? 'At least one Claude call did not report its token count' : 'This server does not report token usage for this job')));
+    const searches = T ? T.web_searches : (u.calls ? u.web_searches : null);
+    if (searches) rows.push(statRow('Web searches', esc(fmtInt(searches))));
+    const cost = T ? T.cost_usd : (u.calls && u.costKnown ? u.cost_usd : null);
+    if (cost != null) rows.push(statRow(isRunning() ? 'Cost so far' : 'Cost', esc(fmtUsd(cost))));
+    if (T && T.tts_chars != null) rows.push(statRow('Narration', esc(fmtInt(T.tts_chars) + ' chars')));
+    $('stats').innerHTML = rows.join('') +
+      (estimate && estimate.ok && estimate.data && estimate.data.based_on_runs && estimate.data.median_seconds != null ? `<div class="stat-note">Typical total is the median of ${esc(String(estimate.data.based_on_runs))} finished runs with these settings.</div>` : '');
+  }
+
+  const STAGE_NAME = { script: 'Script', fact_check: 'Fact check', scene_code: 'Scene code' };
+  let peekShown = null;
+  function renderPeek(wb) {
+    const p = wb.peek;
+    const dot = $('peek-dot');
+    if (!p) {
+      dot.className = 'dot unknown';
+      $('peek-title').textContent = 'Live from the workbench';
+      $('peek-stage').textContent = '';
+      const why = isRunning() ? 'Claude\'s writing shows here as it streams. Nothing has streamed yet.' : 'No live text was recorded for this run.';
+      $('peek-body').innerHTML = `<p class="peek-empty">${esc(why)}</p>`;
+      peekShown = null;
+      return;
+    }
+    const live = isRunning() && !p.done && livePeekTs != null && p.ts === livePeekTs && Date.now() - p.ts < 15000;
+    dot.className = live ? 'dot ok' : 'dot';
+    $('peek-title').textContent = live ? 'Live from the workbench' : 'Last text from the workbench';
+    const when = p.ts ? new Date(p.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '';
+    $('peek-stage').textContent = [STAGE_NAME[p.stage] || p.stage || '', live ? 'streaming' : (p.done ? 'finished' : 'captured') + (when ? ' ' + when : '')].filter(Boolean).join(' · ');
+    const key = `${p.ts}|${live}`;
+    if (peekShown === key) return;
+    peekShown = key;
+    let body = $('peek-body').querySelector('.peek-body');
+    if (!body) { $('peek-body').innerHTML = '<pre class="peek-body"></pre>'; body = $('peek-body').querySelector('.peek-body'); }
+    body.classList.toggle('src', p.stage === 'scene_code');
+    const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 24;
+    body.textContent = p.text;
+    if (live) { const c = document.createElement('span'); c.className = 'cursor'; c.textContent = '▍'; body.appendChild(c); }
+    if (atBottom) body.scrollTop = body.scrollHeight;
+  }
+
+  // render.segment from the renderer: the segment that just started.
+  function renderPos(wb) {
+    const r = wb.render;
+    if (!r || r.segment == null) return null;
+    return r.segment;   // 0-based: the segment the renderer just started
+  }
+  function renderTl(wb) {
+    const host = $('tl');
+    const sum = $('tl-sum');
+    if (!timelineRes) { host.innerHTML = '<div class="shimmer" style="height:70px"></div>'; sum.textContent = ''; return; }
+    if (!timelineRes.ok) {
+      host.innerHTML = `<div class="tl-note">${esc(missingWhy(timelineRes, 'The timeline'))}</div>`;
+      sum.textContent = 'Unknown';
+      return;
+    }
+    const tl = timelineRes.data || {};
+    const cur = renderPos(wb);
+    const renderDone = job.status === 'completed' || wb.stations.some((s) => s.id === 'render' && s.state === 'done');
+    const t = renderTimeline(host, tl, {
+      mode: 'progress', currentSegment: cur, renderDone,
+      renderedSegments: cur != null ? cur : null,
+      emptyText: isRunning() ? 'Segments appear once the script is written.' : 'No segments were recorded for this run.',
+    });
+    if (!t) { sum.textContent = ''; return; }
+    const parts = [`${t.segments} segment${t.segments === 1 ? '' : 's'}`];
+    if (t.cues) parts.push(`${t.cues} cues`);
+    parts.push(t.total != null ? fmtClock(t.total) : 'length unknown until narration');
+    if (isRunning() && !renderDone) parts.push('scenes fill in as they render');
+    sum.textContent = parts.join(' · ');
+  }
+
+  function renderResult() {
+    const box = $('result');
+    if (isRunning()) { box.hidden = true; return; }
+    if (box.dataset.for === `${job.id}:${job.status}`) return;
+    box.dataset.for = `${job.id}:${job.status}`;
+    const files = job.output_files || [];
+    let html = '';
+    if (job.status === 'completed') {
+      if (files.includes('final.mp4')) {
+        html += `<div class="result"><video controls preload="metadata" playsinline src="${fileUrl(job.id, 'final.mp4')}"${files.includes('thumb.jpg') ? ` poster="${fileUrl(job.id, 'thumb.jpg')}"` : ''}></video></div>`;
+      }
+      html += `<div class="chips"><a class="btn primary" href="/library/${encodeURIComponent(job.id)}">Open in library</a>
+        ${files.includes('final.mp4') ? `<a class="btn" href="${fileUrl(job.id, 'final.mp4')}" download>Download MP4</a>` : ''}
+        <a class="btn" href="/">Generate another</a></div>`;
+      if (job.error) html += errorCard(job.error, 'Finished with a problem');
+    } else if (job.status === 'failed') {
+      html += errorCard(job.error || '', 'The job failed');
+      html += `<div class="chips"><a class="btn" href="/?${new URLSearchParams({ topic: job.topic, ...(job.effort ? { effort: job.effort } : {}), ...(job.quality ? { quality: job.quality } : {}), ...(job.narrator ? { narrator: job.narrator } : {}), ...(job.qa_density ? { qa_density: job.qa_density } : {}), quiz: String(!!job.quiz) })}">Try again with the same settings</a></div>`;
+    }
+    box.innerHTML = html;
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
+    box.style.gap = '12px';
+    box.hidden = !html;
+  }
+
+  // ── Data ───────────────────────────────────────────────────────────────
+  async function sync() {
+    const r = await getJSON(`/api/jobs/${encodeURIComponent(jobId)}`);
+    if (!r.ok) return r;
+    const prevStatus = job && job.status;
+    job = r.data;
+    events = job.events || [];
+    render();
+    if (prevStatus && prevStatus !== job.status && !isRunning()) { loadTimeline(); closeStream(); if (window.CB.refreshCounts) window.CB.refreshCounts(); }
+    return r;
+  }
+  let syncTimer = null;
+  function queueSync(ms) { clearTimeout(syncTimer); syncTimer = setTimeout(() => sync(), ms == null ? 400 : ms); }
+
+  let tlTimer = null, tlLast = 0;
+  async function loadTimeline() {
+    tlLast = Date.now();
+    timelineRes = await getJSON(`/api/jobs/${encodeURIComponent(jobId)}/timeline`);
+    render();
+  }
+  function queueTimeline() {
+    if (tlTimer) return;
+    const wait = Math.max(0, 3000 - (Date.now() - tlLast));
+    tlTimer = setTimeout(() => { tlTimer = null; loadTimeline(); }, wait);
+  }
+
+  function closeStream() { if (es) { es.close(); es = null; } }
+  function openStream() {
+    closeStream();
+    es = new EventSource(`/api/jobs/${encodeURIComponent(jobId)}/events`);
+    es.onmessage = (m) => {
+      let ev;
+      try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.done) { closeStream(); sync(); return; }
+      // The stream replays the backlog first; skip events we already have.
+      if (ev.ts && events.some((e) => e.ts === ev.ts && e.node === ev.node)) return;
+      events.push(ev);
+      if (ev.node === 'peek') {
+        // Only text that arrives after this page opened counts as live.
+        if (parseTs(ev.ts) >= liveSince - 2000) livePeekTs = parseTs(ev.ts);
+        renderPeek(buildWorkbench({ ...job, events }));
+        return;
+      }
+      if (ev.node === 'tts' || ev.node === 'render' || ev.node === 'render_trigger' || ev.node === 'script_agent') queueTimeline();
+      render();
+      if (ev.node !== 'usage' && ev.node !== 'tts' && !(ev.node === 'render' && ev.updates && ev.updates.status === 'running' && ev.updates.segment != null)) queueSync();
+    };
+    es.onerror = () => {
+      closeStream();
+      sync().then((r) => { if (r && r.ok && isRunning()) setTimeout(() => { if (isRunning() && !es) openStream(); }, 3000); });
+    };
+  }
+
+  async function findCancel() {
+    const r = await getJSON('/openapi.json');
+    if (!r.ok || !r.data || !r.data.paths) return;
+    const paths = r.data.paths;
+    for (const [p, ops] of Object.entries(paths)) {
+      if (/^\/api\/jobs\/\{[^}]+\}\/cancel$/.test(p) && ops.post) { cancelPath = { method: 'POST', path: p }; break; }
+      if (/^\/api\/jobs\/\{[^}]+\}$/.test(p) && ops.delete) { cancelPath = { method: 'DELETE', path: p }; }
+    }
+  }
+
+  function showJobs(list, heading, body) {
+    page.innerHTML = `
+      <div class="eyebrow"><span class="pip"></span>In progress</div>
+      <h1 class="h1">${heading}</h1>
+      ${body ? `<p class="quote" style="font-style:normal">${body}</p>` : ''}
+      ${list}`;
+  }
+  function jobRows(jobs) {
+    return `<div class="jobs-pick">${jobs.map((j) => {
+      const wb = buildWorkbench(j);
+      const st = j.status === 'running' ? `● ${wb.active ? wb.active.name.toLowerCase() : 'running'}` : j.status === 'pending' ? 'queued' : j.status === 'completed' ? 'done' : 'failed';
+      const cls = j.status === 'completed' ? 'c-ok' : j.status === 'failed' ? 'c-danger' : 'c-gold';
+      return `<a href="/progress/?job=${encodeURIComponent(j.id)}"${j.id === jobId ? ' aria-current="true"' : ''}><span class="t">${esc(j.topic)}</span><span class="m ${cls}">${esc(st)}</span></a>`;
+    }).join('')}</div>`;
+  }
+
+  async function init() {
+    const all = await getJobs(true);
+    const list = all.ok && Array.isArray(all.data) ? all.data : [];
+    const running = list.filter((j) => j.status === 'running' || j.status === 'pending');
+    if (!jobId) {
+      if (!all.ok) { showJobs('', 'Could not load <em>jobs</em>.', esc(missingWhy(all, 'The job list'))); return; }
+      if (running.length === 1) { jobId = running[running.length - 1].id; history.replaceState(null, '', `/progress/?job=${encodeURIComponent(jobId)}`); }
+      else if (running.length > 1) { showJobs(jobRows(running.slice().reverse()), `${running.length} videos in the <em>works</em>.`, 'Pick one to watch its workbench.'); return; }
+      else {
+        const finished = list.filter((j) => j.status === 'completed' || j.status === 'failed').slice(-8).reverse();
+        showJobs((finished.length ? `<div class="label">Finished since the server started</div>${jobRows(finished)}` : '') +
+          '<div><a class="btn primary big" href="/">Generate video</a></div>',
+          'Nothing is <em>running</em>.', 'Start a video and its workbench shows up here.');
+        return;
+      }
+    }
+    skeleton();
+    const r = await sync();
+    if (!r.ok) {
+      page.innerHTML = `<div class="state"><p class="state-title">${r.status === 404 ? 'Job not found' : 'Could not load this job'}</p>
+        <p>${r.status === 404 ? 'The server keeps jobs in memory, so a restart forgets them. If it finished, it is in the library.' : esc(missingWhy(r, 'The job'))}</p>
+        <div class="chips"><a class="btn" href="/library">Open the library</a><a class="btn" href="/">Generate video</a></div></div>`;
+      return;
+    }
+    if (running.length > 1) {
+      $('others').hidden = false;
+      $('others').innerHTML = `<div class="label" style="margin-bottom:8px">Also running</div>${jobRows(running.filter((j) => j.id !== jobId))}`;
+    }
+    voiceList = (await getVoices()).list || [];
+    const eff = job.effort || null;
+    const p = new URLSearchParams({ effort: eff || '', quality: job.quality || '', narrator: job.narrator || '', research: String(eff === 'high') });
+    getJSON(`/api/estimate?${p}`).then((x) => { estimate = x; render(); });
+    loadTimeline();
+    findCancel().then(render);
+    if (isRunning()) openStream();
+    setInterval(() => { if (isRunning()) render(); }, 1000);
+    setInterval(() => { if (isRunning()) sync(); }, 10000);
+  }
+
+  document.addEventListener('click', async (e) => {
+    if (e.target.id !== 'cancel' || !cancelPath) return;
+    if (!confirm('Cancel this run? Work done so far is kept, but the video will not finish.')) return;
+    e.target.disabled = true;
+    e.target.textContent = 'Cancelling';
+    const path = cancelPath.path.replace(/\{[^}]+\}/, encodeURIComponent(jobId));
+    const r = await getJSON(path, { method: cancelPath.method });
+    if (!r.ok) { e.target.disabled = false; e.target.textContent = 'Cancel run'; alert(`Could not cancel: ${r.error}`); }
+    sync();
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>

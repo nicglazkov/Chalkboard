@@ -1,850 +1,467 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chalkboard</title>
-  <meta name="color-scheme" content="dark light" />
-  <script>try{if(localStorage.getItem('cb-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=3" />
-  <script src="/app.js?v=3"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generate a video · Chalkboard</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="/app.css?v=5">
+  <script src="/app.js?v=5"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="nav" data-page="generate"></header>
+<div class="shell">
+  <nav class="side" aria-label="Main" data-page="generate"></nav>
+  <main class="main" id="main">
+    <div class="page">
+      <div class="split">
+        <section>
+          <div class="eyebrow"><span class="pip"></span>Generate</div>
+          <h1 class="h1">What should we <em class="ul">sketch out</em>?</h1>
 
-  <main id="main" class="wrap">
-    <div class="gen" id="app-body">
-
-      <!-- Progress + result (shown once a job starts) -->
-      <section class="run" id="progress-panel" hidden aria-labelledby="run-topic">
-        <div class="run-head">
-          <div class="run-head-text">
-            <p class="label" id="run-status" aria-live="polite">Generating</p>
-            <h2 class="run-topic" id="run-topic"></h2>
-          </div>
-          <span class="run-clock mono" id="run-clock" aria-label="Elapsed time"></span>
-        </div>
-
-        <div class="result" id="result" hidden>
-          <video id="result-video" controls preload="metadata" playsinline></video>
-        </div>
-
-        <div class="alert" id="run-error" role="alert" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
-          <div class="alert-main">
-            <p class="alert-title" id="run-error-title">The job failed</p>
-            <p class="alert-body" id="run-error-body"></p>
-            <details class="alert-raw" id="run-error-raw" hidden>
-              <summary>Error details</summary>
-              <pre id="run-error-raw-text"></pre>
-            </details>
-          </div>
-        </div>
-
-        <div class="run-actions" id="completion-card" hidden>
-          <a class="btn btn-primary" id="btn-watch" href="#">
-            <svg viewBox="0 0 14 14" aria-hidden="true"><polygon points="3,1.5 12,7 3,12.5" fill="currentColor"/></svg>
-            Open in library
-          </a>
-          <button class="btn" id="btn-again" type="button">Generate another</button>
-        </div>
-
-        <div class="downloads" id="downloads-panel" hidden>
-          <p class="label">Downloads</p>
-          <div class="download-chips" id="downloads-list"></div>
-        </div>
-
-        <ol class="stages" id="stages-list" aria-label="Pipeline steps"></ol>
-      </section>
-
-      <!-- Form -->
-      <section class="gen-form" aria-labelledby="gen-title">
-        <div class="gen-intro">
-          <h1 class="page-title" id="gen-title">New video</h1>
-          <p class="page-lede">Describe a topic. Chalkboard writes the script, animates it and narrates it.</p>
-        </div>
-
-        <div class="alert" id="error-panel" role="alert" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
-          <div><p class="alert-title">Could not start the job</p><p class="alert-body" id="error-text"></p></div>
-        </div>
-
-        <form id="job-form" novalidate>
-          <fieldset class="form-fields" id="form-fields">
-
-            <div class="board">
-              <div class="board-head">
-                <label for="topic" class="board-label">Topic</label>
-                <button type="button" class="help" aria-label="About the topic" data-tip="What the video should explain. Specific beats broad: 'How merge sort works' gets a better video than 'sorting'.">?</button>
+          <form id="gen" novalidate>
+            <div class="field">
+              <label for="topic" class="label">Topic</label>
+              <textarea id="topic" class="topic" rows="4" placeholder="How a Fourier transform finds the notes in a chord" aria-describedby="topic-hint"></textarea>
+              <div class="under">
+                <button type="button" class="pill-btn" id="attach-btn" aria-expanded="false" aria-controls="attach">+ Attach files or links</button>
+                <span id="tags" class="chips" aria-live="polite"></span>
+                <span class="hint" id="topic-hint"><span id="chars">0 chars</span> · <span id="kbd">Ctrl</span>+Enter to generate</span>
               </div>
-              <textarea id="topic" name="topic" rows="3" placeholder="How merge sort works" required aria-describedby="topic-hint"></textarea>
-              <p class="board-hint" id="topic-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to generate</p>
+              <div class="attach" id="attach" hidden>
+                <button type="button" class="drop" id="drop">Drop files here or click to choose. PDF, DOCX, images, text and code.</button>
+                <input type="file" id="file-input" multiple hidden>
+                <div class="row">
+                  <label class="sr-only" for="url-in">Web page URL</label>
+                  <input class="input" id="url-in" type="url" placeholder="https://example.com/article" autocomplete="off" spellcheck="false">
+                  <button type="button" class="btn" id="url-add">Add link</button>
+                </div>
+                <div class="row">
+                  <label class="sr-only" for="gh-in">GitHub repo</label>
+                  <input class="input" id="gh-in" type="text" placeholder="owner/repo on GitHub" autocomplete="off" spellcheck="false">
+                  <button type="button" class="btn" id="gh-add">Add repo</button>
+                </div>
+                <div class="note" id="attach-note">Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.</div>
+              </div>
             </div>
 
-            <div class="field-grid">
-              <fieldset class="field">
-                <legend class="field-head"><span class="label">Effort</span>
-                  <button type="button" class="help" aria-label="About effort" data-tip="How thorough the pipeline is. Low is fastest and skips research. High adds web research and stricter fact-checking, which takes several extra minutes.">?</button></legend>
-                <div class="seg">
-                  <label><input type="radio" name="effort" value="low" /><span>Low</span></label>
-                  <label><input type="radio" name="effort" value="medium" checked /><span>Medium</span></label>
-                  <label><input type="radio" name="effort" value="high" /><span>High</span></label>
-                </div>
-              </fieldset>
-              <fieldset class="field">
-                <legend class="field-head"><span class="label">Audience</span>
-                  <button type="button" class="help" aria-label="About audience" data-tip="Sets vocabulary and depth. Beginner gets analogies and plain language. Expert skips the fundamentals.">?</button></legend>
-                <div class="seg">
-                  <label><input type="radio" name="audience" value="beginner" /><span>Beginner</span></label>
-                  <label><input type="radio" name="audience" value="intermediate" checked /><span>Intermediate</span></label>
-                  <label><input type="radio" name="audience" value="expert" /><span>Expert</span></label>
-                </div>
-              </fieldset>
+            <div class="toggles" style="margin-top:22px">
+              <button type="button" class="toggle" id="t-research" aria-pressed="false">
+                <span class="box" aria-hidden="true"></span>
+                <span><span class="t">Deep research</span><span class="s">Web research and stricter fact-checking before the script (high effort)</span></span>
+              </button>
+              <button type="button" class="toggle" id="t-quiz" aria-pressed="false">
+                <span class="box" aria-hidden="true"></span>
+                <span><span class="t">Write a quiz</span><span class="s">Multiple-choice questions with explanations</span></span>
+              </button>
             </div>
 
-            <!-- Source material -->
-            <details class="section" id="sources-section">
-              <summary><span class="section-name">Source material</span><span class="section-sum" id="sources-sum">Optional</span></summary>
-              <div class="section-body">
-                <div class="field">
-                  <div class="field-head"><span class="label" id="files-label">Files</span>
-                    <button type="button" class="help" aria-label="About files" data-tip="PDF, DOCX, images, or code and text files. Limits per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.">?</button></div>
-                  <button type="button" class="drop" id="upload-zone" aria-describedby="files-label">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
-                    <span>Drop files or folders, or <u>browse</u></span>
-                    <span class="drop-sub">PDF, DOCX, images, code and text</span>
-                  </button>
-                  <input type="file" id="file-input" multiple hidden
-                    accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
-                  <ul class="file-list" id="file-list"></ul>
-                  <p class="upload-total" id="upload-total" hidden></p>
-                </div>
-
-                <div class="field">
-                  <div class="field-head"><span class="label">Web pages</span>
-                    <button type="button" class="help" aria-label="About web pages" data-tip="Public pages Claude fetches and reads, such as docs or articles.">?</button></div>
-                  <div class="rows" id="url-list"></div>
-                  <button type="button" class="btn btn-sm" id="add-url">Add URL</button>
-                </div>
-
-                <div class="field">
-                  <div class="field-head"><span class="label">GitHub repos</span>
-                    <button type="button" class="help" aria-label="About GitHub repos" data-tip="Use owner/repo, for example nicglazkov/Chalkboard. Chalkboard reads the README.">?</button></div>
-                  <div class="rows" id="github-list"></div>
-                  <button type="button" class="btn btn-sm" id="add-github">Add repo</button>
-                </div>
+            <details class="disc" id="style" style="margin-top:22px">
+              <summary><span class="t">Style</span><span class="sum" id="style-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
+              <div class="disc-body">
+                <div class="label" id="voices-label">Narrator</div>
+                <div class="voices" id="voices" role="radiogroup" aria-labelledby="voices-label"></div>
+                <div id="voices-note" class="mono muted" hidden></div>
+                <div class="opt-row"><span class="label" id="l-aud">Audience</span><div class="chips" data-key="audience" role="group" aria-labelledby="l-aud"></div></div>
+                <div class="opt-row"><span class="label" id="l-tone">Tone</span><div class="chips" data-key="tone" role="group" aria-labelledby="l-tone"></div></div>
+                <div class="opt-row"><span class="label" id="l-theme">Theme</span><div class="chips" data-key="theme" role="group" aria-labelledby="l-theme"></div></div>
+                <div class="opt-row"><span class="label" id="l-tpl">Template</span><div class="chips" data-key="template" role="group" aria-labelledby="l-tpl"></div></div>
               </div>
             </details>
 
-            <!-- Style -->
-            <details class="section" id="style-section">
-              <summary><span class="section-name">Style</span><span class="section-sum" id="style-sum"></span></summary>
-              <div class="section-body">
-                <fieldset class="field">
-                  <legend class="field-head"><span class="label">Tone</span>
-                    <button type="button" class="help" aria-label="About tone" data-tip="How the narration sounds. Casual is conversational, formal is structured, Socratic asks questions as it goes.">?</button></legend>
-                  <div class="seg">
-                    <label><input type="radio" name="tone" value="casual" checked /><span>Casual</span></label>
-                    <label><input type="radio" name="tone" value="formal" /><span>Formal</span></label>
-                    <label><input type="radio" name="tone" value="socratic" /><span>Socratic</span></label>
-                  </div>
-                </fieldset>
-                <fieldset class="field">
-                  <legend class="field-head"><span class="label">Theme</span>
-                    <button type="button" class="help" aria-label="About theme" data-tip="Colors of the video. Chalkboard is dark with chalk-white text, light is bright, colorful uses vivid accents.">?</button></legend>
-                  <div class="seg">
-                    <label><input type="radio" name="theme" value="chalkboard" checked /><span>Chalkboard</span></label>
-                    <label><input type="radio" name="theme" value="light" /><span>Light</span></label>
-                    <label><input type="radio" name="theme" value="colorful" /><span>Colorful</span></label>
-                  </div>
-                </fieldset>
-                <div class="field">
-                  <div class="field-head"><label class="label" for="template">Template</label>
-                    <button type="button" class="help" aria-label="About templates" data-tip="A ready-made layout. Algorithm shows array cells and pointers, code reveals lines step by step, compare uses two columns, derivation steps through aligned equations, how-to builds a numbered list, timeline places events on an axis.">?</button></div>
-                  <select id="template" name="template" class="select">
-                    <option value="">None</option>
-                    <option value="algorithm">Algorithm</option>
-                    <option value="code">Code</option>
-                    <option value="compare">Compare</option>
-                    <option value="derivation">Derivation</option>
-                    <option value="howto">How-to</option>
-                    <option value="timeline">Timeline</option>
-                  </select>
-                </div>
+            <details class="disc" id="output" style="margin-top:14px">
+              <summary><span class="t">Output</span><span class="sum" id="output-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
+              <div class="disc-body">
+                <div class="opt-row"><span class="label" id="l-res">Resolution</span><div class="chips" data-key="quality" role="group" aria-labelledby="l-res"></div></div>
+                <div class="opt-row"><span class="label" id="l-eff">Effort</span><div class="chips" data-key="effort" role="group" aria-labelledby="l-eff"></div></div>
+                <div class="opt-row"><span class="label" id="l-qa">Visual QA</span><div class="chips" data-key="qa_density" role="group" aria-labelledby="l-qa"></div></div>
+                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted">x narration speed</span></div></div>
+                <div class="opt-row"><span class="label">Captions</span><label class="check-line"><input type="checkbox" id="burn"> Burn captions into the video</label></div>
               </div>
             </details>
 
-            <!-- Output -->
-            <details class="section" id="output-section">
-              <summary><span class="section-name">Output</span><span class="section-sum" id="output-sum"></span></summary>
-              <div class="section-body">
-                <fieldset class="field">
-                  <legend class="field-head"><span class="label">Resolution</span>
-                    <button type="button" class="help" aria-label="About resolution" data-tip="Render size and frame rate: 480p at 15 fps, 720p at 30, 1080p at 60, 4K at 60. Higher takes longer to render.">?</button><span class="field-default" id="quality-default"></span></legend>
-                  <div class="seg" id="quality-seg">
-                    <label><input type="radio" name="quality" value="low" /><span>480p</span></label>
-                    <label><input type="radio" name="quality" value="medium" /><span>720p</span></label>
-                    <label><input type="radio" name="quality" value="high" checked /><span>1080p</span></label>
-                    <label><input type="radio" name="quality" value="4k" /><span>4K</span></label>
-                  </div>
-                </fieldset>
-                <div class="field-grid">
-                  <div class="field">
-                    <div class="field-head"><label class="label" for="narrator">Narrator</label>
-                      <button type="button" class="help" aria-label="About narrators" data-tip="The voice. Aria and Milo are ElevenLabs voices, Alloy is OpenAI; both need an API key on the server. Kokoro is free and runs locally.">?</button><span class="field-default" id="narrator-default"></span></div>
-                    <select id="narrator" name="narrator" class="select">
-                      <option value="">Server default</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <div class="field-head"><label class="label" for="speed">Narration speed</label>
-                      <button type="button" class="help" aria-label="About narration speed" data-tip="1.0 is normal; 1.25 talks a little faster.">?</button></div>
-                    <input type="number" id="speed" name="speed" class="input" value="1.0" min="0.1" max="4.0" step="0.05" inputmode="decimal" />
-                  </div>
-                </div>
-                <fieldset class="field">
-                  <legend class="field-head"><span class="label">Visual QA</span>
-                    <button type="button" class="help" aria-label="About visual QA" data-tip="After rendering, Claude looks at frames for visual mistakes and fixes them. Normal checks about 10 frames, high about 20. Off is fastest.">?</button></legend>
-                  <div class="seg">
-                    <label><input type="radio" name="qa_density" value="zero" /><span>Off</span></label>
-                    <label><input type="radio" name="qa_density" value="normal" checked /><span>Normal</span></label>
-                    <label><input type="radio" name="qa_density" value="high" /><span>High</span></label>
-                  </div>
-                </fieldset>
-                <div class="checks">
-                  <label class="check"><input type="checkbox" id="burn-captions" name="burn_captions" /> Burn captions into the video
-                    <button type="button" class="help" aria-label="About burned captions" data-tip="Draws subtitles into the video frames. Needs a re-encode, so rendering takes a bit longer.">?</button></label>
-                  <label class="check"><input type="checkbox" id="quiz" name="quiz" /> Write a quiz
-                    <button type="button" class="help" aria-label="About the quiz" data-tip="Writes multiple-choice questions about the video. Saved as quiz.json and shown on the video page.">?</button></label>
-                </div>
-              </div>
-            </details>
+            <div id="form-error" style="margin-top:18px" hidden></div>
 
-          </fieldset>
+            <div class="submit-row" style="margin-top:22px">
+              <button type="submit" class="btn primary big" id="submit">Generate video</button>
+              <span class="est-line" id="est-line"></span>
+            </div>
+          </form>
+        </section>
 
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-go" id="submit-btn">Generate video</button>
+        <aside>
+          <div class="card" id="est-card" aria-live="polite">
+            <div class="label">Estimated time</div>
+            <div class="shimmer" style="height:44px"></div>
           </div>
-        </form>
-      </section>
+          <div class="card recent">
+            <div class="card-head"><span class="label">Recent</span><a class="right" href="/library" style="text-decoration:none">See all</a></div>
+            <div id="recent"><div class="shimmer" style="height:120px"></div></div>
+          </div>
+        </aside>
+      </div>
     </div>
   </main>
+</div>
 
-  <div class="tip" id="help-tip" role="tooltip" hidden></div>
+<script>
+(function () {
+  const { esc, cap, fmtBytes, fmtSpan, fmtDuration, fmtAgo, parseTs, fmtUsd, getJSON, missingWhy, getVoices, getMeta, resLabel, resFull, unknownHtml, buildWorkbench, getJobs } = window.CB;
+  const $ = (id) => document.getElementById(id);
 
-  <script>
-  (function () {
-    const { esc, fmtBytes, fmtClock, stageLabel, buildSteps, upcoming, explainError, fileUrl, getMeta, narratorLabel, resLabel } = window.CB;
-    const $ = (id) => document.getElementById(id);
+  const OPTIONS = {
+    audience: [['beginner', 'beginner'], ['intermediate', 'intermediate'], ['expert', 'expert']],
+    tone: [['casual', 'casual'], ['formal', 'formal'], ['socratic', 'socratic']],
+    theme: [['chalkboard', 'chalkboard'], ['light', 'light'], ['colorful', 'colorful']],
+    template: [['', 'auto'], ['algorithm', 'algorithm'], ['code', 'code'], ['compare', 'compare'], ['derivation', 'derivation'], ['howto', 'how-to'], ['timeline', 'timeline']],
+    quality: [['low', '480p'], ['medium', '720p'], ['high', '1080p'], ['4k', '4K']],
+    effort: [['low', 'low'], ['medium', 'medium']],
+    qa_density: [['zero', 'off'], ['normal', 'normal'], ['high', 'high']],
+  };
+  const S = {
+    audience: 'intermediate', tone: 'casual', theme: 'chalkboard', template: '', quality: 'high',
+    effort: 'medium', qa_density: 'normal', research: false, quiz: false, narrator: null,
+    speed: 1.0, burn: false, files: [], urls: [], github: [],
+  };
+  let voices = [];
 
-    const DOWNLOADABLE = [
-      ['final.mp4', 'Video', 'MP4'],
-      ['captions.srt', 'Captions', 'SRT'],
-      ['quiz.json', 'Quiz', 'JSON'],
-      ['script.txt', 'Script', 'TXT'],
-    ];
-
-    const form = $('job-form');
-    const fields = $('form-fields');
-    const submitBtn = $('submit-btn');
-    const appBody = $('app-body');
-    const progressPanel = $('progress-panel');
-    const stagesList = $('stages-list');
-    const resultBox = $('result');
-    const resultVideo = $('result-video');
-    const downloadsPanel = $('downloads-panel');
-    const downloadsList = $('downloads-list');
-    const completion = $('completion-card');
-    const runStatus = $('run-status');
-    const runClock = $('run-clock');
-
-    const val = (name) => form.elements[name].value;
-    function setVal(name, v) {
-      if (v == null) return;
-      const el = form.elements[name];
-      if (!el) return;
-      if (el instanceof RadioNodeList) {
-        for (const r of el) r.checked = r.value === v;
-      } else {
-        el.value = v;
-      }
-    }
-
-    // ── Section summaries (what is set without opening the section) ──────
-    const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-    function updateSummaries() {
-      const t = form.elements.template;
-      $('style-sum').textContent = [cap(val('tone')), cap(val('theme')),
-        t.value ? t.options[t.selectedIndex].text + ' template' : 'No template'].join(', ');
-      const q = form.querySelector('input[name="quality"]:checked');
-      const nar = form.elements.narrator;
-      const opt = nar.options[nar.selectedIndex];
-      const out = [q ? q.nextElementSibling.textContent : 'Default resolution', opt ? opt.dataset.short || opt.text : 'Default voice', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
-      if ($('burn-captions').checked) out.push('burned captions');
-      if ($('quiz').checked) out.push('quiz');
-      $('output-sum').textContent = out.join(', ');
-      const parts = [];
-      if (selectedFiles.length) parts.push(`${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`);
-      const urls = getRows('url-list').length, repos = getRows('github-list').length;
-      if (urls) parts.push(`${urls} URL${urls > 1 ? 's' : ''}`);
-      if (repos) parts.push(`${repos} repo${repos > 1 ? 's' : ''}`);
-      $('sources-sum').textContent = parts.length ? parts.join(', ') : 'Optional';
-    }
-    form.addEventListener('change', updateSummaries);
-    form.addEventListener('input', (e) => { if (e.target.id === 'speed' || e.target.closest('.rows')) updateSummaries(); });
-
-    // ── Repeatable URL / repo rows ────────────────────────────────────────
-    function addRow(listId, placeholder, label) {
-      const list = $(listId);
-      const row = document.createElement('div');
-      row.className = 'row';
-      const n = list.children.length + 1;
-      row.innerHTML = `<input type="text" class="input" placeholder="${esc(placeholder)}" aria-label="${esc(label)} ${n}" autocomplete="off" spellcheck="false" />
-        <button type="button" class="icon-btn" aria-label="Remove ${esc(label)} ${n}">${CB.ICONS.close}</button>`;
-      row.querySelector('button').addEventListener('click', () => { row.remove(); updateSummaries(); });
-      list.appendChild(row);
-      row.querySelector('input').focus();
-    }
-    function getRows(listId) {
-      return Array.from($(listId).querySelectorAll('input')).map((el) => el.value.trim()).filter(Boolean);
-    }
-    $('add-url').addEventListener('click', () => addRow('url-list', 'https://example.com/article', 'URL'));
-    $('add-github').addEventListener('click', () => addRow('github-list', 'owner/repo', 'Repo'));
-
-    // ── File upload ───────────────────────────────────────────────────────
-    const FILE_LIMITS = { text: 2 * 1024 * 1024, image: 5 * 1024 * 1024, pdf: 20 * 1024 * 1024, docx: 10 * 1024 * 1024 };
-    const TOTAL_LIMIT = 24 * 1024 * 1024;
-    const TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs',
-      '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1',
-      '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini',
-      '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
-    const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
-    let selectedFiles = []; // [{file, error}]
-
-    function fileCategory(file) {
-      const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-      if (IMAGE_EXTS.has(ext)) return 'image';
-      if (ext === '.pdf') return 'pdf';
-      if (ext === '.docx') return 'docx';
-      if (TEXT_EXTS.has(ext)) return 'text';
-      return 'unsupported';
-    }
-    function validateFile(file) {
-      const cat = fileCategory(file);
-      if (cat === 'unsupported') return 'Unsupported type. Use PDF, DOCX, images, or text and code files.';
-      if (file.size > FILE_LIMITS[cat]) return `${fmtBytes(file.size)} is over the ${fmtBytes(FILE_LIMITS[cat])} limit for ${cat} files.`;
-      return null;
-    }
-    const totalSize = () => selectedFiles.reduce((s, { file }) => s + file.size, 0);
-    const filesInvalid = () => totalSize() > TOTAL_LIMIT || selectedFiles.some(({ error }) => error);
-
-    function renderFileList() {
-      const list = $('file-list');
-      list.innerHTML = '';
-      selectedFiles.forEach(({ file, error }, i) => {
-        const li = document.createElement('li');
-        li.className = 'file' + (error ? ' file-bad' : '');
-        li.innerHTML = `<span class="file-name">${esc(file.name)}</span><span class="file-size">${fmtBytes(file.size)}</span>
-          <button type="button" class="icon-btn" aria-label="Remove ${esc(file.name)}">${CB.ICONS.close}</button>
-          ${error ? `<span class="file-error">${esc(error)}</span>` : ''}`;
-        li.querySelector('button').addEventListener('click', () => { selectedFiles.splice(i, 1); renderFileList(); });
-        list.appendChild(li);
-      });
-      const total = totalSize();
-      const t = $('upload-total');
-      t.hidden = selectedFiles.length === 0;
-      t.textContent = `${fmtBytes(total)} of ${fmtBytes(TOTAL_LIMIT)}`;
-      t.classList.toggle('bad', total > TOTAL_LIMIT);
-      submitBtn.disabled = running || filesInvalid();
-      updateSummaries();
-    }
-    function addFiles(files) {
-      for (const file of files) {
-        if (selectedFiles.some(({ file: f }) => f.name === file.name && f.size === file.size)) continue;
-        selectedFiles.push({ file, error: validateFile(file) });
-      }
-      renderFileList();
-    }
-
-    const drop = $('upload-zone');
-    const fileInput = $('file-input');
-    drop.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); if (!fields.disabled) drop.classList.add('over'); });
-    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-
-    async function filesFromEntry(entry) {
-      if (entry.isFile) return [await new Promise((res, rej) => entry.file(res, rej))];
-      const reader = entry.createReader();
-      const out = [];
-      let batch;
-      do {
-        batch = await new Promise((res, rej) => reader.readEntries(res, rej));
-        for (const child of batch) out.push(...await filesFromEntry(child));
-      } while (batch.length > 0);
-      return out;
-    }
-    drop.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      drop.classList.remove('over');
-      if (fields.disabled) return;
-      const files = [];
-      for (const item of Array.from(e.dataTransfer.items)) {
-        const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
-        if (entry) files.push(...await filesFromEntry(entry));
-        else if (item.kind === 'file') files.push(item.getAsFile());
-      }
-      addFiles(files);
+  // ── Chip groups ────────────────────────────────────────────────────────
+  function renderChips() {
+    document.querySelectorAll('.chips[data-key]').forEach((g) => {
+      const key = g.dataset.key;
+      g.innerHTML = OPTIONS[key].map(([v, label]) => {
+        const lockHigh = key === 'effort' && S.research;
+        const on = lockHigh ? false : S[key] === v;
+        return `<button type="button" class="chip" data-v="${esc(v)}" aria-pressed="${on}"${lockHigh ? ' disabled title="Deep research runs at high effort"' : ''}>${esc(label)}</button>`;
+      }).join('') + (key === 'effort' && S.research ? '<span class="mono c-gold" style="align-self:center">high (deep research)</span>' : '');
     });
+  }
+  document.querySelectorAll('.chips[data-key]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('.chip');
+    if (!b || b.disabled) return;
+    S[g.dataset.key] = b.dataset.v;
+    changed();
+  }));
 
-    // ── Errors ─────────────────────────────────────────────────────────────
-    function showError(msg) { $('error-text').textContent = msg; $('error-panel').hidden = false; }
-    function hideError() { $('error-panel').hidden = true; }
+  function toggle(id, key) {
+    $(id).addEventListener('click', () => { S[key] = !S[key]; changed(); });
+  }
+  toggle('t-research', 'research');
+  toggle('t-quiz', 'quiz');
+  $('speed').addEventListener('input', () => { S.speed = parseFloat($('speed').value) || 1.0; summaries(); });
+  $('burn').addEventListener('change', () => { S.burn = $('burn').checked; summaries(); });
 
-    // ── Progress state ─────────────────────────────────────────────────────
-    let running = false;
-    let currentJobId = null;
-    let jobOpts = null;       // {effort, qa, quiz} when known (jobs started here)
-    let events = [];          // the job's events so far
-    let finalStatus = null;   // 'completed' | 'failed' once finished
-    let es = null;
-    let finalized = false;
-    let startedAt = 0;
-    let clockTimer = null;
-    let liveTiming = false;   // false while replaying a backlog (reconnect)
-    let times = {};           // "index:node" -> {t0, t1}, observed live
+  function voiceLabel() {
+    const v = voices.find((x) => x.id === S.narrator);
+    return v ? v.label : 'server default voice';
+  }
+  function summaries() {
+    $('style-sum').textContent = [voiceLabel().toLowerCase(), S.audience, S.tone, S.theme, S.template ? S.template + ' template' : 'auto template'].join(' · ');
+    $('output-sum').textContent = [resFull(S.quality), S.research ? 'high effort' : S.effort + ' effort', S.qa_density === 'zero' ? 'visual QA off' : 'visual QA ' + S.qa_density, `${S.speed}x speed`, S.burn ? 'burned captions' : 'captions file'].join(' · ');
+  }
+  function changed() {
+    $('t-research').setAttribute('aria-pressed', S.research);
+    $('t-research').querySelector('.box').textContent = S.research ? '✓' : '';
+    $('t-quiz').setAttribute('aria-pressed', S.quiz);
+    $('t-quiz').querySelector('.box').textContent = S.quiz ? '✓' : '';
+    renderChips();
+    renderVoices();
+    summaries();
+    queueEstimate();
+  }
 
-    const ICON_DONE = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    const ICON_FAIL = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-
-    function renderStages() {
-      const steps = buildSteps(events, jobOpts).map((x) => ({ ...x }));
-      if (finalStatus) {
-        const lastRun = steps.map((x) => x.status).lastIndexOf('running');
-        steps.forEach((x, i) => {
-          if (x.status !== 'running') return;
-          x.status = finalStatus === 'failed' && i === lastRun ? 'failed' : 'done';
-        });
-        // Drop a trailing predicted step that never ran.
-        if (finalStatus === 'completed' && steps.length > 1 && events.length && !events.some((e) => e.node === steps[steps.length - 1].node)) steps.pop();
-      }
-      steps.forEach((x) => { if (x.node === 'escalate_to_user') x.status = 'failed'; });
-      const now = Date.now();
-      steps.forEach((x, i) => {
-        const k = `${i}:${x.node}`;
-        const t = times[k];
-        if (x.status === 'running' && !t && liveTiming) times[k] = { t0: now };
-        else if (x.status !== 'running' && t && !t.t1) t.t1 = now;
-      });
-      const lastNode = steps[steps.length - 1].node;
-      const pending = finalStatus ? [] : upcoming(lastNode, jobOpts);
-
-      const row = (x, i) => {
-        const t = times[`${i}:${x.node}`];
-        const label = stageLabel(x.node) + (x.attempt > 1 ? ` (attempt ${x.attempt})` : '');
-        const sr = { done: 'done', failed: 'failed', running: 'in progress' }[x.status];
-        let time = '';
-        if (x.t0 !== undefined && x.status === 'running') time = fmtClock((now - x.t0) / 1000);
-        else if (x.t0 !== undefined && x.t1 !== undefined) { if (x.t1 - x.t0 >= 1000) time = fmtClock((x.t1 - x.t0) / 1000); }
-        else if (t && x.status === 'running') time = fmtClock((now - t.t0) / 1000);
-        else if (t && t.t1 && t.t1 - t.t0 >= 1000) time = fmtClock((t.t1 - t.t0) / 1000);
-        return `<li class="stage ${x.status}"${x.status === 'running' ? ' aria-current="step"' : ''}>
-          <span class="stage-mark">${x.status === 'done' ? ICON_DONE : x.status === 'failed' ? ICON_FAIL : ''}</span>
-          <span class="stage-name">${esc(label)}<span class="sr-only">, ${sr}</span></span>
-          <span class="stage-time" data-k="${i}:${esc(x.node)}"${x.status === 'running' && x.t0 !== undefined ? ` data-t0="${x.t0}"` : ''}>${time}</span></li>`;
-      };
-      stagesList.innerHTML = steps.map(row).join('') + pending.map((n) =>
-        `<li class="stage pending"><span class="stage-mark"></span><span class="stage-name">${esc(stageLabel(n))}<span class="sr-only">, not started</span></span><span class="stage-time"></span></li>`).join('');
-
-      const cur = steps.filter((x) => x.status === 'running').pop();
-      if (!finalStatus) runStatus.textContent = cur ? stageLabel(cur.node) : 'Finishing up';
-      if (currentJobId && !finalStatus) window.jobStatus.updateStage(currentJobId, cur ? cur.node : null);
+  // ── Voices ─────────────────────────────────────────────────────────────
+  let voiceSource = null;
+  const sampleFail = {};   // id -> reason the sample could not play
+  let audio = null, playing = null;
+  function renderVoices() {
+    const host = $('voices');
+    if (!voices.length) {
+      host.innerHTML = `<div class="mono muted">${esc(voiceSource && voiceSource.why ? voiceSource.why : 'Loading voices')}</div>`;
+      return;
     }
-
-    function tick() {
-      runClock.textContent = fmtClock((Date.now() - startedAt) / 1000);
-      const el = stagesList.querySelector('.stage.running .stage-time');
-      if (!el) return;
-      const t0 = Number(el.dataset.t0) || (times[el.dataset.k] || {}).t0;
-      if (t0) el.textContent = fmtClock((Date.now() - t0) / 1000);
-    }
-
-    function resetUI() {
-      hideError();
-      if (es) { es.close(); es = null; }
-      clearInterval(clockTimer);
-      running = false;
-      finalized = false;
-      finalStatus = null;
-      currentJobId = null;
-      jobOpts = null;
-      events = [];
-      times = {};
-      appBody.classList.remove('is-active');
-      progressPanel.hidden = true;
-      progressPanel.classList.remove('is-done', 'is-failed');
-      resultBox.hidden = true;
-      resultVideo.removeAttribute('src');
-      resultVideo.removeAttribute('poster');
-      resultVideo.innerHTML = '';
-      resultVideo.load();
-      downloadsPanel.hidden = true;
-      downloadsList.innerHTML = '';
-      completion.hidden = true;
-      $('run-error').hidden = true;
-      stagesList.innerHTML = '';
-      fields.disabled = false;
-      submitBtn.disabled = filesInvalid();
-      submitBtn.textContent = 'Generate video';
-    }
-
-    function beginRun(jobId, topic, since, opts, live) {
-      running = true;
-      currentJobId = jobId;
-      jobOpts = opts || null;
-      liveTiming = !!live;
-      startedAt = since || Date.now();
-      $('run-topic').textContent = topic;
-      runStatus.textContent = 'Starting';
-      appBody.classList.add('is-active');
-      progressPanel.hidden = false;
-      fields.disabled = true;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Generating';
-      renderStages();
-      tick();
-      clockTimer = setInterval(tick, 1000);
-    }
-
-    // Fetch the job and render its events. Idempotent, so it is safe after
-    // reconnects or when another tab drained the SSE queue.
-    async function sync() {
-      const r = await fetch(`/api/jobs/${encodeURIComponent(currentJobId)}`);
-      if (!r.ok) throw new Error(r.status === 404 ? 'Job not found. The server may have restarted.' : `HTTP ${r.status}`);
-      const job = await r.json();
-      events = job.events || [];
-      renderStages();
-      liveTiming = true;
-      return job;
-    }
-
-    let syncQueued = false;
-    function queueSync() {
-      if (syncQueued) return;
-      syncQueued = true;
-      setTimeout(() => { syncQueued = false; sync().catch(() => {}); }, 150);
-    }
-
-    function startSSE(jobId) {
-      if (es) es.close();
-      es = new EventSource(`/api/jobs/${encodeURIComponent(jobId)}/events`);
-      es.onmessage = (evt) => {
-        let data;
-        try { data = JSON.parse(evt.data); } catch { return; }
-        if (data.done) { es.close(); es = null; finalizeJob(); return; }
-        queueSync();
-      };
-      es.onerror = async () => {
-        if (es) { es.close(); es = null; }
-        // The stream dropped. Only finish if the job really finished.
-        try {
-          const job = await sync();
-          if (job.status === 'completed' || job.status === 'failed') finalizeJob(job);
-          else setTimeout(() => { if (running && currentJobId === jobId) startSSE(jobId); }, 3000);
-        } catch (e) {
-          finalizeJob(null, e.message);
-        }
-      };
-    }
-
-    function renderDownloads(jobId, files) {
-      const items = DOWNLOADABLE.filter(([f]) => files.includes(f));
-      downloadsList.innerHTML = items.map(([f, name, ext]) =>
-        `<a class="chip" href="${fileUrl(jobId, f)}" download="${esc(f)}">${esc(name)}<span class="chip-ext">${ext}</span></a>`).join('');
-      downloadsPanel.hidden = items.length === 0;
-    }
-
-    function showRunError(raw, fallbackTitle) {
-      const info = explainError(raw);
-      $('run-error-title').textContent = info.title || fallbackTitle;
-      $('run-error-body').textContent = info.body;
-      const showRaw = raw && raw.trim() && raw.trim() !== info.body;
-      $('run-error-raw').hidden = !showRaw;
-      $('run-error-raw').open = false;
-      $('run-error-raw-text').textContent = showRaw ? raw.trim() : '';
-      $('run-error').hidden = false;
-    }
-
-    async function finalizeJob(job, fetchError) {
-      if (finalized) return;
-      finalized = true;
-      if (es) { es.close(); es = null; }
-      clearInterval(clockTimer);
-      const jobId = currentJobId;
-      if (!job && !fetchError) {
-        try { job = await sync(); } catch (e) { fetchError = e.message; }
-      } else if (job) {
-        try { job = await sync(); } catch {}
-      }
-      running = false;
-      fields.disabled = false;
-      submitBtn.textContent = 'Generate video';
-      submitBtn.disabled = filesInvalid();
-      completion.hidden = false;
-      $('btn-watch').hidden = true;
-
-      if (fetchError || job.status === 'failed') {
-        finalStatus = 'failed';
-        renderStages();
-        window.jobStatus.resolve(jobId, 'failed');
-        progressPanel.classList.add('is-failed');
-        runStatus.textContent = `Failed after ${runClock.textContent}`;
-        runClock.textContent = '';
-        showRunError(fetchError || job.error || '', 'The job failed');
-        $('btn-again').textContent = 'Try again';
-        return;
-      }
-
-      finalStatus = 'completed';
-      renderStages();
-      window.jobStatus.resolve(jobId, 'completed');
-      progressPanel.classList.add('is-done');
-      runStatus.textContent = `Finished in ${runClock.textContent}`;
-      runClock.textContent = '';
-      $('btn-again').textContent = 'Generate another';
-
-      const files = job.output_files || [];
-      if (files.includes('final.mp4')) {
-        if (files.includes('thumb.jpg')) resultVideo.poster = fileUrl(jobId, 'thumb.jpg');
-        resultVideo.src = fileUrl(jobId, 'final.mp4');
-        resultBox.hidden = false;
-      }
-      const watch = $('btn-watch');
-      watch.href = `/library/${encodeURIComponent(jobId)}`;
-      watch.hidden = false;
-      if (job.error) showRunError(job.error, 'Finished with a problem');
-      renderDownloads(jobId, files);
-    }
-
-    $('btn-again').addEventListener('click', () => {
-      const retry = finalStatus === 'failed';
-      resetUI();
-      if (retry) form.requestSubmit();
-      else $('topic').focus();
-    });
-
-    // ── Submit ─────────────────────────────────────────────────────────────
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (running) return;
-      const topic = $('topic').value.trim();
-      if (!topic) {
-        showError('Add a topic first. One clear sentence is enough.');
-        $('topic').focus();
-        return;
-      }
-      if (totalSize() > TOTAL_LIMIT) {
-        showError(`Files add up to ${fmtBytes(totalSize())}, over the ${fmtBytes(TOTAL_LIMIT)} limit. Remove some and try again.`);
-        return;
-      }
-      resetUI();
-      submitBtn.disabled = true;
-
-      const common = {
-        topic,
-        effort: val('effort'),
-        audience: val('audience'),
-        tone: val('tone'),
-        theme: val('theme'),
-        template: val('template'),
-        speed: parseFloat(val('speed')) || 1.0,
-        burn_captions: $('burn-captions').checked,
-        quiz: $('quiz').checked,
-        qa_density: val('qa_density'),
-        quality: val('quality'),
-        narrator: val('narrator'),
-        urls: getRows('url-list'),
-        github: getRows('github-list'),
-      };
-
-      let job;
+    host.innerHTML = voices.map((v) => {
+      const on = S.narrator === v.id;
+      const off = v.available === false;
+      let why = '';
+      if (off) why = v.availability_reason || 'Not available on this server';
+      let hearWhy = '';
+      if (voiceSource.source !== 'voices') hearWhy = voiceSource.why || 'Samples are not available';
+      else if (off) hearWhy = 'Voice not available';
+      else if (!v.sample_url) hearWhy = 'No sample for this voice';
+      else if (sampleFail[v.id]) hearWhy = sampleFail[v.id];
+      const hear = playing === v.id ? '■ Stop' : (hearWhy ? 'No sample' : '▶ Hear');
+      const avail = v.available == null ? 'availability unknown' : '';
+      const availTip = v.available == null && v.availability_reason ? v.availability_reason : '';
+      const bk = [v.backend, v.model, avail].filter(Boolean).join(' · ');
+      return `<div class="voice${on ? ' on' : ''}${off ? ' off' : ''}">
+        <button type="button" class="pick" role="radio" aria-checked="${on}" data-id="${esc(v.id)}" aria-label="${esc(v.label)}${off ? ', not available' : ''}"${off ? ' disabled' : ''}></button>
+        <span class="top"><span class="nm">${esc(v.label)}</span>
+          <button type="button" class="hear" data-hear="${esc(v.id)}"${hearWhy ? ` disabled title="${esc(hearWhy)}"` : ''} aria-label="${playing === v.id ? 'Stop' : 'Hear'} ${esc(v.label)}">${hear}</button></span>
+        ${v.tagline ? `<span class="tag">${esc(v.tagline)}</span>` : ''}
+        ${bk ? `<span class="bk"${availTip ? ` title="${esc(availTip)}"` : ''}>${esc(bk)}</span>` : ''}
+        ${why ? `<span class="why">${esc(why)}</span>` : ''}
+        ${sampleFail[v.id] && !off ? `<span class="why">${esc(sampleFail[v.id])}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+  $('voices').addEventListener('click', async (e) => {
+    const hear = e.target.closest('[data-hear]');
+    if (hear) {
+      e.stopPropagation();
+      const id = hear.dataset.hear;
+      if (playing === id) { audio && audio.pause(); playing = null; renderVoices(); return; }
+      if (audio) audio.pause();
+      const v = voices.find((x) => x.id === id);
+      hear.textContent = 'Loading';
+      hear.disabled = true;
       try {
-        let resp;
-        if (selectedFiles.length > 0) {
-          // Multipart: files + fields go to /api/jobs/upload
-          const fd = new FormData();
-          for (const [k, v] of Object.entries(common)) {
-            if (Array.isArray(v)) v.forEach((x) => fd.append(k, x));
-            else fd.append(k, typeof v === 'boolean' ? String(v) : v);
-          }
-          for (const { file } of selectedFiles) fd.append('files', file);
-          resp = await fetch('/api/jobs/upload', { method: 'POST', body: fd });
-        } else {
-          resp = await fetch('/api/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...common, template: common.template || null, quality: common.quality || null, narrator: common.narrator || null }),
-          });
+        const r = await fetch(v.sample_url);
+        if (!r.ok) {
+          let why = `Sample failed (HTTP ${r.status})`;
+          try { const j = await r.json(); if (j && j.detail) why = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
+          sampleFail[id] = why;
+          renderVoices();
+          return;
         }
-        if (!resp.ok) {
-          let detail = await resp.text();
-          try { const j = JSON.parse(detail); detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
-          throw new Error(`${detail} (HTTP ${resp.status})`);
-        }
-        job = await resp.json();
+        const blob = await r.blob();
+        audio = new Audio(URL.createObjectURL(blob));
+        audio.addEventListener('ended', () => { playing = null; renderVoices(); });
+        await audio.play();
+        playing = id;
       } catch (err) {
-        showError(err.message || 'The server did not respond.');
-        submitBtn.disabled = filesInvalid();
-        return;
+        sampleFail[id] = 'Could not play the sample';
       }
-
-      const opts = { effort: common.effort, qa: common.qa_density !== 'zero', quiz: common.quiz };
-      window.jobStatus.set(job.id, topic, opts);
-      beginRun(job.id, topic, null, opts, true);
-      startSSE(job.id);
-      progressPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-
-    // Ctrl/Cmd + Enter submits from the topic box
-    $('topic').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); }
-    });
-    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
-      const k = document.querySelector('#topic-hint kbd');
-      if (k) k.textContent = 'Cmd';
+      renderVoices();
+      return;
     }
+    const pick = e.target.closest('.pick');
+    if (!pick || pick.disabled) return;
+    S.narrator = S.narrator === pick.dataset.id ? null : pick.dataset.id;
+    changed();
+  });
 
-    // ── Help tooltips ──────────────────────────────────────────────────────
-    const tip = $('help-tip');
-    let tipBtn = null;
-    function hideTip() {
-      tip.hidden = true;
-      if (tipBtn) { tipBtn.setAttribute('aria-expanded', 'false'); tipBtn.removeAttribute('aria-describedby'); }
-      tipBtn = null;
-    }
-    function showTip(btn) {
-      if (tipBtn === btn) { hideTip(); return; }
-      hideTip();
-      tipBtn = btn;
-      tip.textContent = btn.dataset.tip;
-      tip.hidden = false;
-      btn.setAttribute('aria-expanded', 'true');
-      btn.setAttribute('aria-describedby', 'help-tip');
-      const r = btn.getBoundingClientRect();
-      const w = tip.offsetWidth, h = tip.offsetHeight;
-      let top = r.bottom + 8, left = r.left - 8;
-      if (top + h > innerHeight - 8) top = r.top - h - 8;
-      if (left + w > innerWidth - 8) left = innerWidth - w - 8;
-      tip.style.top = Math.max(8, top) + 'px';
-      tip.style.left = Math.max(8, left) + 'px';
-    }
-    document.querySelectorAll('.help').forEach((btn) => {
-      btn.setAttribute('aria-expanded', 'false');
-      btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showTip(btn); });
-    });
-    document.addEventListener('click', (e) => { if (!tip.contains(e.target)) hideTip(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tipBtn) { const b = tipBtn; hideTip(); b.focus(); } });
-    addEventListener('scroll', hideTip, { passive: true });
-
-    // ── Server defaults + narrators (/api/meta) ───────────────────────────
-    // Fallback when /api/meta is unreachable: the four known voices.
-    const FALLBACK_NARRATORS = [
-      { id: 'aria', label: 'Aria', tagline: '', available: true },
-      { id: 'milo', label: 'Milo', tagline: '', available: true },
-      { id: 'kokoro', label: 'Kokoro', tagline: '', available: true },
-      { id: 'alloy', label: 'Alloy', tagline: '', available: true },
+  // ── Attachments ────────────────────────────────────────────────────────
+  const FILE_LIMITS = { text: 2 * 1024 * 1024, image: 5 * 1024 * 1024, pdf: 20 * 1024 * 1024, docx: 10 * 1024 * 1024 };
+  const TOTAL_LIMIT = 24 * 1024 * 1024;
+  const TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1', '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini', '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
+  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+  function fileCategory(f) {
+    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (IMAGE_EXTS.has(ext)) return 'image';
+    if (ext === '.pdf') return 'pdf';
+    if (ext === '.docx') return 'docx';
+    if (TEXT_EXTS.has(ext)) return 'text';
+    return 'unsupported';
+  }
+  function validateFile(f) {
+    const c = fileCategory(f);
+    if (c === 'unsupported') return 'Unsupported type';
+    if (f.size > FILE_LIMITS[c]) return `Over the ${fmtBytes(FILE_LIMITS[c])} limit`;
+    return null;
+  }
+  const totalSize = () => S.files.reduce((a, x) => a + x.file.size, 0);
+  const filesInvalid = () => totalSize() > TOTAL_LIMIT || S.files.some((x) => x.error);
+  function renderTags() {
+    const tags = [
+      ...S.files.map((x, i) => `<span class="chip tag${x.error ? ' bad' : ''}" title="${esc(x.error ? x.error : fmtBytes(x.file.size))}"><span class="nm">${esc(x.file.name)}</span>${x.error ? `<span class="c-danger">${esc(x.error)}</span>` : ''}<button type="button" class="x" data-rm="f${i}" aria-label="Remove ${esc(x.file.name)}">✕</button></span>`),
+      ...S.urls.map((u, i) => `<span class="chip tag"><span class="k">link</span><span class="nm">${esc(u)}</span><button type="button" class="x" data-rm="u${i}" aria-label="Remove ${esc(u)}">✕</button></span>`),
+      ...S.github.map((u, i) => `<span class="chip tag"><span class="k">repo</span><span class="nm">${esc(u)}</span><button type="button" class="x" data-rm="g${i}" aria-label="Remove ${esc(u)}">✕</button></span>`),
     ];
-    const BACKEND_NAMES = { kokoro: 'Kokoro', elevenlabs: 'ElevenLabs', openai: 'OpenAI' };
-    const shortTagline = (t) => String(t || '').replace(/\s*\([^)]*\)/g, '').replace(/\.$/, '');
+    $('tags').innerHTML = tags.join('');
+    const t = totalSize();
+    $('attach-note').innerHTML = esc('Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.') + (S.files.length ? ` <span class="${t > TOTAL_LIMIT ? 'c-danger' : ''}">${esc(fmtBytes(t))} attached.</span>` : '');
+    $('submit').disabled = filesInvalid();
+  }
+  $('tags').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm]');
+    if (!b) return;
+    const k = b.dataset.rm[0], i = Number(b.dataset.rm.slice(1));
+    ({ f: S.files, u: S.urls, g: S.github })[k].splice(i, 1);
+    renderTags();
+  });
+  function addFiles(list) {
+    for (const file of list) {
+      if (S.files.some((x) => x.file.name === file.name && x.file.size === file.size)) continue;
+      S.files.push({ file, error: validateFile(file) });
+    }
+    renderTags();
+  }
+  $('attach-btn').addEventListener('click', () => {
+    const open = $('attach').hidden;
+    $('attach').hidden = !open;
+    $('attach-btn').setAttribute('aria-expanded', String(open));
+  });
+  $('drop').addEventListener('click', () => $('file-input').click());
+  $('file-input').addEventListener('change', () => { addFiles(Array.from($('file-input').files)); $('file-input').value = ''; });
+  $('drop').addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('over'); });
+  $('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'));
+  $('drop').addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('over'); addFiles(Array.from(e.dataTransfer.files || [])); });
+  function addFrom(inputId, list, check) {
+    const el = $(inputId);
+    const v = el.value.trim();
+    if (!v) return;
+    const bad = check(v);
+    if (bad) { el.setCustomValidity(bad); el.reportValidity(); return; }
+    el.setCustomValidity('');
+    if (!list.includes(v)) list.push(v);
+    el.value = '';
+    renderTags();
+  }
+  const addUrl = () => addFrom('url-in', S.urls, (v) => (/^https?:\/\/\S+\.\S+/.test(v) ? '' : 'Use a full link starting with https://'));
+  const addGh = () => addFrom('gh-in', S.github, (v) => (/^[\w.-]+\/[\w.-]+$/.test(v.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')) ? '' : 'Use owner/repo, for example nicglazkov/Chalkboard'));
+  $('url-add').addEventListener('click', addUrl);
+  $('gh-add').addEventListener('click', addGh);
+  $('url-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
+  $('gh-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addGh(); } });
+  $('url-in').addEventListener('input', () => $('url-in').setCustomValidity(''));
+  $('gh-in').addEventListener('input', () => $('gh-in').setCustomValidity(''));
 
-    function buildNarrators(meta) {
-      const sel = form.elements.narrator;
-      const list = (meta && meta.narrators && meta.narrators.length) ? meta.narrators : FALLBACK_NARRATORS;
-      const def = meta && meta.defaults ? meta.defaults.narrator : null;
-      // Order: the default voice first, then available ones, then the rest.
-      const sorted = [...list].sort((a, b) =>
-        (b.id === def) - (a.id === def) || (b.available !== false) - (a.available !== false));
-      let html = '';
-      if (!def) {
-        const backend = meta && meta.defaults ? meta.defaults.tts_backend : '';
-        const name = BACKEND_NAMES[backend] || (backend ? backend : 'server setting');
-        html += `<option value="" data-short="${esc(name)} voice">Default (${esc(name)})</option>`;
+  // ── Topic ──────────────────────────────────────────────────────────────
+  const topic = $('topic');
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) $('kbd').textContent = '⌘';
+  topic.addEventListener('input', () => { $('chars').textContent = `${topic.value.trim().length} chars`; });
+  topic.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('gen').requestSubmit(); } });
+
+  // ── Estimate (from finished runs with matching settings) ───────────────
+  let estTimer = null, estSeq = 0;
+  function queueEstimate() { clearTimeout(estTimer); estTimer = setTimeout(loadEstimate, 250); }
+  async function loadEstimate() {
+    const seq = ++estSeq;
+    const effort = S.research ? 'high' : S.effort;
+    const p = new URLSearchParams({ effort, quality: S.quality || '', narrator: S.narrator || '', research: String(S.research) });
+    const res = await getJSON(`/api/estimate?${p}`);
+    if (seq !== estSeq) return;
+    const card = $('est-card');
+    const line = $('est-line');
+    if (!res.ok || !res.data) {
+      const why = missingWhy(res, 'The estimate');
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk" title="${esc(why)}">Unknown</div><div class="mono muted">${esc(why)}</div>`;
+      line.innerHTML = unknownHtml(why, 'cost unknown');
+      return;
+    }
+    const d = res.data;
+    const n = d.based_on_runs || 0;
+    if (d.median_seconds == null) {
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk">No estimate yet: fewer than 3 similar runs</div>
+        <div class="kv"><span>Similar finished runs</span><span>${esc(String(n))}</span></div>`;
+    } else {
+      const big = d.median_seconds >= 60 ? `~${Math.round(d.median_seconds / 60)} min` : `~${Math.round(d.median_seconds)} s`;
+      const range = d.p25_seconds != null && d.p75_seconds != null ? `${fmtSpan(d.p25_seconds)} to ${fmtSpan(d.p75_seconds)}` : null;
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num">${esc(big)}</div>
+        <div class="kv"><span>Middle half of runs</span><span>${range ? esc(range) : unknownHtml('Not enough runs for a range')}</span></div>
+        <div class="kv"><span>Typical cost</span><span>${d.median_cost_usd != null ? esc(fmtUsd(d.median_cost_usd)) : unknownHtml('These runs did not record a cost')}</span></div>
+        <div class="kv"><span>Based on</span><span>${esc(String(n))} finished run${n === 1 ? '' : 's'}${d.basis ? ' · ' + esc(d.basis) : ''}</span></div>`;
+    }
+    line.innerHTML = d.median_cost_usd != null
+      ? `typical cost ${esc(fmtUsd(d.median_cost_usd))} · median of ${esc(String(n))} similar runs`
+      : unknownHtml(n < 3 ? 'Fewer than 3 similar runs have finished' : 'Similar runs did not record a cost', 'cost unknown');
+  }
+
+  // ── Recent ─────────────────────────────────────────────────────────────
+  async function loadRecent() {
+    const [lib, jobs, vs] = await Promise.all([getJSON('/api/library?limit=4&sort=newest'), getJobs(), getVoices()]);
+    const rows = [];
+    if (jobs.ok && Array.isArray(jobs.data)) {
+      for (const j of jobs.data.filter((x) => x.status === 'running' || x.status === 'pending').slice(0, 2)) {
+        const wb = buildWorkbench(j);
+        rows.push(`<a href="/progress/?job=${encodeURIComponent(j.id)}"><span class="t">${esc(j.topic)}</span><span class="m c-gold">● ${j.status === 'pending' ? 'queued' : 'running'}${wb.active ? ' · ' + esc(wb.active.name.toLowerCase()) : ''}</span></a>`);
       }
-      for (const n of sorted) {
-        const tag = shortTagline(n.tagline);
-        let text = n.label + (tag ? `: ${tag}` : '');
-        if (n.available === false) text = `${n.label}: needs an API key on the server`;
-        html += `<option value="${esc(n.id)}" data-short="${esc(n.label)}"${n.available === false ? ' disabled' : ''}>${esc(text)}</option>`;
+    }
+    if (lib.ok && lib.data) {
+      for (const v of lib.data.videos.slice(0, 4 - Math.min(rows.length, 2))) {
+        const meta = ['done', fmtDuration(v.duration_sec), fmtAgo(parseTs(v.created_at))].filter(Boolean).join(' · ');
+        rows.push(`<a href="/library/${encodeURIComponent(v.run_id)}"><span class="t">${esc(v.title || v.topic)}</span><span class="m c-ok">${esc(meta)}</span></a>`);
       }
-      sel.innerHTML = html;
-      sel.value = def || '';
-      $('narrator-default').textContent = def ? `Default: ${narratorLabel(def, meta)}` : '';
     }
+    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="mono muted" style="margin:0">Nothing yet. Your first video shows up here.</p>' : `<p class="mono muted" style="margin:0">${esc(missingWhy(lib, 'The library'))}</p>`);
+  }
 
-    function applyDefaults(meta, prefilled) {
-      const d = (meta && meta.defaults) || {};
-      if (!prefilled) {
-        for (const k of ['effort', 'audience', 'tone', 'theme', 'quality']) if (d[k]) setVal(k, d[k]);
+  // ── Submit ─────────────────────────────────────────────────────────────
+  function showError(html) { $('form-error').innerHTML = html; $('form-error').hidden = false; }
+  $('gen').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('form-error').hidden = true;
+    const t = topic.value.trim();
+    if (!t) { showError('<div class="err"><div class="err-title">Add a topic first</div><p class="muted">One clear sentence is enough.</p></div>'); topic.focus(); return; }
+    if (filesInvalid()) { showError('<div class="err"><div class="err-title">Some attachments cannot be sent</div><p class="muted">Remove the files marked in red, or keep the total under 24 MB.</p></div>'); return; }
+    const body = {
+      topic: t,
+      effort: S.research ? 'high' : S.effort,
+      audience: S.audience, tone: S.tone, theme: S.theme,
+      template: S.template || null,
+      speed: S.speed || 1.0,
+      burn_captions: S.burn, quiz: S.quiz,
+      qa_density: S.qa_density,
+      quality: S.quality || null,
+      narrator: S.narrator || null,
+      urls: S.urls, github: S.github,
+    };
+    const btn = $('submit');
+    btn.disabled = true;
+    btn.textContent = 'Starting';
+    let res;
+    if (S.files.length) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(body)) {
+        if (Array.isArray(v)) v.forEach((x) => fd.append(k, x));
+        else if (v != null) fd.append(k, typeof v === 'boolean' ? String(v) : v);
       }
-      $('quality-default').textContent = d.quality ? `Default: ${resLabel(d.quality)}` : '';
+      for (const { file } of S.files) fd.append('files', file);
+      res = await getJSON('/api/jobs/upload', { method: 'POST', body: fd });
+    } else {
+      res = await getJSON('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     }
+    if (!res.ok || !res.data || !res.data.id) {
+      btn.disabled = false;
+      btn.textContent = 'Generate video';
+      showError(`<div class="err" role="alert"><div class="err-title">The server did not start the job</div><p class="muted">${esc(res.error || 'No response.')}${res.status ? ` (HTTP ${res.status})` : ''}</p></div>`);
+      return;
+    }
+    location.href = `/progress/?job=${encodeURIComponent(res.data.id)}`;
+  });
 
-    // ── Prefill from query params (re-generate from library) ──────────────
-    const params = new URLSearchParams(location.search);
-    const prefilled = params.has('topic');
-    function applyPrefill() {
-      if (!prefilled) return;
-      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality']) setVal(k, params.get(k));
-      const nar = params.get('narrator');
-      const sel = form.elements.narrator;
-      if (nar && Array.from(sel.options).some((o) => o.value === nar && !o.disabled)) sel.value = nar;
-      if (params.get('quiz') === 'true') $('quiz').checked = true;
-      if (params.get('burn_captions') === 'true') $('burn-captions').checked = true;
-    }
-    buildNarrators(null);
-    applyPrefill();
-    if (prefilled) {
-      $('style-section').open = true;
-      $('output-section').open = true;
-      history.replaceState(null, '', '/');
-    }
-    updateSummaries();
-    let touched = false;
-    form.addEventListener('change', () => { touched = true; }, { once: true });
-    getMeta().then((meta) => {
-      if (!meta) return;
-      const keep = form.elements.narrator.value;
-      buildNarrators(meta);
-      applyDefaults(meta, prefilled || touched);
-      const sel = form.elements.narrator;
-      const want = prefilled ? params.get('narrator') : touched ? keep : null;
-      if (want && Array.from(sel.options).some((o) => o.value === want && !o.disabled)) sel.value = want;
-      updateSummaries();
-    });
+  // ── Defaults and prefill ───────────────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  const prefilled = params.has('topic');
+  function applyPrefill() {
+    for (const k of ['audience', 'tone', 'theme', 'template', 'quality', 'qa_density']) if (params.has(k)) S[k] = params.get(k);
+    const eff = params.get('effort');
+    if (eff === 'high') S.research = true; else if (eff) S.effort = eff;
+    if (params.has('speed')) S.speed = parseFloat(params.get('speed')) || 1.0;
+    if (params.get('quiz') === 'true') S.quiz = true;
+    if (params.get('burn_captions') === 'true') S.burn = true;
+    if (params.get('narrator')) S.narrator = params.get('narrator');
+    topic.value = params.get('topic') || '';
+    $('speed').value = S.speed;
+    $('burn').checked = S.burn;
+    $('style').open = true;
+    $('output').open = true;
+    history.replaceState(null, '', '/');
+  }
 
-    // ── Reconnect to a running job when coming back to this page ──────────
-    (async function reconnect() {
-      if (prefilled) return;
-      const stored = window.jobStatus.get();
-      if (!stored) return;
-      let job;
-      try {
-        const r = await fetch(`/api/jobs/${encodeURIComponent(stored.id)}`);
-        if (!r.ok) { if (r.status === 404) window.jobStatus.resolve(stored.id, 'failed'); return; }
-        job = await r.json();
-      } catch { return; }
-      beginRun(stored.id, stored.topic || job.topic, stored.startedAt, stored.opts, false);
-      await sync().catch(() => {});
-      if (job.status === 'completed' || job.status === 'failed') finalizeJob(job);
-      else startSSE(stored.id);
-    })();
+  (async function init() {
+    const meta = await getMeta();
+    const d = (meta && meta.defaults) || {};
+    if (!prefilled) {
+      for (const k of ['audience', 'tone', 'theme', 'quality']) if (d[k]) S[k] = d[k];
+      if (d.effort === 'high') S.research = true; else if (d.effort) S.effort = d.effort;
+      if (d.narrator) S.narrator = d.narrator;
+    } else applyPrefill();
+    voiceSource = await getVoices();
+    voices = voiceSource.list || [];
+    if (S.narrator && !voices.some((v) => v.id === S.narrator && v.available !== false)) S.narrator = null;
+    if (voiceSource.source !== 'voices') { $('voices-note').hidden = false; $('voices-note').textContent = voiceSource.why || ''; }
+    topic.dispatchEvent(new Event('input'));
+    changed();
+    renderTags();
   })();
-  </script>
+  renderChips();
+  summaries();
+  loadRecent();
+})();
+</script>
 </body>
 </html>

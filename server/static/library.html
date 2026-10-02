@@ -1,255 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Library · Chalkboard</title>
-  <meta name="color-scheme" content="dark light" />
-  <script>try{if(localStorage.getItem('cb-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=3" />
-  <script src="/app.js?v=3"></script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="/app.css?v=5">
+  <script src="/app.js?v=5"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="nav" data-page="library"></header>
-
-  <main id="main" class="wrap">
-    <div class="lib-head">
-      <div>
-        <h1 class="page-title">Library</h1>
-        <p class="lib-count" id="total-label" aria-live="polite">&nbsp;</p>
-      </div>
-      <div class="lib-tools" role="search">
-        <div class="search">
-          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <label for="search" class="sr-only">Search videos</label>
-          <input class="input" type="search" id="search" placeholder="Search videos" autocomplete="off" />
-          <kbd class="search-key" aria-hidden="true">/</kbd>
+<div class="shell">
+  <nav class="side" aria-label="Main" data-page="library"></nav>
+  <main class="main" id="main" style="padding-top:36px">
+    <div class="page" style="max-width:1240px;gap:24px">
+      <div class="lib-top">
+        <div>
+          <div class="eyebrow"><span class="pip"></span>Your library</div>
+          <h1 class="h1" style="font-size:44px;margin-top:8px">Everything you've <em>sketched</em>.</h1>
         </div>
-        <label for="sort" class="sr-only">Sort by</label>
-        <select class="select sort" id="sort">
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="longest">Longest</option>
-          <option value="shortest">Shortest</option>
-        </select>
+        <div class="lib-tools" role="search">
+          <label for="q" class="sr-only">Search the library</label>
+          <input id="q" class="input" type="search" placeholder="Search by topic or transcript" autocomplete="off">
+          <label for="sort" class="sr-only">Sort</label>
+          <select id="sort" class="input">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="longest">Longest</option>
+            <option value="shortest">Shortest</option>
+          </select>
+        </div>
       </div>
+
+      <div class="kpis" id="kpis" aria-label="Library stats">
+        <div class="kpi"><div class="label">This week</div><div class="shimmer" style="height:36px;margin-top:6px"></div></div>
+        <div class="kpi"><div class="label">Narration sync</div><div class="shimmer" style="height:36px;margin-top:6px"></div></div>
+        <div class="kpi"><div class="label">Visual QA</div><div class="shimmer" style="height:36px;margin-top:6px"></div></div>
+        <div class="kpi"><div class="label">Typical run</div><div class="shimmer" style="height:36px;margin-top:6px"></div></div>
+      </div>
+
+      <div class="chips" id="filters" role="group" aria-label="Filter by status">
+        <button type="button" class="chip" data-f="all" aria-pressed="true">All</button>
+        <button type="button" class="chip" data-f="done" aria-pressed="false">Done</button>
+        <button type="button" class="chip" data-f="running" aria-pressed="false">Running</button>
+        <button type="button" class="chip" data-f="failed" aria-pressed="false">Failed</button>
+      </div>
+
+      <div id="list"><div class="shimmer" style="height:300px"></div></div>
+      <div class="pager" id="pager" hidden></div>
+      <div class="foot" id="foot"></div>
     </div>
-
-    <div class="grid" id="grid" aria-live="polite"></div>
-    <nav class="pagination" id="pagination" aria-label="Pages" hidden></nav>
   </main>
+</div>
 
-  <script>
-  (function () {
-    const { esc, fmtDuration, fmtWhen, thumbInner, resLabel } = window.CB;
-    const $ = (id) => document.getElementById(id);
-    const grid = $('grid');
-    const searchEl = $('search');
-    const sortEl = $('sort');
-    const totalLabel = $('total-label');
-    const pager = $('pagination');
+<script>
+(function () {
+  const { esc, fmtDuration, fmtAgo, fmtSpan, fmtStamp, parseTs, getJSON, missingWhy, thumbInner, resLabel, getVoices, narratorName, buildWorkbench, getJobs } = window.CB;
+  const $ = (id) => document.getElementById(id);
+  const PAGE = 30;
+  const params = new URLSearchParams(location.search);
+  const st = { q: params.get('q') || '', sort: params.get('sort') || 'newest', f: params.get('f') || 'all', limit: PAGE };
+  $('q').value = st.q;
+  $('sort').value = st.sort;
+  let voiceList = [];
 
-    // State lives in the URL so reloads and back navigation keep it.
-    const qs = new URLSearchParams(location.search);
-    let perPage = [25, 50, 100].includes(+qs.get('per')) ? +qs.get('per') : 25;
-    let page = Math.max(1, parseInt(qs.get('page'), 10) || 1);
-    let query = qs.get('q') || '';
-    let sort = ['newest', 'oldest', 'longest', 'shortest'].includes(qs.get('sort')) ? qs.get('sort') : 'newest';
-    let total = 0;
-    let reqId = 0;
-    searchEl.value = query;
-    sortEl.value = sort;
+  function saveUrl() {
+    const p = new URLSearchParams();
+    if (st.q) p.set('q', st.q);
+    if (st.sort !== 'newest') p.set('sort', st.sort);
+    if (st.f !== 'all') p.set('f', st.f);
+    history.replaceState(null, '', p.toString() ? `/library?${p}` : '/library');
+  }
+  function paintFilters() {
+    document.querySelectorAll('#filters .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === st.f)));
+  }
 
-    function saveUrl() {
-      const p = new URLSearchParams();
-      if (query) p.set('q', query);
-      if (sort !== 'newest') p.set('sort', sort);
-      if (page > 1) p.set('page', page);
-      if (perPage !== 25) p.set('per', perPage);
-      history.replaceState(null, '', '/library' + (p.toString() ? '?' + p : ''));
+  // ── KPIs from /api/stats ───────────────────────────────────────────────
+  async function loadStats() {
+    const r = await getJSON('/api/stats');
+    const tile = (k, v, sub, why) => `<div class="kpi"><div class="label">${esc(k)}</div>${v != null
+      ? `<div class="v">${esc(v)}</div>` : `<div class="v unk" tabindex="0" title="${esc(why)}" aria-label="Unknown. ${esc(why)}">Unknown</div>`}<div class="sub">${esc(sub)}</div></div>`;
+    if (!r.ok || !r.data) {
+      const why = missingWhy(r, 'Library stats');
+      $('kpis').innerHTML = tile('This week', null, 'videos made', why) + tile('Narration sync', null, 'median cue offset', why) +
+        tile('Visual QA', null, 'passed first time', why) + tile('Typical run', null, 'median run time', why);
+      return;
     }
+    const d = r.data;
+    const rate = d.qa_pass_rate == null ? null : (d.qa_pass_rate > 1 ? d.qa_pass_rate : d.qa_pass_rate * 100);
+    $('kpis').innerHTML =
+      tile('This week', d.videos_this_week != null ? String(d.videos_this_week) : null,
+        d.videos_total != null ? `${d.videos_total} in total` : 'videos made', 'The server did not return a weekly count') +
+      tile('Narration sync', d.median_sync_lag_s != null ? `${Number(d.median_sync_lag_s).toFixed(2)} s` : null,
+        `scene clock vs speech · ${d.sync_runs || 0} run${d.sync_runs === 1 ? '' : 's'} measured`, d.sync_runs ? 'The server did not return a median' : 'No run has a recorded cue log yet, so sync has never been measured') +
+      tile('Visual QA', rate != null ? `${Math.round(rate)}%` : null,
+        `passed · ${d.qa_runs || 0} run${d.qa_runs === 1 ? '' : 's'} checked`, d.qa_runs ? 'The server did not return a pass rate' : 'No run has a saved visual QA report yet') +
+      tile('Typical run', d.median_run_seconds != null ? fmtSpan(d.median_run_seconds) : null,
+        `median of ${d.timed_runs || 0} timed run${d.timed_runs === 1 ? '' : 's'}`, d.timed_runs ? 'The server did not return a median' : 'No run has recorded its start and finish times yet');
+    const t = parseTs(d.computed_at);
+    $('kpis').title = t ? `Computed ${fmtStamp(d.computed_at)}` : '';
+    statsNote = t ? `Stats computed ${fmtAgo(t)}` : '';
+    paintFoot();
+  }
 
-    const MORE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>';
+  // ── Rows ───────────────────────────────────────────────────────────────
+  let statsNote = '', totalNote = '';
+  function paintFoot() { $('foot').textContent = ['Chalkboard · MIT License', totalNote, statsNote].filter(Boolean).join(' · '); }
+  function videoRow(v) {
+    const meta = [v.effort, resLabel(v.quality)].filter(Boolean).join(' · ');
+    return `<a class="vrow" href="/library/${encodeURIComponent(v.run_id)}">
+      <span class="thumb">${thumbInner(v)}</span>
+      <span class="tw"><span class="title">${esc(v.title || v.topic)}</span><span class="meta">${esc(meta)}</span></span>
+      <span class="st c-ok">Done</span>
+      <span class="vo">${esc(narratorName(v.narrator, voiceList) || 'Not recorded')}</span>
+      <span class="ln">${esc(fmtDuration(v.duration_sec) || '')}</span>
+      <span class="wh">${esc(fmtAgo(parseTs(v.created_at)))}</span></a>`;
+  }
+  function jobRow(j) {
+    const wb = buildWorkbench(j);
+    const running = j.status === 'running' || j.status === 'pending';
+    const t0 = parseTs(j.created_at) || wb.startTs;
+    const meta = [j.effort, resLabel(j.quality), t0 ? `started ${fmtAgo(t0)}` : ''].filter(Boolean).join(' · ');
+    let status, cls;
+    if (j.status === 'pending') { status = '● Queued'; cls = 'c-gold'; }
+    else if (running) {
+      const r = wb.render;
+      const where = r && r.segment != null && r.segments ? `scene ${r.segment + 1} of ${r.segments}` : (wb.active ? wb.active.name.toLowerCase() : '');
+      status = `● Running${where ? ' · ' + where : ''}`; cls = 'c-gold';
+    } else { status = 'Failed'; cls = 'c-danger'; }
+    return `<a class="vrow${running ? ' running' : ''}" href="/progress/?job=${encodeURIComponent(j.id)}">
+      <span class="thumb dim"><div class="thumb-board"><span>${esc(j.topic)}</span></div>${running ? '<span class="bar"></span>' : ''}</span>
+      <span class="tw"><span class="title">${esc(j.topic)}</span><span class="meta">${esc(meta)}</span></span>
+      <span class="st ${cls}">${esc(status)}</span>
+      <span class="vo">${esc(narratorName(j.narrator, voiceList) || 'Default')}</span>
+      <span class="ln"></span>
+      <span class="wh">${running ? 'now' : esc(t0 ? fmtAgo(wb.lastTs || t0) : '')}</span></a>`;
+  }
 
-    function card(v) {
-      const title = v.title || v.topic;
-      const dur = fmtDuration(v.duration_sec);
-      const id = esc(v.run_id);
-      return `<article class="card" data-run-id="${id}">
-        <a class="card-link" href="/library/${encodeURIComponent(v.run_id)}">
-          <div class="thumb">${thumbInner(v)}${dur ? `<span class="duration">${dur}</span>` : ''}</div>
-          <h2 class="card-title">${esc(title)}</h2>
-        </a>
-        <p class="card-meta"><span>${esc(fmtWhen(v.created_at))}</span><span class="card-q">${esc(resLabel(v.quality))}</span></p>
-        <button class="icon-btn card-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Options for ${esc(title)}">${MORE}</button>
-        <div class="menu" hidden>
-          <a href="/library/${encodeURIComponent(v.run_id)}">Open</a>
-          <button type="button" class="danger" data-delete="${id}" data-title="${esc(title)}">Delete</button>
-        </div>
-      </article>`;
-    }
-
-    function skeletons(n) {
-      return Array.from({ length: n }, () => `<div class="card card-skel" aria-hidden="true">
-        <div class="thumb skeleton"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>`).join('');
-    }
-
-    function stateHtml(icon, title, body, action) {
-      return `<div class="state">${icon}<p class="state-title">${title}</p>${body ? `<p>${body}</p>` : ''}${action || ''}</div>`;
-    }
-    const ICON_FILM = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="4" stroke="currentColor" stroke-width="2"/><path d="M21 19l9 5-9 5z" fill="currentColor"/></svg>';
-    const ICON_SEARCH = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="21" cy="21" r="12" stroke="currentColor" stroke-width="2"/><path d="M30 30l10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-    const ICON_WARN = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="24" cy="24" r="17" stroke="currentColor" stroke-width="2"/><path d="M24 15v11M24 32v1" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
-
-    async function load() {
-      const my = ++reqId;
-      saveUrl();
-      grid.setAttribute('aria-busy', 'true');
-      if (!grid.querySelector('.card') || grid.querySelector('.state')) grid.innerHTML = skeletons(8);
-      else grid.classList.add('is-loading');
-
-      const params = new URLSearchParams({ q: query, sort, limit: perPage, offset: (page - 1) * perPage });
-      try {
-        let res;
-        try { res = await fetch(`/api/library?${params}`); }
-        catch { throw new Error('Could not reach the server. Check that it is running.'); }
-        if (!res.ok) throw new Error(`The server answered HTTP ${res.status}. The server log has the details.`);
-        const data = await res.json();
-        if (my !== reqId) return;
-        total = data.total;
-        // Deleted the last item on the last page: step back a page.
-        if (data.videos.length === 0 && total > 0 && page > 1) { page = Math.ceil(total / perPage); return load(); }
-        totalLabel.textContent = query
-          ? `${total} ${total === 1 ? 'match' : 'matches'} for "${query}"`
-          : `${total} ${total === 1 ? 'video' : 'videos'}`;
-
-        if (data.videos.length === 0) {
-          grid.innerHTML = query
-            ? stateHtml(ICON_SEARCH, 'Nothing matches that search', `No titles or topics contain "${esc(query)}".`,
-                '<button class="btn" type="button" id="clear-search">Clear search</button>')
-            : stateHtml(ICON_FILM, 'No videos yet', 'Videos you generate are saved here with their script, captions and downloads.',
-                '<a class="btn btn-primary" href="/">Generate a video</a>');
-          const clear = $('clear-search');
-          if (clear) clear.addEventListener('click', () => { searchEl.value = ''; query = ''; page = 1; load(); searchEl.focus(); });
-        } else {
-          grid.innerHTML = data.videos.map(card).join('');
-        }
-        renderPager();
-      } catch (err) {
-        if (my !== reqId) return;
-        totalLabel.innerHTML = '&nbsp;';
-        grid.innerHTML = stateHtml(ICON_WARN, 'Could not load the library', esc(err.message || 'Could not reach the server.'),
-          '<button class="btn" type="button" id="retry">Try again</button>');
-        $('retry').addEventListener('click', load);
-        pager.hidden = true;
-      } finally {
-        if (my === reqId) { grid.removeAttribute('aria-busy'); grid.classList.remove('is-loading'); }
+  let seq = 0;
+  async function load() {
+    const my = ++seq;
+    saveUrl();
+    paintFilters();
+    const wantLib = st.f === 'all' || st.f === 'done';
+    const wantJobs = st.f !== 'done';
+    const p = new URLSearchParams({ q: st.q, sort: st.sort, limit: String(st.limit), offset: '0' });
+    const [lib, jobs] = await Promise.all([wantLib ? getJSON(`/api/library?${p}`) : null, wantJobs ? getJobs(true) : null]);
+    if (my !== seq) return;
+    let rows = '';
+    const q = st.q.toLowerCase();
+    if (jobs && jobs.ok && Array.isArray(jobs.data)) {
+      let js = jobs.data.slice().reverse();
+      if (st.f === 'running' || st.f === 'all') {
+        const run = js.filter((j) => (j.status === 'running' || j.status === 'pending') && (!q || j.topic.toLowerCase().includes(q)));
+        rows += run.map(jobRow).join('');
+      }
+      if (st.f === 'failed' || st.f === 'all') {
+        const fail = js.filter((j) => j.status === 'failed' && (!q || j.topic.toLowerCase().includes(q)));
+        rows += fail.map(jobRow).join('');
       }
     }
-
-    function pageList(cur, n) {
-      if (n <= 7) return Array.from({ length: n }, (_, i) => i + 1);
-      const out = [1];
-      if (cur > 3) out.push('…');
-      for (let i = Math.max(2, cur - 1); i <= Math.min(n - 1, cur + 1); i++) out.push(i);
-      if (cur < n - 2) out.push('…');
-      out.push(n);
-      return out;
+    let total = null;
+    if (lib && lib.ok && lib.data) {
+      rows += lib.data.videos.map(videoRow).join('');
+      total = lib.data.total;
+      totalNote = `${lib.data.total} video${lib.data.total === 1 ? '' : 's'}${st.q ? ' match' : ' in the library'}`;
     }
-
-    function renderPager() {
-      const pages = Math.max(1, Math.ceil(total / perPage));
-      if (total <= 25) { pager.hidden = true; return; }
+    const list = $('list');
+    if (lib && !lib.ok) {
+      list.innerHTML = `<div class="state"><p class="state-title">Could not load the library</p><p>${esc(missingWhy(lib, 'The library'))}</p><button class="btn" type="button" onclick="location.reload()">Try again</button></div>`;
+    } else if (!rows) {
+      const empty = {
+        running: ['Nothing is running', 'Start a video and it shows up here while it works.'],
+        failed: ['No failed runs', 'Failed runs since the server last started show up here.'],
+      }[st.f] || (st.q ? ['No matches', `Nothing in the library matches "${st.q}".`] : ['No videos yet', 'Generate your first video and it lands here.']);
+      list.innerHTML = `<div class="state"><p class="state-title">${esc(empty[0])}</p><p>${esc(empty[1])}</p>${st.q ? '' : '<a class="btn primary" href="/">Generate video</a>'}</div>`;
+    } else {
+      list.innerHTML = `<div class="rows">${rows}</div>`;
+    }
+    const pager = $('pager');
+    if (lib && lib.ok && total != null && total > lib.data.videos.length) {
       pager.hidden = false;
-      let html = '<div class="pages">';
-      html += `<button class="page-btn" type="button" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">&#8249;</button>`;
-      for (const p of pageList(page, pages)) {
-        html += p === '…'
-          ? '<span class="page-gap" aria-hidden="true">…</span>'
-          : `<button class="page-btn" type="button" data-page="${p}" ${p === page ? 'aria-current="page"' : ''}>${p}</button>`;
-      }
-      html += `<button class="page-btn" type="button" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="Next page">&#8250;</button></div>`;
-      html += `<label class="per-page">Per page <select class="select" id="per-page">
-        ${[25, 50, 100].map((n) => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
-      pager.innerHTML = html;
-      $('per-page').addEventListener('change', (e) => { perPage = +e.target.value; page = 1; load(); });
-    }
+      pager.innerHTML = `<span>Showing ${lib.data.videos.length} of ${total}</span><button type="button" class="btn" id="more">Show ${Math.min(PAGE, total - lib.data.videos.length)} more</button>`;
+      $('more').addEventListener('click', () => { st.limit = Math.min(100, st.limit + PAGE); load(); });
+      if (st.limit >= 100) $('more').hidden = true;
+    } else pager.hidden = true;
+    paintFoot();
+  }
 
-    pager.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-page]');
-      if (!b || b.disabled) return;
-      const pages = Math.max(1, Math.ceil(total / perPage));
-      const p = +b.dataset.page;
-      if (p < 1 || p > pages || p === page) return;
-      page = p;
-      load();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    let searchTimer = null;
-    searchEl.addEventListener('input', () => {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => { query = searchEl.value.trim(); page = 1; load(); }, 250);
-    });
-    sortEl.addEventListener('change', () => { sort = sortEl.value; page = 1; load(); });
-
-    // "/" jumps to search
-    document.addEventListener('keydown', (e) => {
-      if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
-        e.preventDefault();
-        searchEl.focus();
-      }
-    });
-
-    // ── Card menus ───────────────────────────────────────────────────────
-    function closeMenus(except) {
-      grid.querySelectorAll('.card-menu-btn[aria-expanded="true"]').forEach((b) => {
-        if (b === except) return;
-        b.setAttribute('aria-expanded', 'false');
-        b.nextElementSibling.hidden = true;
-        b.closest('.card').classList.remove('menu-open');
-      });
-    }
-    grid.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.card-menu-btn');
-      if (btn) {
-        e.stopPropagation();
-        const open = btn.getAttribute('aria-expanded') !== 'true';
-        closeMenus(btn);
-        btn.setAttribute('aria-expanded', String(open));
-        btn.nextElementSibling.hidden = !open;
-        btn.closest('.card').classList.toggle('menu-open', open);
-        if (open) btn.nextElementSibling.querySelector('a, button').focus();
-        return;
-      }
-      const del = e.target.closest('[data-delete]');
-      if (del) {
-        closeMenus();
-        if (!confirm(`Delete "${del.dataset.title}" and all its files? This cannot be undone.`)) return;
-        try {
-          const res = await fetch(`/api/library/${encodeURIComponent(del.dataset.delete)}?files=true`, { method: 'DELETE' });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          load();
-        } catch (err) {
-          alert(`Could not delete the video (${err.message}).`);
-        }
-      }
-    });
-    document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) closeMenus(); });
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const open = grid.querySelector('.card-menu-btn[aria-expanded="true"]');
-      if (open) { closeMenus(); open.focus(); }
-    });
-
+  let qTimer = null;
+  $('q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = $('q').value.trim(); st.limit = PAGE; load(); }, 250); });
+  $('sort').addEventListener('change', () => { st.sort = $('sort').value; load(); });
+  $('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('.chip');
+    if (!b) return;
+    st.f = b.dataset.f;
     load();
-  })();
-  </script>
+  });
+
+  getVoices().then((v) => { voiceList = v.list || []; load(); });
+  loadStats();
+  // Keep running rows current without reloading the page.
+  setInterval(() => { if (document.querySelector('.vrow.running')) load(); }, 10000);
+})();
+</script>
 </body>
 </html>

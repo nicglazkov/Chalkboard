@@ -1,107 +1,117 @@
-// app.js: shared helpers, the nav (tabs, Claude API status, jobs menu,
-// theme toggle) and the window.jobStatus store used by the generate page.
-// Plain script, no build step. Loaded (not deferred) in <head> of every page
-// so inline page scripts can use window.CB; the nav renders on DOMContentLoaded.
+// app.js: shared helpers, the sidebar (nav counts + render box card from /api/status),
+// the workbench station model built from real job events, and the timeline renderer
+// used by the progress and video pages. Plain script, no build step. Loaded in <head>
+// so inline page scripts can use window.CB.
+//
+// Honesty rule: every number on screen comes from an API response. Missing values render
+// as "Unknown" (with the reason on hover), never as a guess.
 (function () {
   'use strict';
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+  // ── Formatting ─────────────────────────────────────────────────────────
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-
-  function fmtDuration(sec) {
-    if (!sec || sec < 1) return '';
-    const total = Math.round(sec);
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-  }
-
   function fmtClock(sec) {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${String(s).padStart(2, '0')}`;
+    if (sec == null || !isFinite(sec)) return '';
+    sec = Math.max(0, sec);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
   }
-
-  function fmtDate(iso, long) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d)) return '';
-    const opts = { month: long ? 'long' : 'short', day: 'numeric' };
-    if (long || d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-    return d.toLocaleDateString(undefined, opts);
+  function fmtDuration(sec) { return sec && sec >= 1 ? fmtClock(sec) : ''; }
+  // "6m 40s" style for typical times
+  function fmtSpan(sec) {
+    if (sec == null || !isFinite(sec)) return '';
+    sec = Math.round(sec);
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
   }
-
-  // Short date for lists: Today, Yesterday, then "Oct 2".
-  function fmtWhen(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d)) return '';
-    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const diff = Math.round((day(new Date()) - day(d)) / 86400000);
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Yesterday';
-    return fmtDate(iso);
+  function parseTs(iso) { const t = Date.parse(iso); return isNaN(t) ? null : t; }
+  function fmtAgo(ms) {
+    if (ms == null) return '';
+    const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (sec < 45) return `${sec}s ago`;
+    const min = Math.round(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const d = Math.round(hr / 24);
+    if (d < 14) return `${d}d ago`;
+    return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: new Date(ms).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
   }
-
-  function fmtAgo(ts) {
-    const sec = Math.floor((Date.now() - ts) / 1000);
-    if (sec < 60) return 'just now';
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min} min ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr} h ago`;
-    return `${Math.floor(hr / 24)} d ago`;
+  function fmtStamp(iso) {
+    const t = parseTs(iso);
+    if (t == null) return '';
+    const d = new Date(t);
+    const today = new Date().toDateString() === d.toDateString();
+    const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return today ? `today ${time}` : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} ${time}`;
   }
-
   function fmtBytes(n) {
+    if (n == null || !isFinite(n)) return '';
     if (n < 1024) return n + ' B';
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    if (n < 1024 ** 3) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / 1024 ** 3).toFixed(1) + ' GB';
   }
+  function fmtInt(n) { return n == null ? '' : Number(n).toLocaleString(); }
+  function fmtUsd(n) { return n == null ? '' : n < 0.01 && n > 0 ? '<$0.01' : '$' + Number(n).toFixed(2); }
+  function fmtSec(n, digits) { return n == null ? '' : `${Number(n).toFixed(digits == null ? 2 : digits)} s`; }
+  const cap = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '');
+  function unknownHtml(why, text) { return `<span class="unknown" title="${esc(why)}">${esc(text || 'Unknown')}</span>`; }
+
+  const RES = { low: '480p', medium: '720p', high: '1080p', '4k': '4K' };
+  const RES_FULL = { low: '480p15', medium: '720p30', high: '1080p60', '4k': '4K60' };
+  function resLabel(q) { return RES[q] || (q ? String(q) : ''); }
+  function resFull(q) { return RES_FULL[q] || resLabel(q); }
 
   function fileUrl(runId, name) {
     return `/api/jobs/${encodeURIComponent(runId)}/files/${encodeURIComponent(name)}`;
   }
 
-  // Thumbnail markup for a library video. Falls back to the topic written on
-  // a small board when there is no thumb.jpg (or it fails to load).
-  function boardHtml(text, theme) {
-    return `<div class="thumb-board" data-theme="${esc(theme || 'chalkboard')}"><span>${esc(text)}</span></div>`;
+  // GET JSON with the status kept, so callers can tell "endpoint missing" from "value null".
+  async function getJSON(url, opts) {
+    try {
+      const r = await fetch(url, opts);
+      let data = null;
+      const text = await r.text();
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+      if (!r.ok) {
+        const detail = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : text.slice(0, 200);
+        return { ok: false, status: r.status, data, error: detail || `HTTP ${r.status}` };
+      }
+      return { ok: true, status: r.status, data };
+    } catch (e) {
+      return { ok: false, status: 0, data: null, error: 'The server did not respond.' };
+    }
   }
+  function missingWhy(res, what) {
+    if (!res) return `${what} has not loaded.`;
+    if (res.status === 404) return `${what} is not available on this server yet.`;
+    if (res.status === 0) return `Could not reach the server for ${what}.`;
+    return `${what} failed: ${res.error || 'HTTP ' + res.status}`;
+  }
+
+  // ── Thumbnails ─────────────────────────────────────────────────────────
+  function boardHtml(text) { return `<div class="thumb-board"><span>${esc(text)}</span></div>`; }
   function thumbInner(v) {
-    const label = v.title || v.topic;
-    if (!v.thumb_path) return boardHtml(label, v.theme);
-    return `<img src="${fileUrl(v.run_id, 'thumb.jpg')}" alt="" loading="lazy" decoding="async"
-      data-fallback="${esc(label)}" data-theme="${esc(v.theme || 'chalkboard')}">`;
+    const label = v.title || v.topic || '';
+    if (!v.thumb_path) return boardHtml(label);
+    return `<img src="${fileUrl(v.run_id, 'thumb.jpg')}" alt="" loading="lazy" decoding="async" data-fallback="${esc(label)}">`;
   }
-  // One capturing listener handles every broken thumbnail on the page.
   document.addEventListener('error', (e) => {
     const img = e.target;
-    if (img && img.tagName === 'IMG' && img.dataset.fallback != null) {
-      img.outerHTML = boardHtml(img.dataset.fallback, img.dataset.theme);
-    }
+    if (img && img.tagName === 'IMG' && img.dataset.fallback != null) img.outerHTML = boardHtml(img.dataset.fallback);
   }, true);
 
-  const ICONS = {
-    sun: '<svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-    moon: '<svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
-    jobs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    mark: '<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1a1918"/><rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="rgba(242,237,226,0.14)"/><polygon points="11,9 11,23 24,16" fill="#c8b97a"/></svg>',
-  };
-
-  // ── Math: $...$ rendered with KaTeX, loaded from cdnjs only when needed ─
+  // ── Math: $...$ typeset with KaTeX from cdnjs, loaded only when needed ─
   const MATH_RE = /\$\$([^$]+?)\$\$|\$(?=\S)([^$\n]*?\S)\$(?!\d)/g;
   const KATEX = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/';
   let katexPromise = null;
-
   function loadKatex() {
     if (window.katex) return Promise.resolve(window.katex);
     if (katexPromise) return katexPromise;
@@ -122,171 +132,26 @@
     });
     return katexPromise;
   }
-
-  function hasMath(text) {
-    MATH_RE.lastIndex = 0;
-    return MATH_RE.test(String(text || ''));
-  }
-
+  function hasMath(text) { MATH_RE.lastIndex = 0; return MATH_RE.test(String(text || '')); }
   function mathHtml(text) {
     const katex = window.katex;
     const src = String(text || '');
     if (!katex) return esc(src);
-    let out = '';
-    let last = 0;
+    let out = '', last = 0, m;
     MATH_RE.lastIndex = 0;
-    let m;
     while ((m = MATH_RE.exec(src))) {
       out += esc(src.slice(last, m.index));
       const display = m[1] != null;
-      try {
-        out += katex.renderToString(display ? m[1] : m[2], { displayMode: display, throwOnError: false, output: 'html' });
-      } catch {
-        out += esc(m[0]);
-      }
+      try { out += katex.renderToString(display ? m[1] : m[2], { displayMode: display, throwOnError: false, output: 'html' }); }
+      catch { out += esc(m[0]); }
       last = m.index + m[0].length;
     }
     return out + esc(src.slice(last));
   }
-
-  // Put text in an element; upgrade any $...$ to typeset math once KaTeX loads.
   function setMathText(el, text) {
     el.textContent = text;
     if (!hasMath(text)) return;
     loadKatex().then(() => { el.innerHTML = mathHtml(text); }).catch(() => {});
-  }
-
-  // Render quality preset -> what it means on screen
-  const RES = { low: '480p', medium: '720p', high: '1080p', '4k': '4K' };
-  function resLabel(q) { return RES[q] || (q ? String(q) : ''); }
-
-  // ── Pipeline stages ────────────────────────────────────────────────────
-  // Pipeline nodes emit one event when they FINISH, so the step for node X is
-  // marked done when its event lands and the next node is predicted from the
-  // update. After the pipeline, the server reports render / visual_qa / quiz
-  // as pseudo-nodes with {status: running|done|failed}.
-  const STAGE_LABELS = {
-    init: 'Preparing',
-    research_agent: 'Researching the topic',
-    script_agent: 'Writing the script',
-    fact_validator: 'Checking facts',
-    manim_agent: 'Writing the animation code',
-    code_validator: 'Checking the code',
-    layout_checker: 'Checking the layout',
-    render_trigger: 'Recording the voiceover',
-    escalate_to_user: 'Stopped after repeated retries',
-    render: 'Rendering the video',
-    visual_qa: 'Checking the rendered frames',
-    quiz: 'Writing the quiz',
-  };
-  const PSEUDO = new Set(['render', 'visual_qa', 'quiz']);
-
-  function stageLabel(node) {
-    return STAGE_LABELS[node] || String(node || '').replace(/_/g, ' ');
-  }
-
-  // opts (optional, known only for jobs started in this browser):
-  // {effort, qa: bool, quiz: bool}
-  function afterRender(opts) {
-    if (!opts) return null;
-    if (opts.qa) return 'visual_qa';
-    return opts.quiz ? 'quiz' : null;
-  }
-  function nextStage(node, updates, opts) {
-    const u = updates || {};
-    switch (node) {
-      case undefined: case null: return 'init';
-      case 'init': return u.effort_level === 'high' ? 'research_agent' : 'script_agent';
-      case 'research_agent': return 'script_agent';
-      case 'script_agent': return 'fact_validator';
-      case 'fact_validator': return u.fact_feedback ? 'script_agent' : 'manim_agent';
-      case 'manim_agent': return 'code_validator';
-      case 'code_validator': return u.code_feedback ? 'manim_agent' : 'layout_checker';
-      case 'layout_checker': return u.code_feedback ? 'manim_agent' : 'render_trigger';
-      case 'render_trigger': return 'render';
-      case 'render': return u.status === 'done' ? afterRender(opts) : null;
-      case 'visual_qa': return u.status === 'done' && opts && opts.quiz ? 'quiz' : null;
-      default: return null;
-    }
-  }
-
-  // The happy path still ahead after `node`, shown as faded upcoming steps.
-  function upcoming(node, opts) {
-    const out = [];
-    const o = opts || {};
-    let n = node;
-    for (let guard = 0; guard < 12; guard++) {
-      let next;
-      if (n == null) next = 'init';
-      else if (n === 'init') next = o.effort === 'high' ? 'research_agent' : 'script_agent';
-      else if (PSEUDO.has(n)) next = nextStage(n, { status: 'done' }, o);
-      else next = nextStage(n, {}, o);
-      if (!next) break;
-      out.push(next);
-      n = next;
-    }
-    return out;
-  }
-
-  // Turn a job's event list into display steps:
-  // [{node, status: 'done'|'running'|'failed', attempt}]
-  function buildSteps(events, opts) {
-    const steps = [];
-    const counts = {};
-    const push = (node, status) => {
-      counts[node] = (counts[node] || 0) + 1;
-      const s = { node, status, attempt: counts[node] };
-      steps.push(s);
-      return s;
-    };
-    const last = () => steps[steps.length - 1];
-    // Re-point a predicted running step at the node that actually ran.
-    const claim = (node, status) => {
-      const l = last();
-      if (l && l.status === 'running') {
-        if (l.node !== node) {
-          counts[l.node]--;
-          steps.pop();
-          return push(node, status);
-        }
-        l.status = status;
-        return l;
-      }
-      return push(node, status);
-    };
-    // Server timestamps (ev.ts) give each step a start (t0) and end (t1), so
-    // step times survive a reload; steps without them fall back to live timing.
-    for (const ev of events || []) {
-      if (!ev || ev.done || !ev.node) continue;
-      const node = ev.node;
-      const u = ev.updates || {};
-      const ts = ev.ts ? Date.parse(ev.ts) : NaN;
-      let s;
-      if (PSEUDO.has(node)) {
-        if (u.status === 'running') {
-          s = claim(node, 'running');
-          if (!isNaN(ts) && s.t0 === undefined) s.t0 = ts;
-          continue;
-        }
-        s = claim(node, u.status === 'failed' ? 'failed' : 'done');
-      } else {
-        s = claim(node, 'done');
-      }
-      if (!isNaN(ts)) s.t1 = ts;
-      const next = nextStage(node, u, opts);
-      if (next) {
-        const n = push(next, 'running');
-        if (!isNaN(ts)) n.t0 = ts;
-      }
-    }
-    if (!steps.length) push('init', 'running');
-    return steps;
-  }
-
-  function currentStep(events, opts) {
-    const steps = buildSteps(events, opts);
-    const run = steps.filter((s) => s.status === 'running').pop();
-    return run ? run.node : null;
   }
 
   // ── Errors: a short human line first, the raw detail on request ─────────
@@ -295,6 +160,7 @@
     const low = s.toLowerCase();
     const has = (...xs) => xs.some((x) => low.includes(x));
     if (!s.trim()) return { title: 'The job failed', body: 'No error message was recorded. The server log has the details.' };
+    if (has('cancel')) return { title: 'The run was cancelled', body: 'Nothing else will run for this job.' };
     if (has('elevenlabs', 'quota_exceeded')) return { title: 'The voiceover failed', body: 'ElevenLabs refused the request. Try again, or pick the Kokoro narrator.' };
     if (has('error code: 529', 'overloaded')) return { title: 'Claude was overloaded', body: 'Anthropic is busy right now. Try again in a minute.' };
     if (has('rate_limit', 'rate limit', 'error code: 429')) return { title: 'Hit the Claude rate limit', body: 'Too many requests in a short time. Wait a minute, then try again.' };
@@ -310,258 +176,404 @@
     const first = s.split('\n')[0];
     return { title: 'The job failed', body: first.length > 160 ? first.slice(0, 157) + '...' : first };
   }
+  function errorCard(raw, fallbackTitle) {
+    const info = explainError(raw);
+    const showRaw = raw && String(raw).trim() && String(raw).trim() !== info.body;
+    return `<div class="err" role="alert"><div class="err-title">${esc(info.title || fallbackTitle || 'Something failed')}</div>
+      <p class="muted">${esc(info.body)}</p>
+      ${showRaw ? `<details><summary>Show the error</summary><pre>${esc(String(raw).trim())}</pre></details>` : ''}</div>`;
+  }
 
-  // ── Server metadata (defaults, narrators) ──────────────────────────────
+  // ── Narrators ──────────────────────────────────────────────────────────
+  let voicesPromise = null;
+  // Voices from /api/voices, else the narrator list in /api/meta (no samples there).
+  function getVoices() {
+    if (!voicesPromise) {
+      voicesPromise = (async () => {
+        const r = await getJSON('/api/voices');
+        if (r.ok && Array.isArray(r.data)) return { source: 'voices', list: r.data };
+        const m = await getMeta();
+        if (m && Array.isArray(m.narrators)) return { source: 'meta', list: m.narrators.map((n) => ({ ...n, available: n.available != null ? n.available : (n.configured === false ? false : null), availability_reason: n.configured === false ? 'No API key configured on the server' : null, sample_url: null })), why: missingWhy(r, 'Voice samples') };
+        return { source: 'none', list: [], why: missingWhy(r, 'The voice list') };
+      })();
+    }
+    return voicesPromise;
+  }
   let metaPromise = null;
   function getMeta() {
-    if (!metaPromise) {
-      metaPromise = fetch('/api/meta')
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-    }
+    if (!metaPromise) metaPromise = getJSON('/api/meta').then((r) => (r.ok ? r.data : null));
     return metaPromise;
   }
-  function narratorLabel(id, meta) {
+  function narratorName(id, list) {
     if (!id) return '';
-    const n = meta && (meta.narrators || []).find((x) => x.id === id);
+    const n = (list || []).find((x) => x.id === id);
     if (n) return n.label;
     const s = String(id);
-    return s === 'elevenlabs' ? 'ElevenLabs' : s === 'openai' ? 'OpenAI' : s.charAt(0).toUpperCase() + s.slice(1);
+    return s === 'elevenlabs' ? 'ElevenLabs' : s === 'openai' ? 'OpenAI' : cap(s);
   }
 
-  // ── Theme ──────────────────────────────────────────────────────────────
-  const THEME_KEY = 'cb-theme';
-  function currentTheme() {
-    return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  // ── Workbench stations, built only from real job events ────────────────
+  // Pipeline nodes emit one event when they FINISH. render / visual_qa / quiz are
+  // reported as pseudo-nodes with {status: running|done|failed}. tts / render progress,
+  // usage and peek events carry data but do not move the pipeline on their own.
+  const STATIONS = [
+    { id: 'research', name: 'Research', nodes: ['research_agent'] },
+    { id: 'script', name: 'Script', nodes: ['script_agent'] },
+    { id: 'fact', name: 'Fact-check', nodes: ['fact_validator'] },
+    { id: 'anim', name: 'Animator', nodes: ['manim_agent', 'code_validator'] },
+    { id: 'layout', name: 'Layout dry-run', nodes: ['layout_checker'] },
+    { id: 'render', name: 'Narrate & render', nodes: ['render_trigger', 'render'] },
+    { id: 'qa', name: 'Visual QA', nodes: ['visual_qa'] },
+    { id: 'quiz', name: 'Quiz', nodes: ['quiz'] },
+  ];
+  const NODE_STATION = {};
+  STATIONS.forEach((s) => s.nodes.forEach((n) => { NODE_STATION[n] = s.id; }));
+  const PSEUDO = new Set(['render', 'visual_qa', 'quiz']);
+  const AGENT_STATION = [
+    [/research/i, 'research'], [/fact/i, 'fact'], [/script/i, 'script'], [/manim|code|anim/i, 'anim'],
+    [/layout/i, 'layout'], [/visual|qa/i, 'qa'], [/quiz/i, 'quiz'],
+  ];
+  function stationForAgent(agent) {
+    for (const [re, id] of AGENT_STATION) if (re.test(agent || '')) return id;
+    return null;
   }
-  function setTheme(t) {
-    if (t === 'light') document.documentElement.dataset.theme = 'light';
-    else delete document.documentElement.dataset.theme;
-    try { localStorage.setItem(THEME_KEY, t); } catch {}
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.setAttribute('aria-label', t === 'light' ? 'Switch to dark theme' : 'Switch to light theme');
+  function shortModel(m) { return String(m || '').replace(/^claude-/, '').replace(/-\d{8}$/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2').replace(/-/g, ' '); }
+
+  function nextNode(node, u, job) {
+    switch (node) {
+      case 'init': return u.effort_level === 'high' || (job && job.effort === 'high') ? 'research_agent' : 'script_agent';
+      case 'research_agent': return 'script_agent';
+      case 'script_agent': return 'fact_validator';
+      case 'fact_validator': return u.fact_feedback ? 'script_agent' : 'manim_agent';
+      case 'manim_agent': return 'code_validator';
+      case 'code_validator': return u.code_feedback ? 'manim_agent' : 'layout_checker';
+      case 'layout_checker': return u.code_feedback ? 'manim_agent' : 'render_trigger';
+      case 'render_trigger': return 'render';
+      default: return null;
+    }
   }
 
-  // ── Job store (localStorage) ───────────────────────────────────────────
-  const STORAGE_KEY = 'chalkboard_jobs';
-  const MAX_FINISHED = 10;
-  const POLL_MS = 2500;
-  const isActive = (j) => j.status === 'running' || j.status === 'pending';
+  // job: {status, events, effort, qa_density, quiz, narrator, error}
+  // Returns {stations:[{id,name,state,seconds,detail,badge}], active, startTs, lastTs, peek, usage, render, tts}
+  function buildWorkbench(job, now) {
+    now = now || Date.now();
+    const events = (job.events || []).filter((e) => e && !e.done);
+    const st = {};
+    STATIONS.forEach((s) => { st[s.id] = { ...s, state: 'queued', seconds: 0, detail: '', badge: '', seen: false, runs: 0 }; });
+    const usage = { calls: 0, input_tokens: 0, output_tokens: 0, web_searches: 0, cost_usd: 0, costKnown: true, models: {} };
+    let cur = null, curStart = null, startTs = null, lastTs = null, peek = null, render = null, tts = null, failedNode = null, qaRender = null;
+    const add = (id, a, b) => { if (id && a != null && b != null && b > a) st[id].seconds += (b - a) / 1000; };
 
-  function getJobs() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { return []; }
-  }
-  function saveJobs(jobs) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs)); } catch {}
-  }
-  function updateJob(id, patch) {
-    const jobs = getJobs();
-    const j = jobs.find((x) => x.id === id);
-    if (!j) return;
-    Object.assign(j, patch);
-    saveJobs(jobs);
-  }
-  function removeJob(id) { saveJobs(getJobs().filter((j) => j.id !== id)); }
-  function addJob(job) {
-    const jobs = getJobs().filter((j) => j.id !== job.id);
-    jobs.unshift(job);
-    saveJobs([...jobs.filter(isActive), ...jobs.filter((j) => !isActive(j)).slice(0, MAX_FINISHED)]);
-  }
-  function activeJobs() { return getJobs().filter(isActive); }
+    for (const ev of events) {
+      const node = ev.node;
+      const u = ev.updates || {};
+      const ts = parseTs(ev.ts);
+      if (ts != null) { if (startTs == null) startTs = ts; lastTs = ts; }
+      if (node === 'peek') { peek = { stage: u.stage, text: u.text || '', done: !!u.done, ts }; continue; }
+      if (node === 'usage') {
+        usage.calls++;
+        usage.input_tokens += u.input_tokens || 0;
+        usage.output_tokens += u.output_tokens || 0;
+        usage.web_searches += u.web_searches || 0;
+        if (u.cost_usd == null) usage.costKnown = false; else usage.cost_usd += u.cost_usd;
+        const sid = stationForAgent(u.agent);
+        if (sid && u.model) {
+          const m = (usage.models[sid] = usage.models[sid] || {});
+          m[u.model] = (m[u.model] || 0) + 1;
+        }
+        continue;
+      }
+      if (node === 'tts') { tts = { ...u, ts }; continue; }
+      // Visual QA re-renders report render events inside the QA phase: detail only.
+      if (node === 'render' && cur === 'visual_qa') { qaRender = { ...u, ts }; continue; }
+      if (node === 'render' && u.status === 'running' && (u.segment != null || u.animation != null || u.segments != null)) {
+        render = { ...u, ts };
+        if (cur !== 'render') { add(NODE_STATION[cur], curStart, ts); cur = 'render'; curStart = ts; }
+        continue;
+      }
+      if (node === 'init') { cur = nextNode('init', u, job); curStart = ts; continue; }
+      if (node === 'escalate_to_user') { failedNode = cur || 'manim_agent'; add(NODE_STATION[cur], curStart, ts); cur = null; continue; }
+      const sid = NODE_STATION[node];
+      if (!sid) continue;
+      const s = st[sid];
+      s.seen = true;
+      if (PSEUDO.has(node)) {
+        if (u.status === 'running') {
+          if (cur && cur !== node) add(NODE_STATION[cur], curStart, ts);
+          if (cur !== node) { cur = node; curStart = ts; }
+          s.runs++;
+          continue;
+        }
+        add(sid, curStart != null && cur === node ? curStart : null, ts);
+        if (u.status === 'failed') { failedNode = node; }
+        else s.state = 'done';
+        cur = null; curStart = ts;
+        continue;
+      }
+      // A pipeline node finished: the time since the previous transition was this node's.
+      add(sid, curStart, ts);
+      s.runs++;
+      s.state = 'done';
+      describe(s, node, u);
+      cur = nextNode(node, u, job);
+      curStart = ts;
+    }
 
-  window.jobStatus = {
-    set(id, topic, opts) {
-      addJob({ id, topic, opts: opts || null, status: 'running', startedAt: Date.now(), currentStage: null });
-      renderJobs();
-      startPolling();
-    },
-    resolve(id, status) {
-      updateJob(id, { status, completedAt: Date.now(), currentStage: null });
-      renderJobs();
-    },
-    get() { return activeJobs()[0] || null; },
-    clear() { saveJobs([]); renderJobs(); },
-    // stage = the label key of the step that is in progress now
-    updateStage(id, stage) { updateJob(id, { currentStage: stage }); renderJobs(); },
-  };
+    const running = job.status === 'running' || job.status === 'pending';
+    if (job.status === 'failed' && !failedNode) failedNode = cur;
+    if (running && cur && NODE_STATION[cur]) {
+      const s = st[NODE_STATION[cur]];
+      s.state = 'active';
+      s.seen = true;
+      if (curStart != null) s.seconds += (now - curStart) / 1000;
+    }
+    if (failedNode && NODE_STATION[failedNode]) st[NODE_STATION[failedNode]].state = 'failed';
 
-  // ── Nav ────────────────────────────────────────────────────────────────
-  function renderNav() {
-    const host = document.querySelector('header.nav');
-    if (!host) return;
-    const page = host.dataset.page;
-    const tab = (href, name, key) =>
-      `<a class="nav-tab" href="${href}"${page === key ? ' aria-current="page"' : ''}>${name}</a>`;
+    // Live details for the render station
+    const rs = st.render;
+    const parts = [];
+    if (tts) {
+      if (tts.status === 'failed') parts.push('narration failed');
+      else if (tts.status === 'done') parts.push(`${tts.segments != null ? tts.segments + ' segments narrated' : 'narrated'}`);
+      else if (tts.segments_done != null && tts.segments) parts.push(`narrating ${tts.segments_done} of ${tts.segments}`);
+    }
+    if (render && rs.state !== 'done') {
+      if (render.segment != null && render.segments) parts.push(`scene ${render.segment + 1} of ${render.segments}`);
+      else if (render.animation != null) parts.push(`animation ${render.animation}${render.animations ? ' of ' + render.animations : ''}`);
+    }
+    if (rs.state === 'done') parts.push('rendered');
+    if (job.quality) parts.push(resFull(job.quality));
+    rs.detail = parts.join(' · ');
+    if (job.narrator) rs.badge = String(job.narrator);
+    if (st.qa.state === 'done') st.qa.detail = 'Frame check finished';
+    else if (st.qa.state === 'active') st.qa.detail = qaRender && qaRender.status === 'running' && qaRender.segment != null && qaRender.segments
+      ? `Re-rendering after a fix · scene ${qaRender.segment + 1} of ${qaRender.segments}` : (qaRender ? 'Re-rendering after a fix' : 'Checking rendered frames');
+    if (st.quiz.state === 'active') st.quiz.detail = 'Writing questions';
+
+    // Model badges from usage events
+    for (const [sid, models] of Object.entries(usage.models)) {
+      const names = Object.keys(models);
+      const calls = names.reduce((a, k) => a + models[k], 0);
+      st[sid].badge = names.map(shortModel).join(', ') + (calls > 1 ? ` · ${calls} calls` : '');
+    }
+
+    // Which stations belong to this run
+    const include = (s) => {
+      if (s.seen) return true;
+      if (s.id === 'research') return job.effort === 'high';
+      if (s.id === 'qa') return job.qa_density ? job.qa_density !== 'zero' : false;
+      if (s.id === 'quiz') return !!job.quiz;
+      return true;
+    };
+    let stations = STATIONS.map((s) => st[s.id]).filter(include);
+    if (!running) stations = stations.map((s) => (s.state === 'queued' ? { ...s, state: job.status === 'completed' ? 'skipped' : 'queued' } : s));
+    const active = stations.find((s) => s.state === 'active') || null;
+    return { stations, active, startTs, lastTs, peek, usage, render, tts };
+  }
+  function describe(s, node, u) {
+    if (node === 'research_agent') {
+      const n = Array.isArray(u.research_sources) ? u.research_sources.length : null;
+      s.detail = n != null ? `${n} source${n === 1 ? '' : 's'} read` : 'Brief written';
+    } else if (node === 'script_agent') {
+      const segs = Array.isArray(u.script_segments) ? u.script_segments : null;
+      if (segs) {
+        const cues = segs.reduce((a, x) => a + ((x && (x.cues || x.cue_count)) ? (Array.isArray(x.cues) ? x.cues.length : x.cue_count) : 0), 0);
+        s.detail = `${segs.length} segments${cues ? `, ${cues} sync cues` : ''}`;
+      } else s.detail = 'Script written';
+      if (s.runs > 1) s.detail += ` · draft ${s.runs}`;
+    } else if (node === 'fact_validator') {
+      s.detail = u.fact_feedback ? `Sent back for changes (round ${s.runs})` : 'Approved';
+    } else if (node === 'manim_agent') {
+      s.detail = `Scene code written · try ${s.runs}`;
+    } else if (node === 'code_validator') {
+      s.detail = u.code_feedback ? 'Code failed a check, rewriting' : 'Code passed its checks';
+    } else if (node === 'layout_checker') {
+      s.detail = u.code_feedback ? 'Layout problem found, rewriting' : 'Layout checked';
+    } else if (node === 'render_trigger') {
+      s.detail = 'Voiceover recorded';
+    }
+  }
+
+  // ── Timeline ───────────────────────────────────────────────────────────
+  // tl: {duration_s, segments:[{index,start_s,duration_s,label,cues}], waveform, rendered_segments}
+  // opts: {mode: 'progress'|'video', renderedSegments, currentSegment, renderDone, lateCues:Set("seg:cue"), onSeek(sec)}
+  function renderTimeline(host, tl, opts) {
+    opts = opts || {};
+    const segs = (tl && Array.isArray(tl.segments)) ? tl.segments : [];
+    if (!segs.length) {
+      host.innerHTML = `<div class="tl-note">${esc(opts.emptyText || 'No segments yet.')}</div>`;
+      return null;
+    }
+    const timed = segs.every((s) => s.duration_s != null && s.start_s != null);
+    const total = tl.duration_s != null ? tl.duration_s : (timed ? segs.reduce((a, s) => Math.max(a, s.start_s + s.duration_s), 0) : null);
+    const rendered = opts.renderDone ? segs.length : (opts.renderedSegments != null ? opts.renderedSegments : (tl.rendered_segments != null ? tl.rendered_segments : 0));
+    const curIdx = opts.currentSegment;
+    const sceneName = opts.mode === 'video' ? 'Chapters' : 'Scenes';
+    const blocks = segs.map((s, i) => {
+      const w = timed && s.duration_s > 0 ? s.duration_s : 1;
+      let cls = 'tl-seg';
+      if (opts.mode === 'progress') {
+        if (i < rendered) cls += ' done';
+        else if (curIdx != null && i === curIdx) cls += ' now';
+      }
+      const label = `${i + 1}${s.label ? ' · ' + s.label : ''}`;
+      const tip = `${label}${timed ? ` · ${fmtClock(s.start_s)} to ${fmtClock(s.start_s + s.duration_s)}` : ''}`;
+      return `<div class="${cls}" data-i="${i}" style="flex:${w}" title="${esc(tip)}">${esc(label)}</div>`;
+    }).join('');
+    let wave;
+    if (Array.isArray(tl.waveform) && tl.waveform.length) {
+      const n = tl.waveform.length;
+      const bars = tl.waveform.map((v, i) => {
+        const h = Math.max(2, Math.min(100, (Number(v) || 0) * 100));
+        return `<rect x="${i}" y="${((100 - h) / 2).toFixed(1)}" width="0.72" height="${h.toFixed(1)}"/>`;
+      }).join('');
+      wave = `<svg class="tl-wave" viewBox="0 0 ${n} 100" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+    } else {
+      wave = `<span class="tl-none">${opts.mode === 'progress' ? 'Waveform appears after narration' : 'No waveform recorded'}</span>`;
+    }
+    let cues = '';
+    let cueCount = 0;
+    if (timed && total) {
+      for (const s of segs) {
+        (s.cues || []).forEach((c, k) => {
+          if (c == null) return;
+          cueCount++;
+          const at = ((s.start_s + c) / total) * 100;
+          const late = opts.lateCues && opts.lateCues.has(`${s.index}:${k}`);
+          cues += `<span class="tl-cue${late ? ' late' : ''}" style="left:${at.toFixed(3)}%" title="Segment ${s.index != null ? s.index + 1 : ''} cue ${k + 1} at ${fmtClock(s.start_s + c)}"></span>`;
+        });
+      }
+    } else {
+      cueCount = segs.reduce((a, s) => a + ((s.cues || []).length), 0);
+    }
+    const cuesLane = timed && total ? cues : `<span class="tl-none">${opts.mode === 'progress' ? 'Cue times come from narration' : 'Not recorded'}</span>`;
+    host.classList.toggle('seekable', !!opts.onSeek && timed && !!total);
     host.innerHTML = `
-      <div class="wrap nav-inner">
-        <a class="brand" href="/" aria-label="Chalkboard home">${ICONS.mark}<span class="brand-name">Chalkboard</span></a>
-        <nav class="nav-tabs" aria-label="Main">
-          ${tab('/', 'Generate', 'generate')}
-          ${tab('/library', 'Library', 'library')}
-        </nav>
-        <div class="nav-spacer"></div>
-        <div class="nav-actions">
-          <a class="status-chip" id="claude-status" href="https://status.claude.com" target="_blank" rel="noopener"
-             title="Checking Claude API status">
-            <span class="dot unknown" aria-hidden="true"></span><span class="status-label">Claude API</span>
-          </a>
-          <button class="icon-btn theme-toggle" id="theme-toggle" type="button">${ICONS.sun}${ICONS.moon}</button>
-          <button class="icon-btn" id="jobs-btn" type="button" aria-haspopup="true" aria-expanded="false"
-                  aria-controls="jobs-pop" aria-label="Recent jobs">${ICONS.jobs}<span class="jobs-badge" hidden></span></button>
-          <div class="popover" id="jobs-pop" hidden></div>
-        </div>
-      </div>`;
-
-    setTheme(currentTheme());
-    document.getElementById('theme-toggle').addEventListener('click', () =>
-      setTheme(currentTheme() === 'light' ? 'dark' : 'light'));
-
-    const btn = document.getElementById('jobs-btn');
-    const pop = document.getElementById('jobs-pop');
-    const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = pop.hidden;
-      pop.hidden = !open;
-      btn.setAttribute('aria-expanded', String(open));
-    });
-    pop.addEventListener('click', (e) => {
-      const dismiss = e.target.closest('[data-dismiss]');
-      if (dismiss) {
-        e.preventDefault();
-        e.stopPropagation();
-        removeJob(dismiss.dataset.dismiss);
-        renderJobs();
-        return;
-      }
-      const row = e.target.closest('a.job-row');
-      if (row && row.dataset.resume) {
-        // Move the job to the front so the generate page reconnects to it.
-        const jobs = getJobs();
-        const i = jobs.findIndex((j) => j.id === row.dataset.resume);
-        if (i > 0) { jobs.unshift(jobs.splice(i, 1)[0]); saveJobs(jobs); }
-      }
-    });
-    document.addEventListener('click', (e) => { if (!pop.hidden && !pop.contains(e.target)) close(); });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !pop.hidden) { close(); btn.focus(); }
-    });
-  }
-
-  function renderJobs() {
-    const pop = document.getElementById('jobs-pop');
-    const badge = document.querySelector('#jobs-btn .jobs-badge');
-    if (!pop) return;
-    const jobs = getJobs();
-    const running = jobs.filter(isActive);
-    const finished = jobs.filter((j) => !isActive(j));
-
-    let state = '';
-    if (running.length) state = 'running';
-    else if (finished.some((j) => j.status === 'failed')) state = 'failed';
-    else if (finished.length) state = 'completed';
-    badge.hidden = !state;
-    badge.className = `jobs-badge dot ${state}`;
-
-    let html = '';
-    if (running.length) {
-      html += '<div class="popover-head">In progress</div>';
-      for (const j of running) {
-        const stage = j.currentStage ? stageLabel(j.currentStage) : 'Starting';
-        html += `<a class="job-row" href="/" data-resume="${esc(j.id)}" title="${esc(j.topic)}">
-          <span class="dot running" aria-hidden="true"></span>
-          <span class="job-row-main"><span class="job-row-topic">${esc(j.topic)}</span>
-          <span class="job-row-sub">${esc(stage)}</span></span></a>`;
-      }
+      <div class="tl-track"><span class="tl-name">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
+      <div class="tl-track"><span class="tl-name">${opts.mode === 'video' ? 'Voice' : 'Narration'}</span><div class="tl-lane wave-lane">${wave}</div></div>
+      <div class="tl-track"><span class="tl-name">Cues</span><div class="tl-lane cues">${cuesLane}</div></div>
+      ${opts.onSeek && total ? '<div class="tl-headwrap"><div class="tl-head" style="left:0%"></div></div>' : ''}`;
+    if (opts.onSeek && timed && total) {
+      host.querySelectorAll('.tl-lane').forEach((lane) => lane.addEventListener('click', (e) => {
+        const r = lane.getBoundingClientRect();
+        opts.onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * total);
+      }));
     }
-    if (finished.length) {
-      html += '<div class="popover-head">Recent</div>';
-      for (const j of finished) {
-        const ok = j.status === 'completed';
-        const when = j.completedAt ? ', ' + fmtAgo(j.completedAt) : '';
-        html += `<a class="job-row" href="${ok ? '/library/' + encodeURIComponent(j.id) : '/'}"${ok ? '' : ` data-resume="${esc(j.id)}"`} title="${esc(j.topic)}">
-          <span class="dot ${ok ? 'completed' : 'failed'}" aria-hidden="true"></span>
-          <span class="job-row-main"><span class="job-row-topic">${esc(j.topic)}</span>
-          <span class="job-row-sub">${ok ? 'Finished' : 'Failed'}${esc(when)}</span></span>
-          <button class="icon-btn" type="button" data-dismiss="${esc(j.id)}" aria-label="Remove from list">${ICONS.close}</button></a>`;
-      }
-    }
-    pop.innerHTML = html || '<div class="popover-empty">No recent jobs. Videos you generate show up here.</div>';
-  }
-
-  // Poll running jobs so the menu stays current on every page.
-  let pollTimer = null;
-  function startPolling() {
-    if (!pollTimer) pollTimer = setTimeout(poll, POLL_MS);
-  }
-  async function poll() {
-    pollTimer = null;
-    for (const j of activeJobs()) {
-      try {
-        const r = await fetch(`/api/jobs/${encodeURIComponent(j.id)}`);
-        if (!r.ok) {
-          if (r.status === 404) { removeJob(j.id); renderJobs(); }
-          continue;
+    const head = host.querySelector('.tl-head');
+    return {
+      total, timed, segments: segs.length, cues: cueCount,
+      setTime(t) {
+        if (head && total) head.style.left = `${Math.max(0, Math.min(100, (t / total) * 100))}%`;
+        if (opts.mode === 'video' && timed) {
+          host.querySelectorAll('.tl-seg').forEach((el, i) => {
+            const s = segs[i];
+            el.classList.toggle('cur', t >= s.start_s && t < s.start_s + s.duration_s);
+          });
         }
-        const data = await r.json();
-        if (data.status === 'completed' || data.status === 'failed') {
-          updateJob(j.id, { status: data.status, completedAt: Date.now(), currentStage: null });
-          renderJobs();
-          continue;
-        }
-        const stage = currentStep(data.events, j.opts) || j.currentStage;
-        if (stage !== j.currentStage) { updateJob(j.id, { currentStage: stage }); renderJobs(); }
-      } catch { /* network blip: retry next tick */ }
-    }
-    if (activeJobs().length) pollTimer = setTimeout(poll, POLL_MS);
+      },
+    };
   }
 
-  // ── Claude API status chip ─────────────────────────────────────────────
-  const STATUS_LABELS = {
-    operational: 'Claude API operational',
-    degraded: 'Claude API degraded',
-    outage: 'Claude API outage',
-    unknown: 'Claude API status unknown',
-  };
-  const STATUS_SHORT = { operational: 'Claude API', degraded: 'Claude API degraded', outage: 'Claude API outage', unknown: 'Claude API' };
-
-  async function fetchClaudeStatus() {
-    const el = document.getElementById('claude-status');
-    if (!el) return;
-    try {
-      const r = await fetch('/api/claude-status');
-      if (!r.ok) throw new Error();
-      const data = await r.json();
-      const status = STATUS_LABELS[data.status] ? data.status : 'unknown';
-      el.querySelector('.dot').className = `dot ${status}`;
-      el.querySelector('.status-label').textContent = STATUS_SHORT[status];
-      const active = (data.incidents || []).filter((i) => i.status !== 'Resolved');
-      const title = active.length
-        ? STATUS_LABELS[status] + '\n' + active.map((i) => `${i.status}: ${i.title}`).join('\n')
-        : STATUS_LABELS[status];
-      el.title = title;
-      el.setAttribute('aria-label', title + '. Opens status.claude.com');
-    } catch {
-      el.title = STATUS_LABELS.unknown;
+  // ── Sidebar ────────────────────────────────────────────────────────────
+  const STATE_WORD = { ok: 'ok', warn: 'warning', down: 'down', unknown: 'unknown', degraded: 'degraded' };
+  function renderShell() {
+    const side = document.querySelector('nav.side');
+    if (!side) return;
+    const page = side.dataset.page;
+    const cur = (k) => (page === k ? ' aria-current="page"' : '');
+    side.innerHTML = `
+      <a class="brand" href="/library" aria-label="Chalkboard library"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Chalkboard</span></a>
+      <a class="btn-gen" href="/"${cur('generate')}>Generate video</a>
+      <div class="nav-links">
+        <a class="nav-link" href="/library"${cur('library')}>Library<span class="count" id="nav-lib"></span></a>
+        <a class="nav-link" href="/progress/"${cur('progress')}>In progress<span class="count" id="nav-run"></span></a>
+        <a class="nav-link" href="/status/"${cur('status')}>Status<span class="count" id="nav-status"></span></a>
+      </div>
+      <a class="box-card" href="/status/" id="box-card" aria-label="Render box status">
+        <span class="label">Render box</span>
+        <span class="box-line"><span class="dot unknown"></span><span class="faint">Checking</span></span>
+      </a>`;
+    refreshCounts();
+    refreshBox();
+    setInterval(refreshCounts, 15000);
+    setInterval(refreshBox, 60000);
+  }
+  let jobsCache = null;
+  async function getJobs(force) {
+    if (!force && jobsCache && Date.now() - jobsCache.at < 3000) return jobsCache.res;
+    const res = await getJSON('/api/jobs');
+    jobsCache = { at: Date.now(), res };
+    return res;
+  }
+  async function refreshCounts() {
+    const [lib, jobs] = await Promise.all([getJSON('/api/library?limit=1'), getJobs(true)]);
+    const l = document.getElementById('nav-lib');
+    if (l) { l.textContent = lib.ok && lib.data ? fmtInt(lib.data.total) : '?'; l.title = lib.ok ? 'Videos in the library' : missingWhy(lib, 'The library count'); }
+    const r = document.getElementById('nav-run');
+    if (r) {
+      if (jobs.ok && Array.isArray(jobs.data)) {
+        const n = jobs.data.filter((j) => j.status === 'running' || j.status === 'pending').length;
+        r.textContent = n ? String(n) : '';
+        r.classList.toggle('live', n > 0);
+        r.title = `${n} running or queued`;
+      } else { r.textContent = '?'; r.title = missingWhy(jobs, 'The job list'); }
     }
   }
-
-  // ── Init ───────────────────────────────────────────────────────────────
-  function init() {
-    renderNav();
-    renderJobs();
-    fetchClaudeStatus();
-    setInterval(fetchClaudeStatus, 300000);
-    if (activeJobs().length) startPolling();
+  let statusCache = null;
+  async function getStatus(force) {
+    if (!force && statusCache && Date.now() - statusCache.at < 10000) return statusCache.res;
+    const res = await getJSON('/api/status');
+    statusCache = { at: Date.now(), res };
+    return res;
+  }
+  function pickCheck(checks, ...keys) {
+    for (const k of keys) {
+      const c = checks.find((x) => x.id === k) || checks.find((x) => new RegExp(k, 'i').test(x.id || '') || new RegExp(k, 'i').test(x.name || ''));
+      if (c) return c;
+    }
+    return null;
+  }
+  async function refreshBox() {
+    const card = document.getElementById('box-card');
+    if (!card) return;
+    const res = await getStatus(true);
+    const ns = document.getElementById('nav-status');
+    if (!res.ok || !res.data) {
+      card.innerHTML = `<span class="label">Render box</span>
+        <span class="box-line"><span class="dot unknown"></span>Status unknown</span>
+        <span class="box-sub">${esc(missingWhy(res, 'The status check'))}</span>`;
+      if (ns) ns.textContent = '';
+      return;
+    }
+    const d = res.data;
+    const checks = Array.isArray(d.checks) ? d.checks : [];
+    const gpu = pickCheck(checks, 'gpu', 'renderer', 'render');
+    const voice = pickCheck(checks, 'elevenlabs');
+    const jobs = pickCheck(checks, 'jobs');
+    const overall = STATE_WORD[d.overall] ? d.overall : 'unknown';
+    const lineState = gpu ? (STATE_WORD[gpu.state] ? gpu.state : 'unknown') : overall;
+    const line = gpu ? (gpu.summary || gpu.name) : `Overall ${STATE_WORD[overall]}`;
+    const subs = [jobs, voice].filter(Boolean).map((c) => `<span class="box-sub">${esc(c.name)} · ${esc(c.summary || STATE_WORD[c.state] || 'unknown')}</span>`).join('');
+    const checked = parseTs(d.checked_at);
+    card.innerHTML = `<span class="label">Render box</span>
+      <span class="box-line"><span class="dot ${lineState}"></span><span>${esc(line)}</span></span>
+      ${subs}
+      <span class="box-sub faint">${checked ? 'checked ' + esc(fmtAgo(checked)) : 'check time unknown'}</span>`;
+    card.title = `Overall: ${STATE_WORD[overall]}`;
+    if (ns) {
+      const bad = checks.filter((c) => c.state === 'warn' || c.state === 'down').length;
+      ns.textContent = bad ? String(bad) : '';
+      ns.title = bad ? `${bad} check${bad > 1 ? 's' : ''} need attention` : '';
+    }
   }
 
   window.CB = {
-    esc, fmtDuration, fmtClock, fmtDate, fmtWhen, fmtAgo, fmtBytes, fileUrl, thumbInner,
-    setMathText, hasMath, loadKatex, mathHtml,
-    stageLabel, nextStage, buildSteps, upcoming, currentStep, explainError,
-    getMeta, narratorLabel, resLabel, ICONS,
+    esc, cap, fmtClock, fmtDuration, fmtSpan, fmtAgo, fmtStamp, fmtBytes, fmtInt, fmtUsd, fmtSec, parseTs, unknownHtml,
+    resLabel, resFull, fileUrl, getJSON, missingWhy, thumbInner, setMathText, hasMath, loadKatex, mathHtml,
+    explainError, errorCard, getVoices, getMeta, narratorName, buildWorkbench, renderTimeline, shortModel,
+    getJobs, getStatus, STATE_WORD, refreshCounts,
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderShell);
+  else renderShell();
 })();
