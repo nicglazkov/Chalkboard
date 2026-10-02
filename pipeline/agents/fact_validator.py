@@ -1,4 +1,5 @@
 # pipeline/agents/fact_validator.py
+from pipeline.cues import strip_cues
 from pipeline.llm import call_json
 from pipeline.retry import api_call_with_retry, TimeoutExhausted, TIMEOUT_FACT_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
@@ -27,7 +28,7 @@ async def fact_validator(state: PipelineState, client=None) -> dict:
     user_msg = (
         f"Review the factual accuracy of this educational script.\n"
         f"Instructions: {instruction}\n\n"
-        f"Script:\n{state['script']}"
+        f"Script:\n{strip_cues(state['script'])}"
     )
 
     def _call():
