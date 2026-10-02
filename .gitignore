@@ -13,7 +13,8 @@ __pycache__/
 *.DS_Store*
 test_output.txt
 docs/superpowers/
-.superpowers/media/
+.superpowers/
+media/
 docker/media/
 bench/
 .venv/
