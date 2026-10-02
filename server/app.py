@@ -1,6 +1,7 @@
 # server/app.py
 from __future__ import annotations
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI
@@ -82,13 +83,13 @@ def create_app(
     if library_store is None:
         library_store = SQLiteLibraryStore("library.db")
 
-    app = FastAPI(title="Chalkboard API", version="0.1.0")
-
-    @app.on_event("startup")
-    async def startup():
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
         await library_store.init()
-        output_dir = Path(OUTPUT_DIR).resolve()
-        await _backfill(library_store, output_dir)
+        await _backfill(library_store, Path(OUTPUT_DIR).resolve())
+        yield
+
+    app = FastAPI(title="Chalkboard API", version="0.1.0", lifespan=lifespan)
 
     # API routes (must come before StaticFiles mount)
     app.include_router(make_router(store, library_store))
