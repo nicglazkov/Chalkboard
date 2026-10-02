@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=1" />
-  <script src="/app.js?v=1"></script>
+  <link rel="stylesheet" href="/app.css?v=2" />
+  <script src="/app.js?v=2"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -47,7 +47,7 @@
 
   <script>
   (function () {
-    const { esc, fmtDuration, fmtDate, thumbInner, resLabel } = window.CB;
+    const { esc, fmtDuration, fmtWhen, thumbInner, resLabel } = window.CB;
     const $ = (id) => document.getElementById(id);
     const grid = $('grid');
     const searchEl = $('search');
@@ -86,7 +86,7 @@
           <div class="thumb">${thumbInner(v)}${dur ? `<span class="duration">${dur}</span>` : ''}</div>
           <h2 class="card-title">${esc(title)}</h2>
         </a>
-        <p class="card-meta"><span>${esc(fmtDate(v.created_at))}</span><span class="card-q">${esc(resLabel(v.quality))}</span></p>
+        <p class="card-meta"><span>${esc(fmtWhen(v.created_at))}</span><span class="card-q">${esc(resLabel(v.quality))}</span></p>
         <button class="icon-btn card-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Options for ${esc(title)}">${MORE}</button>
         <div class="menu" hidden>
           <a href="/library/${encodeURIComponent(v.run_id)}">Open</a>
@@ -116,8 +116,10 @@
 
       const params = new URLSearchParams({ q: query, sort, limit: perPage, offset: (page - 1) * perPage });
       try {
-        const res = await fetch(`/api/library?${params}`);
-        if (!res.ok) throw new Error(`The server answered HTTP ${res.status}.`);
+        let res;
+        try { res = await fetch(`/api/library?${params}`); }
+        catch { throw new Error('Could not reach the server. Check that it is running.'); }
+        if (!res.ok) throw new Error(`The server answered HTTP ${res.status}. The server log has the details.`);
         const data = await res.json();
         if (my !== reqId) return;
         total = data.total;
@@ -142,7 +144,7 @@
       } catch (err) {
         if (my !== reqId) return;
         totalLabel.innerHTML = '&nbsp;';
-        grid.innerHTML = stateHtml(ICON_WARN, 'Could not load the library', esc(err.message || 'Network error.') + ' Check that the server is running.',
+        grid.innerHTML = stateHtml(ICON_WARN, 'Could not load the library', esc(err.message || 'Could not reach the server.'),
           '<button class="btn" type="button" id="retry">Try again</button>');
         $('retry').addEventListener('click', load);
         pager.hidden = true;

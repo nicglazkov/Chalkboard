@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=1" />
-  <script src="/app.js?v=1"></script>
+  <link rel="stylesheet" href="/app.css?v=2" />
+  <script src="/app.js?v=2"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -94,7 +94,7 @@
 
   <script>
   (function () {
-    const { esc, fmtDuration, fmtClock, fmtDate, fileUrl, thumbInner, setMathText, resLabel } = window.CB;
+    const { esc, fmtDuration, fmtClock, fmtDate, fmtWhen, fileUrl, thumbInner, setMathText, resLabel, getMeta, narratorLabel } = window.CB;
     const $ = (id) => document.getElementById(id);
     const runId = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
 
@@ -107,6 +107,8 @@
       'quiz.json': 'Quiz',
       'chapters.txt': 'Chapters',
       'voiceover.wav': 'Voiceover',
+      'layout_report.json': 'Layout report',
+      'qa_report.json': 'QA report',
     };
     const FILE_ORDER = ['captions.srt', 'script.txt', 'quiz.json', 'chapters.txt', 'segments.json', 'manifest.json', 'scene.py'];
     const cap = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : s);
@@ -172,19 +174,19 @@
       }).join('');
     }
 
-    function renderParams(v) {
+    function renderParams(v, meta) {
       const rows = [
+        ['Narrator', v.narrator ? narratorLabel(v.narrator, meta) : 'Not recorded'],
+        ['Resolution', resLabel(v.quality)],
         ['Effort', cap(v.effort)],
         ['Audience', cap(v.audience)],
         ['Tone', cap(v.tone)],
         ['Theme', cap(v.theme)],
         ['Template', v.template ? cap(v.template) : 'None'],
         ['Speed', v.speed != null ? `${v.speed}x` : ''],
-        ['Resolution', resLabel(v.quality)],
-        ['Length', fmtDuration(v.duration_sec)],
       ];
       $('params-grid').innerHTML = rows.map(([k, val]) =>
-        `<div><dt>${k}</dt><dd>${esc(val || 'Unknown')}</dd></div>`).join('');
+        `<div><dt>${k}</dt><dd${val ? '' : ' class="muted"'}>${esc(val || 'Not recorded')}</dd></div>`).join('');
       const p = new URLSearchParams({
         topic: v.topic,
         effort: v.effort || 'medium',
@@ -195,6 +197,7 @@
       });
       if (v.template) p.set('template', v.template);
       if (['low', 'medium', 'high', '4k'].includes(v.quality)) p.set('quality', v.quality);
+      if (v.narrator) p.set('narrator', v.narrator);
       $('regen-btn').href = `/?${p}`;
     }
 
@@ -223,6 +226,10 @@
           box.appendChild(b);
         });
         if (!video) box.classList.add('no-seek');
+        const fade = () => box.classList.toggle('more-below', box.scrollTop + box.clientHeight < box.scrollHeight - 4);
+        box.addEventListener('scroll', fade, { passive: true });
+        requestAnimationFrame(fade);
+        addEventListener('resize', fade, { passive: true });
         box.addEventListener('click', (e) => {
           const row = e.target.closest('.tx-row');
           if (!row || !video) return;
@@ -348,18 +355,32 @@
       });
     }
 
+    // Related: other videos sharing a distinctive word with this one.
+    const STOP = new Set(['about', 'after', 'their', 'there', 'these', 'thing', 'through', 'where', 'which', 'while', 'works', 'explained', 'understanding', 'introduction', 'always', 'every', 'never', 'really', 'exactly', 'because', 'using', 'number', 'numbers']);
     async function renderRelated(v) {
       try {
-        const words = v.topic.split(/\s+/).slice(0, 3).join(' ');
-        const r = await fetch(`/api/library?q=${encodeURIComponent(words)}&limit=5&sort=newest`);
-        if (!r.ok) return;
-        const others = (await r.json()).videos.filter((x) => x.run_id !== v.run_id).slice(0, 4);
+        const words = String(`${v.title || ''} ${v.topic || ''}`).toLowerCase().match(/[a-z][a-z'-]{4,}/g) || [];
+        const picks = [...new Set(words.map((w) => w.replace(/'s$/, '')).filter((w) => !STOP.has(w)))]
+          .sort((a, b) => b.length - a.length).slice(0, 3);
+        if (!picks.length) return;
+        const seen = new Set([v.run_id]);
+        const others = [];
+        for (const w of picks) {
+          const r = await fetch(`/api/library?q=${encodeURIComponent(w)}&limit=6&sort=newest`);
+          if (!r.ok) continue;
+          for (const x of (await r.json()).videos) {
+            if (seen.has(x.run_id)) continue;
+            seen.add(x.run_id);
+            others.push(x);
+          }
+          if (others.length >= 4) break;
+        }
         if (!others.length) return;
-        $('related-list').innerHTML = others.map((x) => `
+        $('related-list').innerHTML = others.slice(0, 4).map((x) => `
           <a class="rel" href="/library/${encodeURIComponent(x.run_id)}">
             <div class="thumb">${thumbInner(x)}</div>
             <div class="rel-text"><span class="rel-title">${esc(x.title || x.topic)}</span>
-            <span class="rel-date">${esc(fmtDate(x.created_at))}</span></div>
+            <span class="rel-date">${esc([fmtDuration(x.duration_sec), fmtWhen(x.created_at)].filter(Boolean).join(', '))}</span></div>
           </a>`).join('');
         $('related-panel').hidden = false;
       } catch {}
@@ -403,7 +424,8 @@
       $('loading').remove();
       $('content').hidden = false;
       setMathText($('video-title'), title);
-      if (v.title && v.topic && v.title !== v.topic) {
+      const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      if (v.title && v.topic && norm(v.title) !== norm(v.topic)) {
         $('video-topic').hidden = false;
         setMathText($('video-topic'), v.topic);
       }
@@ -412,7 +434,8 @@
 
       const video = renderPlayer(v, files);
       renderFiles(v, files);
-      renderParams(v);
+      renderParams(v, null);
+      getMeta().then((meta) => { if (meta && v.narrator) renderParams(v, meta); });
       const [hasTx, hasQuiz] = await Promise.all([renderTranscript(v, files, video), renderQuiz(v, files)]);
       setupTabs(hasTx, hasQuiz);
       renderRelated(v);

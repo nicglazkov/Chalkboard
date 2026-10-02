@@ -38,6 +38,18 @@
     return d.toLocaleDateString(undefined, opts);
   }
 
+  // Short date for lists: Today, Yesterday, then "Oct 2".
+  function fmtWhen(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return fmtDate(iso);
+  }
+
   function fmtAgo(ts) {
     const sec = Math.floor((Date.now() - ts) / 1000);
     if (sec < 60) return 'just now';
@@ -149,8 +161,10 @@
   function resLabel(q) { return RES[q] || (q ? String(q) : ''); }
 
   // ── Pipeline stages ────────────────────────────────────────────────────
-  // SSE events arrive after a node FINISHES, so the row for node X is marked
-  // done when its event lands and the next node is predicted from the update.
+  // Pipeline nodes emit one event when they FINISH, so the step for node X is
+  // marked done when its event lands and the next node is predicted from the
+  // update. After the pipeline, the server reports render / visual_qa / quiz
+  // as pseudo-nodes with {status: running|done|failed}.
   const STAGE_LABELS = {
     init: 'Preparing',
     research_agent: 'Researching the topic',
@@ -161,18 +175,27 @@
     layout_checker: 'Checking the layout',
     render_trigger: 'Recording the voiceover',
     escalate_to_user: 'Stopped after repeated retries',
-    _render: 'Rendering the video',
-    _start: 'Starting',
+    render: 'Rendering the video',
+    visual_qa: 'Checking the rendered frames',
+    quiz: 'Writing the quiz',
   };
+  const PSEUDO = new Set(['render', 'visual_qa', 'quiz']);
 
   function stageLabel(node) {
     return STAGE_LABELS[node] || String(node || '').replace(/_/g, ' ');
   }
 
-  function nextStage(node, updates) {
+  // opts (optional, known only for jobs started in this browser):
+  // {effort, qa: bool, quiz: bool}
+  function afterRender(opts) {
+    if (!opts) return null;
+    if (opts.qa) return 'visual_qa';
+    return opts.quiz ? 'quiz' : null;
+  }
+  function nextStage(node, updates, opts) {
     const u = updates || {};
     switch (node) {
-      case undefined: case null: return '_start';
+      case undefined: case null: return 'init';
       case 'init': return u.effort_level === 'high' ? 'research_agent' : 'script_agent';
       case 'research_agent': return 'script_agent';
       case 'script_agent': return 'fact_validator';
@@ -180,9 +203,118 @@
       case 'manim_agent': return 'code_validator';
       case 'code_validator': return u.code_feedback ? 'manim_agent' : 'layout_checker';
       case 'layout_checker': return u.code_feedback ? 'manim_agent' : 'render_trigger';
-      case 'render_trigger': return '_render';
+      case 'render_trigger': return 'render';
+      case 'render': return u.status === 'done' ? afterRender(opts) : null;
+      case 'visual_qa': return u.status === 'done' && opts && opts.quiz ? 'quiz' : null;
       default: return null;
     }
+  }
+
+  // The happy path still ahead after `node`, shown as faded upcoming steps.
+  function upcoming(node, opts) {
+    const out = [];
+    const o = opts || {};
+    let n = node;
+    for (let guard = 0; guard < 12; guard++) {
+      let next;
+      if (n == null) next = 'init';
+      else if (n === 'init') next = o.effort === 'high' ? 'research_agent' : 'script_agent';
+      else if (PSEUDO.has(n)) next = nextStage(n, { status: 'done' }, o);
+      else next = nextStage(n, {}, o);
+      if (!next) break;
+      out.push(next);
+      n = next;
+    }
+    return out;
+  }
+
+  // Turn a job's event list into display steps:
+  // [{node, status: 'done'|'running'|'failed', attempt}]
+  function buildSteps(events, opts) {
+    const steps = [];
+    const counts = {};
+    const push = (node, status) => {
+      counts[node] = (counts[node] || 0) + 1;
+      const s = { node, status, attempt: counts[node] };
+      steps.push(s);
+      return s;
+    };
+    const last = () => steps[steps.length - 1];
+    // Re-point a predicted running step at the node that actually ran.
+    const claim = (node, status) => {
+      const l = last();
+      if (l && l.status === 'running') {
+        if (l.node !== node) {
+          counts[l.node]--;
+          steps.pop();
+          return push(node, status);
+        }
+        l.status = status;
+        return l;
+      }
+      return push(node, status);
+    };
+    for (const ev of events || []) {
+      if (!ev || ev.done || !ev.node) continue;
+      const node = ev.node;
+      const u = ev.updates || {};
+      if (PSEUDO.has(node)) {
+        if (u.status === 'running') { claim(node, 'running'); continue; }
+        claim(node, u.status === 'failed' ? 'failed' : 'done');
+      } else {
+        claim(node, 'done');
+      }
+      const next = nextStage(node, u, opts);
+      if (next) push(next, 'running');
+    }
+    if (!steps.length) push('init', 'running');
+    return steps;
+  }
+
+  function currentStep(events, opts) {
+    const steps = buildSteps(events, opts);
+    const run = steps.filter((s) => s.status === 'running').pop();
+    return run ? run.node : null;
+  }
+
+  // ── Errors: a short human line first, the raw detail on request ─────────
+  function explainError(raw) {
+    const s = String(raw || '');
+    const low = s.toLowerCase();
+    const has = (...xs) => xs.some((x) => low.includes(x));
+    if (!s.trim()) return { title: 'The job failed', body: 'No error message was recorded. The server log has the details.' };
+    if (has('elevenlabs', 'quota_exceeded')) return { title: 'The voiceover failed', body: 'ElevenLabs refused the request. Try again, or pick the Kokoro narrator.' };
+    if (has('error code: 529', 'overloaded')) return { title: 'Claude was overloaded', body: 'Anthropic is busy right now. Try again in a minute.' };
+    if (has('rate_limit', 'rate limit', 'error code: 429')) return { title: 'Hit the Claude rate limit', body: 'Too many requests in a short time. Wait a minute, then try again.' };
+    if (has('credit balance', 'billing')) return { title: 'The Anthropic account is out of credits', body: 'Add credits in the Anthropic console, then try again.' };
+    if (has('authentication_error', 'invalid x-api-key', 'error code: 401')) return { title: 'Claude rejected the API key', body: 'Check ANTHROPIC_API_KEY in the server .env, then restart the server.' };
+    if (has('timed out', 'timeout', 'connection error', 'connecterror', 'name resolution')) return { title: 'Could not reach Claude', body: 'The request timed out or the network dropped. Try again.' };
+    if (has('api_error', 'internal server error', 'error code: 500')) return { title: 'Claude had an internal error', body: 'This is usually temporary. Try again in a minute.' };
+    if (has('render failed')) return { title: 'The video did not render', body: 'The script, animation code and voiceover were saved. The server log has the Manim error.' };
+    if (has('code_validator failed', 'layout_checker failed')) return { title: 'The animation code kept failing its checks', body: 'Try again, or reword the topic to be more specific.' };
+    if (has('fact_validator failed')) return { title: 'The script kept failing the fact check', body: 'Try again, or reword the topic to be more specific.' };
+    if (has('pipeline did not complete')) return { title: 'The pipeline stopped before rendering', body: 'It gave up after repeated retries. Try again, or reword the topic.' };
+    if (has('job not found', 'job is gone', 'server may have restarted')) return { title: 'Lost track of the job', body: 'The server may have restarted. Check the library in case it finished.' };
+    const first = s.split('\n')[0];
+    return { title: 'The job failed', body: first.length > 160 ? first.slice(0, 157) + '...' : first };
+  }
+
+  // ── Server metadata (defaults, narrators) ──────────────────────────────
+  let metaPromise = null;
+  function getMeta() {
+    if (!metaPromise) {
+      metaPromise = fetch('/api/meta')
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+    }
+    return metaPromise;
+  }
+  function narratorLabel(id, meta) {
+    if (!id) return '';
+    const n = meta && (meta.narrators || []).find((x) => x.id === id);
+    if (n) return n.label;
+    const s = String(id);
+    return s === 'elevenlabs' ? 'ElevenLabs' : s === 'openai' ? 'OpenAI' : s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   // ── Theme ──────────────────────────────────────────────────────────────
@@ -226,8 +358,8 @@
   function activeJobs() { return getJobs().filter(isActive); }
 
   window.jobStatus = {
-    set(id, topic) {
-      addJob({ id, topic, status: 'running', startedAt: Date.now(), currentStage: null });
+    set(id, topic, opts) {
+      addJob({ id, topic, opts: opts || null, status: 'running', startedAt: Date.now(), currentStage: null });
       renderJobs();
       startPolling();
     },
@@ -365,8 +497,7 @@
           renderJobs();
           continue;
         }
-        const last = (data.events || []).slice(-1)[0];
-        const stage = last ? nextStage(last.node, last.updates) || last.node : j.currentStage;
+        const stage = currentStep(data.events, j.opts) || j.currentStage;
         if (stage !== j.currentStage) { updateJob(j.id, { currentStage: stage }); renderJobs(); }
       } catch { /* network blip: retry next tick */ }
     }
@@ -413,9 +544,10 @@
   }
 
   window.CB = {
-    esc, fmtDuration, fmtClock, fmtDate, fmtAgo, fmtBytes, fileUrl, thumbInner,
+    esc, fmtDuration, fmtClock, fmtDate, fmtWhen, fmtAgo, fmtBytes, fileUrl, thumbInner,
     setMathText, hasMath, loadKatex, mathHtml,
-    stageLabel, nextStage, resLabel, ICONS,
+    stageLabel, nextStage, buildSteps, upcoming, currentStep, explainError,
+    getMeta, narratorLabel, resLabel, ICONS,
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

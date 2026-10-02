@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=1" />
-  <script src="/app.js?v=1"></script>
+  <link rel="stylesheet" href="/app.css?v=2" />
+  <script src="/app.js?v=2"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -37,7 +37,14 @@
 
         <div class="alert" id="run-error" role="alert" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
-          <div><p class="alert-title" id="run-error-title">The job failed</p><p class="alert-body" id="run-error-body"></p></div>
+          <div class="alert-main">
+            <p class="alert-title" id="run-error-title">The job failed</p>
+            <p class="alert-body" id="run-error-body"></p>
+            <details class="alert-raw" id="run-error-raw" hidden>
+              <summary>Error details</summary>
+              <pre id="run-error-raw-text"></pre>
+            </details>
+          </div>
         </div>
 
         <div class="run-actions" id="completion-card" hidden>
@@ -179,25 +186,20 @@
               <div class="section-body">
                 <fieldset class="field">
                   <legend class="field-head"><span class="label">Resolution</span>
-                    <button type="button" class="help" aria-label="About resolution" data-tip="Render size and frame rate: 480p at 15 fps, 720p at 30, 1080p at 60, 4K at 60. Higher takes longer to render. Default uses the server setting.">?</button></legend>
-                  <div class="seg">
-                    <label><input type="radio" name="quality" value="" checked /><span>Default</span></label>
+                    <button type="button" class="help" aria-label="About resolution" data-tip="Render size and frame rate: 480p at 15 fps, 720p at 30, 1080p at 60, 4K at 60. Higher takes longer to render.">?</button><span class="field-default" id="quality-default"></span></legend>
+                  <div class="seg" id="quality-seg">
                     <label><input type="radio" name="quality" value="low" /><span>480p</span></label>
                     <label><input type="radio" name="quality" value="medium" /><span>720p</span></label>
-                    <label><input type="radio" name="quality" value="high" /><span>1080p</span></label>
+                    <label><input type="radio" name="quality" value="high" checked /><span>1080p</span></label>
                     <label><input type="radio" name="quality" value="4k" /><span>4K</span></label>
                   </div>
                 </fieldset>
                 <div class="field-grid">
                   <div class="field">
                     <div class="field-head"><label class="label" for="narrator">Narrator</label>
-                      <button type="button" class="help" aria-label="About narrators" data-tip="The voice. Aria and Milo are ElevenLabs voices (need an ElevenLabs key on the server). Kokoro is free and runs locally. Default uses the server setting.">?</button></div>
+                      <button type="button" class="help" aria-label="About narrators" data-tip="The voice. Aria and Milo are ElevenLabs voices, Alloy is OpenAI; both need an API key on the server. Kokoro is free and runs locally.">?</button><span class="field-default" id="narrator-default"></span></div>
                     <select id="narrator" name="narrator" class="select">
-                      <option value="">Default</option>
-                      <option value="aria">Aria: bright, a little nerdy</option>
-                      <option value="milo">Milo: earnest male</option>
-                      <option value="kokoro">Kokoro: free, local</option>
-                      <option value="alloy">Alloy: OpenAI</option>
+                      <option value="">Server default</option>
                     </select>
                   </div>
                   <div class="field">
@@ -205,16 +207,16 @@
                       <button type="button" class="help" aria-label="About narration speed" data-tip="1.0 is normal; 1.25 talks a little faster.">?</button></div>
                     <input type="number" id="speed" name="speed" class="input" value="1.0" min="0.1" max="4.0" step="0.05" inputmode="decimal" />
                   </div>
-                  <fieldset class="field">
-                    <legend class="field-head"><span class="label">Visual QA</span>
-                      <button type="button" class="help" aria-label="About visual QA" data-tip="After rendering, Claude looks at frames for visual mistakes. Normal checks about 10 frames, high about 20. Off saves time.">?</button></legend>
-                    <div class="seg">
-                      <label><input type="radio" name="qa_density" value="zero" /><span>Off</span></label>
-                      <label><input type="radio" name="qa_density" value="normal" checked /><span>Normal</span></label>
-                      <label><input type="radio" name="qa_density" value="high" /><span>High</span></label>
-                    </div>
-                  </fieldset>
                 </div>
+                <fieldset class="field">
+                  <legend class="field-head"><span class="label">Visual QA</span>
+                    <button type="button" class="help" aria-label="About visual QA" data-tip="After rendering, Claude looks at frames for visual mistakes and fixes them. Normal checks about 10 frames, high about 20. Off is fastest.">?</button></legend>
+                  <div class="seg">
+                    <label><input type="radio" name="qa_density" value="zero" /><span>Off</span></label>
+                    <label><input type="radio" name="qa_density" value="normal" checked /><span>Normal</span></label>
+                    <label><input type="radio" name="qa_density" value="high" /><span>High</span></label>
+                  </div>
+                </fieldset>
                 <div class="checks">
                   <label class="check"><input type="checkbox" id="burn-captions" name="burn_captions" /> Burn captions into the video
                     <button type="button" class="help" aria-label="About burned captions" data-tip="Draws subtitles into the video frames. Needs a re-encode, so rendering takes a bit longer.">?</button></label>
@@ -238,7 +240,7 @@
 
   <script>
   (function () {
-    const { esc, fmtBytes, fmtClock, stageLabel, nextStage, fileUrl } = window.CB;
+    const { esc, fmtBytes, fmtClock, stageLabel, buildSteps, upcoming, explainError, fileUrl, getMeta, narratorLabel, resLabel } = window.CB;
     const $ = (id) => document.getElementById(id);
 
     const DOWNLOADABLE = [
@@ -282,7 +284,8 @@
         t.value ? t.options[t.selectedIndex].text + ' template' : 'No template'].join(', ');
       const q = form.querySelector('input[name="quality"]:checked');
       const nar = form.elements.narrator;
-      const out = [q && q.value ? q.nextElementSibling.textContent : 'Default resolution', nar.value ? nar.options[nar.selectedIndex].text.split(':')[0] : 'Default voice', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
+      const opt = nar.options[nar.selectedIndex];
+      const out = [q ? q.nextElementSibling.textContent : 'Default resolution', opt ? opt.dataset.short || opt.text : 'Default voice', `${parseFloat(val('speed')) || 1}x speed`, val('qa_density') === 'zero' ? 'QA off' : `QA ${val('qa_density')}`];
       if ($('burn-captions').checked) out.push('burned captions');
       if ($('quiz').checked) out.push('quiz');
       $('output-sum').textContent = out.join(', ');
@@ -407,49 +410,67 @@
     // ── Progress state ─────────────────────────────────────────────────────
     let running = false;
     let currentJobId = null;
-    let handled = 0;          // events from job.events already rendered
-    let current = null;       // the in-progress row
-    let counts = {};          // node -> times seen (for retries)
+    let jobOpts = null;       // {effort, qa, quiz} when known (jobs started here)
+    let events = [];          // the job's events so far
+    let finalStatus = null;   // 'completed' | 'failed' once finished
     let es = null;
     let finalized = false;
     let startedAt = 0;
     let clockTimer = null;
+    let liveTiming = false;   // false while replaying a backlog (reconnect)
+    let times = {};           // "index:node" -> {t0, t1}, observed live
 
     const ICON_DONE = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const ICON_FAIL = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
-    function setRow(li, node, status, attempt) {
-      li.className = `stage ${status}`;
-      li.dataset.node = node;
-      const label = stageLabel(node) + (attempt > 1 ? ` (attempt ${attempt})` : '');
-      const sr = status === 'done' ? 'done' : status === 'failed' ? 'failed' : 'in progress';
-      li.innerHTML = `<span class="stage-mark">${status === 'done' ? ICON_DONE : status === 'failed' ? ICON_FAIL : ''}</span>
-        <span class="stage-name">${esc(label)}</span><span class="sr-only">, ${sr}</span>`;
-    }
-    function newRow() {
-      const li = document.createElement('li');
-      stagesList.appendChild(li);
-      return li;
-    }
-
-    function handleEvent(ev) {
-      if (!ev || ev.done || !ev.node) return;
-      const node = ev.node;
-      const u = ev.updates || {};
-      counts[node] = (counts[node] || 0) + 1;
-      const failed = u.status === 'failed';
-      setRow(current || newRow(), node, failed ? 'failed' : 'done', counts[node]);
-      current = null;
-      const next = failed ? null : nextStage(node, u);
-      if (next) {
-        current = newRow();
-        setRow(current, next, 'running', (counts[next] || 0) + 1);
-        runStatus.textContent = stageLabel(next);
+    function renderStages() {
+      const steps = buildSteps(events, jobOpts).map((x) => ({ ...x }));
+      if (finalStatus) {
+        const lastRun = steps.map((x) => x.status).lastIndexOf('running');
+        steps.forEach((x, i) => {
+          if (x.status !== 'running') return;
+          x.status = finalStatus === 'failed' && i === lastRun ? 'failed' : 'done';
+        });
+        // Drop a trailing predicted step that never ran.
+        if (finalStatus === 'completed' && steps.length > 1 && events.length && !events.some((e) => e.node === steps[steps.length - 1].node)) steps.pop();
       }
-      if (currentJobId) window.jobStatus.updateStage(currentJobId, next || node);
+      steps.forEach((x) => { if (x.node === 'escalate_to_user') x.status = 'failed'; });
+      const now = Date.now();
+      steps.forEach((x, i) => {
+        const k = `${i}:${x.node}`;
+        const t = times[k];
+        if (x.status === 'running' && !t && liveTiming) times[k] = { t0: now };
+        else if (x.status !== 'running' && t && !t.t1) t.t1 = now;
+      });
+      const lastNode = steps[steps.length - 1].node;
+      const pending = finalStatus ? [] : upcoming(lastNode, jobOpts);
+
+      const row = (x, i) => {
+        const t = times[`${i}:${x.node}`];
+        const label = stageLabel(x.node) + (x.attempt > 1 ? ` (attempt ${x.attempt})` : '');
+        const sr = { done: 'done', failed: 'failed', running: 'in progress' }[x.status];
+        let time = '';
+        if (t && x.status === 'running') time = fmtClock((now - t.t0) / 1000);
+        else if (t && t.t1 && t.t1 - t.t0 >= 1000) time = fmtClock((t.t1 - t.t0) / 1000);
+        return `<li class="stage ${x.status}"${x.status === 'running' ? ' aria-current="step"' : ''}>
+          <span class="stage-mark">${x.status === 'done' ? ICON_DONE : x.status === 'failed' ? ICON_FAIL : ''}</span>
+          <span class="stage-name">${esc(label)}<span class="sr-only">, ${sr}</span></span>
+          <span class="stage-time" data-k="${i}:${esc(x.node)}">${time}</span></li>`;
+      };
+      stagesList.innerHTML = steps.map(row).join('') + pending.map((n) =>
+        `<li class="stage pending"><span class="stage-mark"></span><span class="stage-name">${esc(stageLabel(n))}<span class="sr-only">, not started</span></span><span class="stage-time"></span></li>`).join('');
+
+      const cur = steps.filter((x) => x.status === 'running').pop();
+      if (!finalStatus) runStatus.textContent = cur ? stageLabel(cur.node) : 'Finishing up';
+      if (currentJobId && !finalStatus) window.jobStatus.updateStage(currentJobId, cur ? cur.node : null);
     }
 
-    function tick() { runClock.textContent = fmtClock((Date.now() - startedAt) / 1000); }
+    function tick() {
+      runClock.textContent = fmtClock((Date.now() - startedAt) / 1000);
+      const el = stagesList.querySelector('.stage.running .stage-time');
+      const t = el && times[el.dataset.k];
+      if (t) el.textContent = fmtClock((Date.now() - t.t0) / 1000);
+    }
 
     function resetUI() {
       hideError();
@@ -457,15 +478,17 @@
       clearInterval(clockTimer);
       running = false;
       finalized = false;
+      finalStatus = null;
       currentJobId = null;
-      handled = 0;
-      current = null;
-      counts = {};
+      jobOpts = null;
+      events = [];
+      times = {};
       appBody.classList.remove('is-active');
       progressPanel.hidden = true;
       progressPanel.classList.remove('is-done', 'is-failed');
       resultBox.hidden = true;
       resultVideo.removeAttribute('src');
+      resultVideo.removeAttribute('poster');
       resultVideo.innerHTML = '';
       resultVideo.load();
       downloadsPanel.hidden = true;
@@ -478,9 +501,11 @@
       submitBtn.textContent = 'Generate video';
     }
 
-    function beginRun(jobId, topic, since) {
+    function beginRun(jobId, topic, since, opts, live) {
       running = true;
       currentJobId = jobId;
+      jobOpts = opts || null;
+      liveTiming = !!live;
       startedAt = since || Date.now();
       $('run-topic').textContent = topic;
       runStatus.textContent = 'Starting';
@@ -489,20 +514,20 @@
       fields.disabled = true;
       submitBtn.disabled = true;
       submitBtn.textContent = 'Generating';
-      current = newRow();
-      setRow(current, '_start', 'running', 1);
+      renderStages();
       tick();
       clockTimer = setInterval(tick, 1000);
     }
 
-    // Fetch the job and render any events not shown yet. Idempotent, so it is
-    // safe after reconnects or when another tab drained the SSE queue.
+    // Fetch the job and render its events. Idempotent, so it is safe after
+    // reconnects or when another tab drained the SSE queue.
     async function sync() {
       const r = await fetch(`/api/jobs/${encodeURIComponent(currentJobId)}`);
-      if (!r.ok) throw new Error(r.status === 404 ? 'This job is gone. The server may have restarted.' : `HTTP ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 404 ? 'Job not found. The server may have restarted.' : `HTTP ${r.status}`);
       const job = await r.json();
-      const events = job.events || [];
-      for (; handled < events.length; handled++) handleEvent(events[handled]);
+      events = job.events || [];
+      renderStages();
+      liveTiming = true;
       return job;
     }
 
@@ -542,6 +567,17 @@
       downloadsPanel.hidden = items.length === 0;
     }
 
+    function showRunError(raw, fallbackTitle) {
+      const info = explainError(raw);
+      $('run-error-title').textContent = info.title || fallbackTitle;
+      $('run-error-body').textContent = info.body;
+      const showRaw = raw && raw.trim() && raw.trim() !== info.body;
+      $('run-error-raw').hidden = !showRaw;
+      $('run-error-raw').open = false;
+      $('run-error-raw-text').textContent = showRaw ? raw.trim() : '';
+      $('run-error').hidden = false;
+    }
+
     async function finalizeJob(job, fetchError) {
       if (finalized) return;
       finalized = true;
@@ -551,7 +587,7 @@
       if (!job && !fetchError) {
         try { job = await sync(); } catch (e) { fetchError = e.message; }
       } else if (job) {
-        try { await sync(); } catch {}
+        try { job = await sync(); } catch {}
       }
       running = false;
       fields.disabled = false;
@@ -560,29 +596,21 @@
       completion.hidden = false;
       $('btn-watch').hidden = true;
 
-      const fail = (title, body) => {
-        if (current) setRow(current, current.dataset.node, 'failed', (counts[current.dataset.node] || 0) + 1);
+      if (fetchError || job.status === 'failed') {
+        finalStatus = 'failed';
+        renderStages();
+        window.jobStatus.resolve(jobId, 'failed');
         progressPanel.classList.add('is-failed');
-        runStatus.textContent = 'Failed';
-        $('run-error-title').textContent = title;
-        $('run-error-body').textContent = body;
-        $('run-error').hidden = false;
+        runStatus.textContent = `Failed after ${runClock.textContent}`;
+        runClock.textContent = '';
+        showRunError(fetchError || job.error || '', 'The job failed');
         $('btn-again').textContent = 'Try again';
-      };
-
-      if (fetchError) {
-        fail('Lost track of the job', fetchError);
-        window.jobStatus.resolve(jobId, 'failed');
-        return;
-      }
-      if (job.status === 'failed') {
-        window.jobStatus.resolve(jobId, 'failed');
-        fail('The job failed', job.error || 'No error message was recorded. Check the server log.');
         return;
       }
 
+      finalStatus = 'completed';
+      renderStages();
       window.jobStatus.resolve(jobId, 'completed');
-      if (current) { setRow(current, current.dataset.node, 'done', (counts[current.dataset.node] || 0) + 1); current = null; }
       progressPanel.classList.add('is-done');
       runStatus.textContent = `Finished in ${runClock.textContent}`;
       runClock.textContent = '';
@@ -590,23 +618,22 @@
 
       const files = job.output_files || [];
       if (files.includes('final.mp4')) {
+        if (files.includes('thumb.jpg')) resultVideo.poster = fileUrl(jobId, 'thumb.jpg');
         resultVideo.src = fileUrl(jobId, 'final.mp4');
         resultBox.hidden = false;
-        const watch = $('btn-watch');
-        watch.href = `/library/${encodeURIComponent(jobId)}`;
-        watch.hidden = false;
       }
-      if (job.error) {
-        $('run-error-title').textContent = 'Finished with a problem';
-        $('run-error-body').textContent = job.error;
-        $('run-error').hidden = false;
-      }
+      const watch = $('btn-watch');
+      watch.href = `/library/${encodeURIComponent(jobId)}`;
+      watch.hidden = false;
+      if (job.error) showRunError(job.error, 'Finished with a problem');
       renderDownloads(jobId, files);
     }
 
     $('btn-again').addEventListener('click', () => {
+      const retry = finalStatus === 'failed';
       resetUI();
-      $('topic').focus();
+      if (retry) form.requestSubmit();
+      else $('topic').focus();
     });
 
     // ── Submit ─────────────────────────────────────────────────────────────
@@ -674,8 +701,9 @@
         return;
       }
 
-      window.jobStatus.set(job.id, topic);
-      beginRun(job.id, topic);
+      const opts = { effort: common.effort, qa: common.qa_density !== 'zero', quiz: common.quiz };
+      window.jobStatus.set(job.id, topic, opts);
+      beginRun(job.id, topic, null, opts, true);
       startSSE(job.id);
       progressPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -721,20 +749,85 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tipBtn) { const b = tipBtn; hideTip(); b.focus(); } });
     addEventListener('scroll', hideTip, { passive: true });
 
+    // ── Server defaults + narrators (/api/meta) ───────────────────────────
+    // Fallback when /api/meta is unreachable: the four known voices.
+    const FALLBACK_NARRATORS = [
+      { id: 'aria', label: 'Aria', tagline: '', available: true },
+      { id: 'milo', label: 'Milo', tagline: '', available: true },
+      { id: 'kokoro', label: 'Kokoro', tagline: '', available: true },
+      { id: 'alloy', label: 'Alloy', tagline: '', available: true },
+    ];
+    const BACKEND_NAMES = { kokoro: 'Kokoro', elevenlabs: 'ElevenLabs', openai: 'OpenAI' };
+    const shortTagline = (t) => String(t || '').replace(/\s*\([^)]*\)/g, '').replace(/\.$/, '');
+
+    function buildNarrators(meta) {
+      const sel = form.elements.narrator;
+      const list = (meta && meta.narrators && meta.narrators.length) ? meta.narrators : FALLBACK_NARRATORS;
+      const def = meta && meta.defaults ? meta.defaults.narrator : null;
+      // Order: the default voice first, then available ones, then the rest.
+      const sorted = [...list].sort((a, b) =>
+        (b.id === def) - (a.id === def) || (b.available !== false) - (a.available !== false));
+      let html = '';
+      if (!def) {
+        const backend = meta && meta.defaults ? meta.defaults.tts_backend : '';
+        const name = BACKEND_NAMES[backend] || (backend ? backend : 'server setting');
+        html += `<option value="" data-short="${esc(name)} voice">Default (${esc(name)})</option>`;
+      }
+      for (const n of sorted) {
+        const tag = shortTagline(n.tagline);
+        let text = n.label + (tag ? `: ${tag}` : '');
+        if (n.available === false) text = `${n.label}: needs an API key on the server`;
+        html += `<option value="${esc(n.id)}" data-short="${esc(n.label)}"${n.available === false ? ' disabled' : ''}>${esc(text)}</option>`;
+      }
+      sel.innerHTML = html;
+      sel.value = def || '';
+      $('narrator-default').textContent = def ? `Default: ${narratorLabel(def, meta)}` : '';
+    }
+
+    function applyDefaults(meta, prefilled) {
+      const d = (meta && meta.defaults) || {};
+      if (!prefilled) {
+        for (const k of ['effort', 'audience', 'tone', 'theme', 'quality']) if (d[k]) setVal(k, d[k]);
+      }
+      $('quality-default').textContent = d.quality ? `Default: ${resLabel(d.quality)}` : '';
+    }
+
     // ── Prefill from query params (re-generate from library) ──────────────
     const params = new URLSearchParams(location.search);
-    if (params.has('topic')) {
-      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality', 'narrator']) setVal(k, params.get(k));
+    const prefilled = params.has('topic');
+    function applyPrefill() {
+      if (!prefilled) return;
+      for (const k of ['topic', 'effort', 'audience', 'tone', 'theme', 'speed', 'template', 'qa_density', 'quality']) setVal(k, params.get(k));
+      const nar = params.get('narrator');
+      const sel = form.elements.narrator;
+      if (nar && Array.from(sel.options).some((o) => o.value === nar && !o.disabled)) sel.value = nar;
       if (params.get('quiz') === 'true') $('quiz').checked = true;
       if (params.get('burn_captions') === 'true') $('burn-captions').checked = true;
+    }
+    buildNarrators(null);
+    applyPrefill();
+    if (prefilled) {
       $('style-section').open = true;
+      $('output-section').open = true;
       history.replaceState(null, '', '/');
     }
     updateSummaries();
+    let touched = false;
+    form.addEventListener('change', () => { touched = true; }, { once: true });
+    getMeta().then((meta) => {
+      if (!meta) return;
+      const keep = form.elements.narrator.value;
+      buildNarrators(meta);
+      applyDefaults(meta, prefilled || touched);
+      const sel = form.elements.narrator;
+      const want = prefilled ? params.get('narrator') : touched ? keep : null;
+      if (want && Array.from(sel.options).some((o) => o.value === want && !o.disabled)) sel.value = want;
+      updateSummaries();
+    });
 
     // ── Reconnect to a running job when coming back to this page ──────────
     (async function reconnect() {
-      if (params.has('topic')) return;
+      if (prefilled) return;
       const stored = window.jobStatus.get();
       if (!stored) return;
       let job;
@@ -743,9 +836,9 @@
         if (!r.ok) { if (r.status === 404) window.jobStatus.resolve(stored.id, 'failed'); return; }
         job = await r.json();
       } catch { return; }
-      beginRun(stored.id, stored.topic || job.topic, stored.startedAt);
+      beginRun(stored.id, stored.topic || job.topic, stored.startedAt, stored.opts, false);
       await sync().catch(() => {});
-      if (job.status === 'completed' || job.status === 'failed') finalizeJob();
+      if (job.status === 'completed' || job.status === 'failed') finalizeJob(job);
       else startSSE(stored.id);
     })();
   })();
