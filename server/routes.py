@@ -183,6 +183,35 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         _spawn(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
+    @router.get("/meta")
+    async def meta():
+        import os
+        import config as _cfg
+        from pipeline import render as _render_backend
+        from pipeline.tts.voices import NARRATORS
+        keys = {"elevenlabs": "ELEVENLABS_API_KEY", "openai": "OPENAI_API_KEY"}
+        narrators = [
+            {"id": nid, "label": spec["label"], "tagline": spec["tagline"], "backend": spec["backend"],
+             "model": spec["model"],
+             "available": spec["backend"] == "kokoro" or bool(os.getenv(keys.get(spec["backend"], ""), ""))}
+            for nid, spec in NARRATORS.items()
+        ]
+        return {
+            "defaults": {
+                "quality": _cfg.MANIM_QUALITY,
+                "narrator": _cfg.NARRATOR or None,
+                "tts_backend": _cfg.TTS_BACKEND,
+                "effort": _cfg.DEFAULT_EFFORT,
+                "audience": _cfg.DEFAULT_AUDIENCE,
+                "tone": _cfg.DEFAULT_TONE,
+                "theme": _cfg.DEFAULT_THEME,
+            },
+            "narrators": narrators,
+            "render_backend": _render_backend.backend(),
+            "model": _cfg.CLAUDE_MODEL,
+            "running_jobs": sum(1 for j in store.list() if j.status in ("pending", "running")),
+        }
+
     @router.get("/jobs", response_model=list[JobResponse])
     async def list_jobs():
         return [_job_to_response(j) for j in store.list()]

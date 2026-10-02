@@ -170,12 +170,17 @@ async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
         if not (output_dir / job.id / "manifest.json").exists():
             raise RuntimeError("pipeline did not complete — no output was written")
 
+        # Post-pipeline phases are reported as pseudo-nodes so the progress UI
+        # can show render / QA / quiz instead of going quiet for minutes.
+        job.append_event({"node": "render", "updates": {"status": "running"}})
         final_mp4 = await _do_render(job.id, burn_captions=job.burn_captions)
         if final_mp4 is None:
             job.error = "render failed; pipeline output preserved"
+        job.append_event({"node": "render", "updates": {"status": "done" if final_mp4 else "failed"}})
 
         # Visual QA (runs in a thread — _run_qa_loop is a sync function)
         if final_mp4 is not None and job.qa_density != "zero":
+            job.append_event({"node": "visual_qa", "updates": {"status": "running"}})
             await asyncio.to_thread(
                 _run_qa_loop,
                 job.id, final_mp4,
@@ -184,12 +189,15 @@ async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
                 context_blocks=context_blocks,
                 qa_density=job.qa_density,
             )
+            job.append_event({"node": "visual_qa", "updates": {"status": "done"}})
 
         # Quiz generation (sync function — run in thread).
         # No final_mp4 guard: quiz only needs script.txt, so it works even when
         # render failed or --no-render was used.
         if job.quiz:
+            job.append_event({"node": "quiz", "updates": {"status": "running"}})
             await asyncio.to_thread(_generate_quiz, job.id)
+            job.append_event({"node": "quiz", "updates": {"status": "done"}})
 
         # Collect output files
         run_dir = output_dir / job.id

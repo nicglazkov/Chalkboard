@@ -212,3 +212,17 @@ def test_upload_endpoint_cleans_up_tmp_dir_on_unexpected_error(tmp_path, monkeyp
     from pathlib import Path
     for d in created_dirs:
         assert not Path(d).exists(), f"temp dir {d} was not cleaned up"
+
+
+def test_meta_reports_defaults_and_narrators():
+    from fastapi.testclient import TestClient
+    from server.app import create_app
+    from server.jobs import JobStore
+    from unittest.mock import AsyncMock, MagicMock
+    lib = MagicMock(); lib.init = AsyncMock(); lib.get_video = AsyncMock(return_value=None)
+    client = TestClient(create_app(store=JobStore(), library_store=lib))
+    data = client.get("/api/meta").json()
+    assert {"quality", "narrator", "effort"} <= set(data["defaults"])
+    ids = {n["id"] for n in data["narrators"]}
+    assert {"aria", "milo", "kokoro"} <= ids
+    assert next(n for n in data["narrators"] if n["id"] == "kokoro")["available"] is True

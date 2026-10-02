@@ -12,6 +12,15 @@ def make_library_router(store: LibraryStore, output_dir: Path | str | None = Non
     _output_dir = Path(output_dir) if output_dir else Path(OUTPUT_DIR).resolve()
 
     router = APIRouter(prefix="/api")
+    last_scan = [0.0]
+
+    async def _refresh_index() -> None:
+        import time
+        if time.monotonic() - last_scan[0] < 10:
+            return
+        last_scan[0] = time.monotonic()
+        from server.app import _backfill
+        await _backfill(store, _output_dir)
 
     @router.get("/library")
     async def list_videos(
@@ -21,6 +30,8 @@ def make_library_router(store: LibraryStore, output_dir: Path | str | None = Non
         sort: str = "newest",
     ):
         limit = min(limit, 100)
+        # Pick up videos made from the CLI since the last look (cheap, throttled).
+        await _refresh_index()
         videos, total = await store.list_videos(query=q, limit=limit, offset=offset, sort=sort)
         return {"videos": [v.model_dump() for v in videos], "total": total, "limit": limit, "offset": offset}
 
