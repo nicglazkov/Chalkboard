@@ -13,10 +13,14 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 
 import anthropic
 
 from config import agent_effort, agent_model
+from pipeline import telemetry
+from pipeline.partial_json import extract_string_field
+from pipeline.pricing import call_cost
 
 _client_lock = threading.Lock()
 _clients: dict[bool, anthropic.Anthropic] = {}
@@ -99,12 +103,83 @@ def call_json(
         kwargs["system"] = system
     if tools:
         kwargs["tools"] = tools
-    if stream:
+    peek = PEEK_FIELDS.get(agent) if telemetry.wants_peek() else None
+    if peek is not None:
+        response = _stream_with_peek(client, kwargs, *peek)
+    elif stream:
         with client.messages.stream(**kwargs) as s:
             response = s.get_final_message()
     else:
         response = client.messages.create(**kwargs)
-    return json.loads(response_text(response)), response
+    report_usage(agent, response, requested_model=kwargs.get("model"))
+    data = json.loads(response_text(response))
+    if peek is not None:
+        value = data.get(peek[1]) if isinstance(data, dict) else None
+        telemetry.emit("peek", {"stage": peek[0], "text": value if isinstance(value, str) else "",
+                                "done": True})
+    return data, response
+
+
+# agent -> (peek stage, JSON string field whose growing value is published)
+PEEK_FIELDS = {
+    "script": ("script", "script"),
+    "fact": ("fact_check", "feedback"),
+    "manim": ("scene_code", "manim_code"),
+}
+PEEK_INTERVAL = 0.25  # seconds between peek events (at most ~4/s)
+
+
+def _stream_with_peek(client, kwargs: dict, stage: str, field: str):
+    """Stream the call and publish the field's text as Claude writes it.
+
+    The text comes from the live stream (the SDK's per-block text snapshot),
+    parsed incrementally; nothing is replayed after the fact.
+    """
+    last_sent = None
+    last_t = 0.0
+    with client.messages.stream(**kwargs) as s:
+        for event in s:
+            if getattr(event, "type", None) != "text":
+                continue
+            now = time.monotonic()
+            if now - last_t < PEEK_INTERVAL:
+                continue
+            value = extract_string_field(getattr(event, "snapshot", "") or "", field)
+            if value is None or value == last_sent:
+                continue
+            telemetry.emit("peek", {"stage": stage, "text": value, "done": False})
+            last_sent, last_t = value, now
+        return s.get_final_message()
+
+
+def _int_or_none(v):
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def report_usage(agent: str, response, requested_model: str | None = None) -> dict | None:
+    """Emit a `usage` event from response.usage (no-op without a sink)."""
+    if telemetry.current() is None:
+        return None
+    usage = getattr(response, "usage", None)
+    model = getattr(response, "model", None)
+    if not isinstance(model, str):
+        model = requested_model
+    inp = _int_or_none(getattr(usage, "input_tokens", None))
+    out = _int_or_none(getattr(usage, "output_tokens", None))
+    stu = getattr(usage, "server_tool_use", None)
+    searches = _int_or_none(getattr(stu, "web_search_requests", None)) if stu is not None else 0
+    cache = sum(_int_or_none(getattr(usage, k, None)) or 0
+                for k in ("cache_creation_input_tokens", "cache_read_input_tokens"))
+    updates = {
+        "agent": agent, "model": model,
+        "input_tokens": inp, "output_tokens": out,
+        "web_searches": searches,
+        "cost_usd": call_cost(model, inp, out, searches, cache),
+    }
+    if cache:
+        updates["cache_tokens"] = cache
+    telemetry.emit("usage", updates)
+    return updates
 
 
 def web_search_tool(agent: str) -> dict:
