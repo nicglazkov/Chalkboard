@@ -240,15 +240,16 @@ def measure_context(blocks: list[dict], client) -> tuple[int, int]:
     Returns (token_count, context_window) using the Anthropic API.
     Both values are fetched live — nothing is hardcoded.
     """
-    from config import CLAUDE_MODEL
+    from config import agent_model
+    model = agent_model("manim")  # the agent that sees the most context
 
     response = client.messages.count_tokens(
-        model=CLAUDE_MODEL,
+        model=model,
         messages=[{"role": "user", "content": blocks}],
     )
     token_count = response.input_tokens
 
-    model_info = client.models.retrieve(CLAUDE_MODEL)
+    model_info = client.models.retrieve(model)
     context_window = model_info.max_input_tokens
 
     return token_count, context_window

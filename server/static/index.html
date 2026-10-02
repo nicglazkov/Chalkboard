@@ -1,1492 +1,467 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chalkboard</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #111110;
-      --surface: #1a1918;
-      --border: rgba(255, 255, 255, 0.07);
-      --text: #e8e4db;
-      --muted: #7a7570;
-      --accent: #c8b97a;
-      --chalk: #f0ebe0;
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      height: 100%;
-    }
-
-    body {
-      font-family: 'Lora', Georgia, serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.025;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      position: relative;
-      z-index: 1;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    header {
-      margin-bottom: 2.5rem;
-      text-align: center;
-    }
-
-    h1 {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 2.5rem;
-      font-weight: 400;
-      letter-spacing: -0.01em;
-      margin-bottom: 0.4rem;
-    }
-
-    .tagline {
-      font-family: 'Lora', Georgia, serif;
-      font-style: italic;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    /* Form */
-    .form-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.75rem;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group:last-of-type {
-      margin-bottom: 0;
-    }
-
-    label {
-      display: block;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.4rem;
-    }
-
-    textarea, input[type="text"], input[type="number"], select {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'Lora', Georgia, serif;
-      font-size: 0.95rem;
-      border-radius: 6px;
-      padding: 0.55rem 0.75rem;
-      outline: none;
-      transition: border-color 0.15s;
-      appearance: none;
-      -webkit-appearance: none;
-    }
-
-    textarea {
-      background: var(--bg);
-      resize: vertical;
-      min-height: 80px;
-      line-height: 1.5;
-    }
-
-    input[type="text"] {
-      font-family: 'DM Mono', monospace;
-    }
-
-    select {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.85rem;
-      cursor: pointer;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7570' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 0.75rem center;
-      padding-right: 2rem;
-    }
-
-    textarea:focus, input:focus, select:focus {
-      border-color: var(--accent);
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem 1.25rem;
-    }
-
-    .form-grid .form-group {
-      margin-bottom: 0;
-    }
-
-    .btn-submit {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      padding: 0.7rem 1.75rem;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 1.5rem;
-      transition: opacity 0.15s, background 0.15s;
-    }
-
-    .btn-submit:hover:not(:disabled) {
-      opacity: 0.88;
-    }
-
-    .btn-submit:disabled {
-      background: var(--muted);
-      color: var(--bg);
-      cursor: not-allowed;
-      opacity: 0.7;
-    }
-
-    /* Advanced section */
-    details.advanced {
-      margin-top: 1.25rem;
-    }
-
-    details.advanced summary {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      cursor: pointer;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      user-select: none;
-      padding: 0.2rem 0;
-    }
-
-    details.advanced summary::-webkit-details-marker { display: none; }
-
-    details.advanced summary::before {
-      content: '▶';
-      font-size: 0.55rem;
-      transition: transform 0.15s;
-      display: inline-block;
-    }
-
-    details[open].advanced summary::before {
-      transform: rotate(90deg);
-    }
-
-    details.advanced .advanced-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem 1.25rem;
-      margin-top: 1rem;
-    }
-
-    details.advanced .advanced-grid .form-group {
-      margin-bottom: 0;
-    }
-
-    .advanced-grid--3 {
-      grid-template-columns: 1fr 1fr 1fr;
-    }
-
-    /* Section label within the form card */
-    .form-section-label {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.65rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin: 1.5rem 0 0.85rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid var(--border);
-      opacity: 0.7;
-    }
-
-    .checkbox-group {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding-top: 0.3rem;
-    }
-
-    .checkbox-group input[type="checkbox"] {
-      width: 15px;
-      height: 15px;
-      accent-color: var(--accent);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .checkbox-group span {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--text);
-    }
-
-    /* Repeatable input rows */
-    .repeatable-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .repeatable-row {
-      display: flex;
-      gap: 0.4rem;
-      align-items: center;
-    }
-
-    .repeatable-row input {
-      flex: 1;
-    }
-
-    .btn-remove {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 4px;
-      padding: 0.3rem 0.5rem;
-      cursor: pointer;
-      flex-shrink: 0;
-      line-height: 1;
-    }
-
-    .btn-remove:hover { border-color: #c0392b; color: #c0392b; }
-
-    .btn-add {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 4px;
-      padding: 0.3rem 0.65rem;
-      cursor: pointer;
-      align-self: flex-start;
-    }
-
-    .btn-add:hover { border-color: var(--accent); color: var(--accent); }
-
-    /* ── File upload zone ─────────────────────────────────────── */
-    .upload-zone {
-      border: 1.5px dashed var(--border);
-      border-radius: 6px;
-      padding: 1.25rem 1rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .upload-zone:hover,
-    .upload-zone.drag-over {
-      border-color: var(--accent);
-      background: rgba(200, 185, 122, 0.04);
-    }
-    .upload-zone p {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin: 0;
-      pointer-events: none;
-    }
-    .upload-zone input[type="file"] {
-      display: none;
-    }
-    .file-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-top: 0.5rem;
-    }
-    .file-item {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      align-items: center;
-      gap: 0.4rem 0.5rem;
-      padding: 0.35rem 0.5rem;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.025);
-      border: 1px solid var(--border);
-    }
-    .file-item--error {
-      border-color: #c0392b;
-    }
-    .file-name {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-    }
-    .file-size {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-    .file-error {
-      grid-column: 1 / -1;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: #e74c3c;
-    }
-    .upload-total {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--muted);
-      margin-top: 0.4rem;
-      text-align: right;
-    }
-    .upload-total--error {
-      color: #e74c3c;
-    }
-
-    .repeatable-full {
-      grid-column: 1 / -1;
-    }
-
-    /* Progress panel */
-    #progress-panel {
-      display: none;
-    }
-
-    .panel-title {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      margin-bottom: 0.75rem;
-    }
-
-    .stages {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    .stage-item {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.65rem 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .stage-item:last-child {
-      border-bottom: none;
-    }
-
-    .stage-dot {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.06);
-      border: 1.5px solid var(--muted);
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .stage-dot.running {
-      background: rgba(200,185,122,0.15);
-      border-color: var(--accent);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-
-    .stage-dot.done {
-      background: rgba(200,185,122,0.15);
-      border-color: var(--accent);
-    }
-
-    .stage-dot.failed {
-      background: rgba(192,57,43,0.15);
-      border-color: #c0392b;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(0.88); }
-    }
-
-    .stage-name {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--text);
-      flex: 1;
-    }
-
-    .stage-item.pending .stage-name { color: var(--muted); }
-    .stage-item.running .stage-name { color: var(--chalk); }
-    .stage-item.done   .stage-name  { color: var(--text); }
-
-    /* ── Completion card ── */
-    #completion-card {
-      display: none;
-      margin-top: 1.25rem;
-      background: rgba(200,185,122,0.07);
-      border: 1px solid rgba(200,185,122,0.2);
-      border-radius: 8px;
-      padding: 1.25rem 1.25rem 1rem;
-    }
-
-    .completion-heading {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.1rem;
-      color: var(--chalk);
-      margin-bottom: 0.25rem;
-    }
-
-    .completion-topic {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin-bottom: 1rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .completion-actions {
-      display: flex;
-      gap: 0.65rem;
-    }
-
-    .btn-watch {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      padding: 0.6rem 1.25rem;
-      cursor: pointer;
-      text-decoration: none;
-      transition: opacity 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .btn-watch:hover { opacity: 0.88; }
-
-    .btn-again {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.09em;
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.6rem 1.25rem;
-      cursor: pointer;
-      text-decoration: none;
-      transition: color 0.15s, border-color 0.15s;
-    }
-
-    .btn-again:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
-
-    /* Error panel */
-    #error-panel {
-      display: none;
-      background: rgba(192, 57, 43, 0.1);
-      border: 1px solid rgba(192, 57, 43, 0.3);
-      border-radius: 8px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 2rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.8rem;
-      color: #e07070;
-    }
-
-    /* Result video */
-    #result-video {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      display: none;
-      background: #000;
-    }
-
-    /* Downloads panel */
-    #downloads-panel {
-      display: none;
-      margin-top: 1.25rem;
-    }
-
-    .downloads {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .download-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--accent);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 0.4rem 0.8rem;
-      text-decoration: none;
-      transition: border-color 0.15s;
-    }
-
-    .download-link:hover {
-      border-color: var(--accent);
-    }
-
-    /* ── Top nav ─────────────────────────────────────────────────── */
-    .top-nav {
-      position: relative;
-      z-index: 10;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .nav-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      height: 52px;
-    }
-
-    .nav-brand {
-      font-family: 'DM Serif Display', serif;
-      color: var(--chalk);
-      font-size: 1.15rem;
-      font-weight: 400;
-      text-decoration: none;
-      letter-spacing: -0.01em;
-      flex-shrink: 0;
-    }
-
-    .nav-links { display: flex; gap: 0.25rem; }
-
-    .nav-link {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 0.35rem 0.75rem;
-      border-radius: 5px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-    .nav-link.active { color: var(--accent); }
-
-    /* ── App layout ──────────────────────────────────────────────── */
-    .app-body {
-      max-width: 640px;
-      margin: 0 auto;
-    }
-
-    .app-left {
-      display: none;
-    }
-
-    /* Generating: progress left | form right */
-    .app-body.is-active {
-      max-width: 1200px;
-      display: grid;
-      grid-template-columns: 1fr 440px;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .app-body.is-active .app-left {
-      display: block;
-    }
-
-    /* Complete: video 2/3 | controls 1/3 */
-    .app-body.is-complete {
-      max-width: 1680px;
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .app-body.is-complete .app-left {
-      display: block;
-    }
-
-    @media (max-width: 900px) {
-      .app-body.is-active,
-      .app-body.is-complete {
-        grid-template-columns: 1fr;
-        max-width: 640px;
-      }
-    }
-
-    /* ── Help tooltips ────────────────────────────────────────── */
-    label.label-row {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .help-btn {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: none;
-      color: var(--muted);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.58rem;
-      font-weight: 500;
-      line-height: 1;
-      cursor: pointer;
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      opacity: 0.65;
-      transition: border-color 0.15s, color 0.15s, opacity 0.15s;
-      vertical-align: middle;
-    }
-
-    .help-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      opacity: 1;
-    }
-
-    #help-tip {
-      display: none;
-      position: fixed;
-      z-index: 9999;
-      max-width: 250px;
-      background: var(--surface);
-      border: 1px solid rgba(200, 185, 122, 0.2);
-      border-radius: 8px;
-      padding: 0.65rem 0.85rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.74rem;
-      line-height: 1.55;
-      color: var(--text);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-      pointer-events: none;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-  </style>
-  <script src="/job-status.js?v=3"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generate a video · Chalkboard</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="/app.css?v=5">
+  <script src="/app.js?v=5"></script>
 </head>
 <body>
+<div class="shell">
+  <nav class="side" aria-label="Main" data-page="generate"></nav>
+  <main class="main" id="main">
+    <div class="page">
+      <div class="split">
+        <section>
+          <div class="eyebrow"><span class="pip"></span>Generate</div>
+          <h1 class="h1">What should we <em class="ul">sketch out</em>?</h1>
 
-  <!-- Top nav -->
-  <nav class="top-nav">
-    <div class="nav-inner">
-      <a class="nav-brand" href="/">Chalkboard</a>
-      <div class="nav-links">
-        <a class="nav-link active" href="/">Generate</a>
-        <a class="nav-link" href="/library">Library</a>
-      </div>
-      <div id="job-status" style="margin-left:auto;position:relative"></div>
-    </div>
-  </nav>
-
-  <div class="container">
-    <header>
-      <h1>Chalkboard</h1>
-      <p class="tagline">Turn any topic into a narrated animation</p>
-    </header>
-
-    <div class="app-body" id="app-body">
-
-      <div class="app-left" id="app-left">
-        <div id="progress-panel">
-          <p class="panel-title">Pipeline progress</p>
-          <div class="stages" id="stages-list"></div>
-          <div id="completion-card">
-            <div class="completion-heading">Your video is ready!</div>
-            <div class="completion-actions">
-              <a class="btn-watch" id="btn-watch" href="#">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <polygon points="3,1.5 11.5,6.5 3,11.5" fill="currentColor"/>
-                </svg>
-                Watch now
-              </a>
-              <button class="btn-again" id="btn-again" type="button">Generate another</button>
-            </div>
-          </div>
-        </div>
-        <video id="result-video" controls></video>
-      </div>
-
-      <div class="app-right" id="app-right">
-
-        <div id="error-panel"></div>
-
-        <div class="form-card">
-      <form id="job-form">
-
-        <!-- Topic -->
-        <div class="form-group">
-          <label for="topic" class="label-row">Topic <button type="button" class="help-btn" data-tip="The subject of your video. Be specific — 'How merge sort works' gets better results than 'sorting'.">?</button></label>
-          <textarea id="topic" name="topic" placeholder="e.g. How merge sort works" required></textarea>
-        </div>
-
-        <!-- Core -->
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="effort" class="label-row">Effort <button type="button" class="help-btn" data-tip="Controls pipeline thoroughness. Low is fastest (no research). High adds web research and deeper fact-checking — expect several extra minutes.">?</button></label>
-            <select id="effort" name="effort">
-              <option value="low">low</option>
-              <option value="medium" selected>medium</option>
-              <option value="high">high</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="audience" class="label-row">Audience <button type="button" class="help-btn" data-tip="Adjusts vocabulary and depth. Beginner gets analogies and plain language. Expert skips fundamentals.">?</button></label>
-            <select id="audience" name="audience">
-              <option value="beginner">beginner</option>
-              <option value="intermediate" selected>intermediate</option>
-              <option value="expert">expert</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Source Material (always visible) -->
-        <p class="form-section-label">Source Material <button type="button" class="help-btn" data-tip="Optional context fed to the AI before it writes the script. Attach files, paste URLs, or add GitHub repos.">?</button></p>
-
-        <div class="form-group">
-          <label class="label-row">Local files <button type="button" class="help-btn" data-tip="PDFs, DOCX, images, or code files the AI reads for context. Per-file limits: text 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB. 24 MB total.">?</button></label>
-          <div class="upload-zone" id="upload-zone">
-            <p>Drop files or folders here or <span style="color:var(--accent);text-decoration:underline;cursor:pointer;" id="upload-browse-trigger">click to browse</span></p>
-            <p style="margin-top:0.3rem;font-size:0.65rem;">PDF · DOCX · images · code &amp; text files</p>
-            <input type="file" id="file-input" multiple
-              accept=".txt,.md,.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.swift,.kt,.sh,.bash,.zsh,.bat,.ps1,.yaml,.yml,.json,.toml,.csv,.html,.css,.scss,.xml,.ini,.env,.sql,.graphql,.proto,.tf,.hcl,.vue,.php,.scala,.dart,.elm,.png,.jpg,.jpeg,.gif,.webp,.pdf,.docx" />
-          </div>
-          <div class="file-list" id="file-list"></div>
-          <div class="upload-total" id="upload-total" style="display:none;"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="label-row">URLs <button type="button" class="help-btn" data-tip="Public webpages the AI will fetch and read as source material. Useful for documentation, articles, or any reference page.">?</button></label>
-          <div class="repeatable-list" id="url-list"></div>
-          <button type="button" class="btn-add" id="add-url">+ Add URL</button>
-        </div>
-
-        <div class="form-group">
-          <label class="label-row">GitHub repos <button type="button" class="help-btn" data-tip="Enter as owner/repo (e.g. nicglazkov/Chalkboard). Chalkboard fetches the README as context.">?</button></label>
-          <div class="repeatable-list" id="github-list"></div>
-          <button type="button" class="btn-add" id="add-github">+ Add repo</button>
-        </div>
-
-        <!-- Style -->
-        <details class="advanced">
-          <summary>Style <button type="button" class="help-btn" data-tip="Tone, visual theme, and animation template for the output video.">?</button></summary>
-          <div class="advanced-grid advanced-grid--3">
-            <div class="form-group">
-              <label for="tone" class="label-row">Tone <button type="button" class="help-btn" data-tip="How the narration sounds. Casual is conversational, Formal is structured, Socratic is question-driven.">?</button></label>
-              <select id="tone" name="tone">
-                <option value="casual" selected>casual</option>
-                <option value="formal">formal</option>
-                <option value="socratic">socratic</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="theme" class="label-row">Theme <button type="button" class="help-btn" data-tip="Color palette for the animation. Chalkboard is dark with chalk-white text, Light is bright, Colorful uses vibrant accents.">?</button></label>
-              <select id="theme" name="theme">
-                <option value="chalkboard" selected>chalkboard</option>
-                <option value="light">light</option>
-                <option value="colorful">colorful</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="template" class="label-row">Template <button type="button" class="help-btn" data-tip="Pre-built animation layout. Algorithm shows array cells and pointers, Code reveals lines step-by-step, Compare uses two side-by-side columns, Howto builds a numbered step list, Timeline shows chronological events on an axis.">?</button></label>
-              <select id="template" name="template">
-                <option value="">none</option>
-                <option value="algorithm">algorithm</option>
-                <option value="code">code</option>
-                <option value="compare">compare</option>
-                <option value="howto">howto</option>
-                <option value="timeline">timeline</option>
-              </select>
-            </div>
-          </div>
-        </details>
-
-        <!-- Output -->
-        <details class="advanced">
-          <summary>Output <button type="button" class="help-btn" data-tip="Controls for the final rendered video file.">?</button></summary>
-          <div class="advanced-grid">
-            <div class="form-group">
-              <label for="speed" class="label-row">Speed <button type="button" class="help-btn" data-tip="Narration playback speed multiplier. 1.0 is normal, 1.25 talks slightly faster. Applies to the TTS audio output.">?</button></label>
-              <input type="number" id="speed" name="speed" value="1.0" min="0.1" max="4.0" step="0.1" />
-            </div>
-            <div class="form-group">
-              <label for="qa-density" class="label-row">Visual QA <button type="button" class="help-btn" data-tip="After rendering, Claude reviews video frames for visual errors. Normal checks ~10 frames, High checks ~20. Off skips entirely and saves time.">?</button></label>
-              <select id="qa-density" name="qa_density">
-                <option value="zero">off</option>
-                <option value="normal" selected>normal</option>
-                <option value="high">high</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label aria-hidden="true">&nbsp;</label>
-              <div class="checkbox-group">
-                <label for="burn-captions" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                  <input type="checkbox" id="burn-captions" name="burn_captions" />
-                  <span>Burn captions</span>
-                  <button type="button" class="help-btn" data-tip="Bakes subtitle text into the video frames. Requires re-encoding so renders a bit slower.">?</button>
-                </label>
+          <form id="gen" novalidate>
+            <div class="field">
+              <label for="topic" class="label">Topic</label>
+              <textarea id="topic" class="topic" rows="4" placeholder="How a Fourier transform finds the notes in a chord" aria-describedby="topic-hint"></textarea>
+              <div class="under">
+                <button type="button" class="pill-btn" id="attach-btn" aria-expanded="false" aria-controls="attach">+ Attach files or links</button>
+                <span id="tags" class="chips" aria-live="polite"></span>
+                <span class="hint" id="topic-hint"><span id="chars">0 chars</span> · <span id="kbd">Ctrl</span>+Enter to generate</span>
+              </div>
+              <div class="attach" id="attach" hidden>
+                <button type="button" class="drop" id="drop">Drop files here or click to choose. PDF, DOCX, images, text and code.</button>
+                <input type="file" id="file-input" multiple hidden>
+                <div class="row">
+                  <label class="sr-only" for="url-in">Web page URL</label>
+                  <input class="input" id="url-in" type="url" placeholder="https://example.com/article" autocomplete="off" spellcheck="false">
+                  <button type="button" class="btn" id="url-add">Add link</button>
+                </div>
+                <div class="row">
+                  <label class="sr-only" for="gh-in">GitHub repo</label>
+                  <input class="input" id="gh-in" type="text" placeholder="owner/repo on GitHub" autocomplete="off" spellcheck="false">
+                  <button type="button" class="btn" id="gh-add">Add repo</button>
+                </div>
+                <div class="note" id="attach-note">Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.</div>
               </div>
             </div>
-            <div class="form-group">
-              <label aria-hidden="true">&nbsp;</label>
-              <div class="checkbox-group">
-                <label for="quiz" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                  <input type="checkbox" id="quiz" name="quiz" />
-                  <span>Generate quiz</span>
-                  <button type="button" class="help-btn" data-tip="After scripting, Claude generates comprehension questions saved as quiz.json alongside the video.">?</button>
-                </label>
-              </div>
+
+            <div class="toggles" style="margin-top:22px">
+              <button type="button" class="toggle" id="t-research" aria-pressed="false">
+                <span class="box" aria-hidden="true"></span>
+                <span><span class="t">Deep research</span><span class="s">Web research and stricter fact-checking before the script (high effort)</span></span>
+              </button>
+              <button type="button" class="toggle" id="t-quiz" aria-pressed="false">
+                <span class="box" aria-hidden="true"></span>
+                <span><span class="t">Write a quiz</span><span class="s">Multiple-choice questions with explanations</span></span>
+              </button>
             </div>
+
+            <details class="disc" id="style" style="margin-top:22px">
+              <summary><span class="t">Style</span><span class="sum" id="style-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
+              <div class="disc-body">
+                <div class="label" id="voices-label">Narrator</div>
+                <div class="voices" id="voices" role="radiogroup" aria-labelledby="voices-label"></div>
+                <div id="voices-note" class="mono muted" hidden></div>
+                <div class="opt-row"><span class="label" id="l-aud">Audience</span><div class="chips" data-key="audience" role="group" aria-labelledby="l-aud"></div></div>
+                <div class="opt-row"><span class="label" id="l-tone">Tone</span><div class="chips" data-key="tone" role="group" aria-labelledby="l-tone"></div></div>
+                <div class="opt-row"><span class="label" id="l-theme">Theme</span><div class="chips" data-key="theme" role="group" aria-labelledby="l-theme"></div></div>
+                <div class="opt-row"><span class="label" id="l-tpl">Template</span><div class="chips" data-key="template" role="group" aria-labelledby="l-tpl"></div></div>
+              </div>
+            </details>
+
+            <details class="disc" id="output" style="margin-top:14px">
+              <summary><span class="t">Output</span><span class="sum" id="output-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
+              <div class="disc-body">
+                <div class="opt-row"><span class="label" id="l-res">Resolution</span><div class="chips" data-key="quality" role="group" aria-labelledby="l-res"></div></div>
+                <div class="opt-row"><span class="label" id="l-eff">Effort</span><div class="chips" data-key="effort" role="group" aria-labelledby="l-eff"></div></div>
+                <div class="opt-row"><span class="label" id="l-qa">Visual QA</span><div class="chips" data-key="qa_density" role="group" aria-labelledby="l-qa"></div></div>
+                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted">x narration speed</span></div></div>
+                <div class="opt-row"><span class="label">Captions</span><label class="check-line"><input type="checkbox" id="burn"> Burn captions into the video</label></div>
+              </div>
+            </details>
+
+            <div id="form-error" style="margin-top:18px" hidden></div>
+
+            <div class="submit-row" style="margin-top:22px">
+              <button type="submit" class="btn primary big" id="submit">Generate video</button>
+              <span class="est-line" id="est-line"></span>
+            </div>
+          </form>
+        </section>
+
+        <aside>
+          <div class="card" id="est-card" aria-live="polite">
+            <div class="label">Estimated time</div>
+            <div class="shimmer" style="height:44px"></div>
           </div>
-        </details>
-
-        <button type="submit" class="btn-submit" id="submit-btn">Generate Video</button>
-      </form>
+          <div class="card recent">
+            <div class="card-head"><span class="label">Recent</span><a class="right" href="/library" style="text-decoration:none">See all</a></div>
+            <div id="recent"><div class="shimmer" style="height:120px"></div></div>
+          </div>
+        </aside>
+      </div>
     </div>
+  </main>
+</div>
 
-        <div id="downloads-panel">
-          <p class="panel-title">Downloads</p>
-          <div class="downloads" id="downloads-list"></div>
-        </div>
+<script>
+(function () {
+  const { esc, cap, fmtBytes, fmtSpan, fmtDuration, fmtAgo, parseTs, fmtUsd, getJSON, missingWhy, getVoices, getMeta, resLabel, resFull, unknownHtml, buildWorkbench, getJobs } = window.CB;
+  const $ = (id) => document.getElementById(id);
 
-      </div><!-- /app-right -->
+  const OPTIONS = {
+    audience: [['beginner', 'beginner'], ['intermediate', 'intermediate'], ['expert', 'expert']],
+    tone: [['casual', 'casual'], ['formal', 'formal'], ['socratic', 'socratic']],
+    theme: [['chalkboard', 'chalkboard'], ['light', 'light'], ['colorful', 'colorful']],
+    template: [['', 'auto'], ['algorithm', 'algorithm'], ['code', 'code'], ['compare', 'compare'], ['derivation', 'derivation'], ['howto', 'how-to'], ['timeline', 'timeline']],
+    quality: [['low', '480p'], ['medium', '720p'], ['high', '1080p'], ['4k', '4K']],
+    effort: [['low', 'low'], ['medium', 'medium']],
+    qa_density: [['zero', 'off'], ['normal', 'normal'], ['high', 'high']],
+  };
+  const S = {
+    audience: 'intermediate', tone: 'casual', theme: 'chalkboard', template: '', quality: 'high',
+    effort: 'medium', qa_density: 'normal', research: false, quiz: false, narrator: null,
+    speed: 1.0, burn: false, files: [], urls: [], github: [],
+  };
+  let voices = [];
 
-    </div><!-- /app-body -->
-  </div>
+  // ── Chip groups ────────────────────────────────────────────────────────
+  function renderChips() {
+    document.querySelectorAll('.chips[data-key]').forEach((g) => {
+      const key = g.dataset.key;
+      g.innerHTML = OPTIONS[key].map(([v, label]) => {
+        const lockHigh = key === 'effort' && S.research;
+        const on = lockHigh ? false : S[key] === v;
+        return `<button type="button" class="chip" data-v="${esc(v)}" aria-pressed="${on}"${lockHigh ? ' disabled title="Deep research runs at high effort"' : ''}>${esc(label)}</button>`;
+      }).join('') + (key === 'effort' && S.research ? '<span class="mono c-gold" style="align-self:center">high (deep research)</span>' : '');
+    });
+  }
+  document.querySelectorAll('.chips[data-key]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('.chip');
+    if (!b || b.disabled) return;
+    S[g.dataset.key] = b.dataset.v;
+    changed();
+  }));
 
-  <div id="help-tip"></div>
+  function toggle(id, key) {
+    $(id).addEventListener('click', () => { S[key] = !S[key]; changed(); });
+  }
+  toggle('t-research', 'research');
+  toggle('t-quiz', 'quiz');
+  $('speed').addEventListener('input', () => { S.speed = parseFloat($('speed').value) || 1.0; summaries(); });
+  $('burn').addEventListener('change', () => { S.burn = $('burn').checked; summaries(); });
 
-  <script>
-    const STAGE_LABELS = {
-      init:              'Initializing',
-      research_agent:    'Researching topic',
-      script_agent:      'Writing script',
-      fact_validator:    'Fact-checking',
-      manim_agent:       'Generating animation code',
-      code_validator:    'Validating code',
-      layout_checker:    'Checking layout',
-      render_trigger:    'Synthesizing voiceover',
-      escalate_to_user:  'Waiting for user input',
-    };
+  function voiceLabel() {
+    const v = voices.find((x) => x.id === S.narrator);
+    return v ? v.label : 'server default voice';
+  }
+  function summaries() {
+    $('style-sum').textContent = [voiceLabel().toLowerCase(), S.audience, S.tone, S.theme, S.template ? S.template + ' template' : 'auto template'].join(' · ');
+    $('output-sum').textContent = [resFull(S.quality), S.research ? 'high effort' : S.effort + ' effort', S.qa_density === 'zero' ? 'visual QA off' : 'visual QA ' + S.qa_density, `${S.speed}x speed`, S.burn ? 'burned captions' : 'captions file'].join(' · ');
+  }
+  function changed() {
+    $('t-research').setAttribute('aria-pressed', S.research);
+    $('t-research').querySelector('.box').textContent = S.research ? '✓' : '';
+    $('t-quiz').setAttribute('aria-pressed', S.quiz);
+    $('t-quiz').querySelector('.box').textContent = S.quiz ? '✓' : '';
+    renderChips();
+    renderVoices();
+    summaries();
+    queueEstimate();
+  }
 
-    const DOWNLOADABLE = ['final.mp4', 'captions.srt', 'quiz.json', 'script.txt'];
-
-    function addRepeatableRow(listId, placeholder) {
-      const list = document.getElementById(listId);
-      const row = document.createElement('div');
-      row.className = 'repeatable-row';
-      row.innerHTML = `<input type="text" placeholder="${placeholder}" />
-                       <button type="button" class="btn-remove">✕</button>`;
-      row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
-      list.appendChild(row);
-      row.querySelector('input').focus();
+  // ── Voices ─────────────────────────────────────────────────────────────
+  let voiceSource = null;
+  const sampleFail = {};   // id -> reason the sample could not play
+  let audio = null, playing = null;
+  function renderVoices() {
+    const host = $('voices');
+    if (!voices.length) {
+      host.innerHTML = `<div class="mono muted">${esc(voiceSource && voiceSource.why ? voiceSource.why : 'Loading voices')}</div>`;
+      return;
     }
-
-    function getRepeatableValues(listId) {
-      return Array.from(document.querySelectorAll(`#${listId} input`))
-        .map(el => el.value.trim())
-        .filter(Boolean);
-    }
-
-    // ── File upload ──────────────────────────────────────────────────────────
-
-    const FILE_LIMITS = { text: 2*1024*1024, image: 5*1024*1024, pdf: 20*1024*1024, docx: 10*1024*1024 };
-    const TOTAL_LIMIT = 24 * 1024 * 1024;
-    const TEXT_EXTS = new Set(['.txt','.md','.py','.js','.ts','.jsx','.tsx','.go','.rs',
-      '.java','.c','.cpp','.h','.hpp','.rb','.swift','.kt','.sh','.bash','.zsh','.bat','.ps1',
-      '.yaml','.yml','.json','.toml','.csv','.html','.css','.scss','.xml','.ini',
-      '.env','.sql','.graphql','.proto','.tf','.hcl','.vue','.php','.scala','.dart','.elm']);
-    const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp']);
-
-    let selectedFiles = []; // [{file: File, error: string|null}]
-
-    function getFileCategory(file) {
-      const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
-      if (IMAGE_EXTS.has(ext)) return 'image';
-      if (ext === '.pdf') return 'pdf';
-      if (ext === '.docx') return 'docx';
-      if (TEXT_EXTS.has(ext)) return 'text';
-      return 'unsupported';
-    }
-
-    function formatBytes(n) {
-      if (n < 1024) return n + ' B';
-      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-      return (n / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    function validateFile(file) {
-      const cat = getFileCategory(file);
-      if (cat === 'unsupported') return `Unsupported type — use PDF, DOCX, images, or text/code files`;
-      const limit = FILE_LIMITS[cat];
-      if (file.size > limit) {
-        return `${formatBytes(file.size)} exceeds the ${formatBytes(limit)} limit for ${cat} files`;
-      }
-      return null;
-    }
-
-    function renderFileList() {
-      const listEl = document.getElementById('file-list');
-      const totalEl = document.getElementById('upload-total');
-      listEl.innerHTML = '';
-
-      selectedFiles.forEach(({file, error}, i) => {
-        const item = document.createElement('div');
-        item.className = 'file-item' + (error ? ' file-item--error' : '');
-
-        const nameEl = document.createElement('span');
-        nameEl.className = 'file-name';
-        nameEl.textContent = file.name;
-
-        const sizeEl = document.createElement('span');
-        sizeEl.className = 'file-size';
-        sizeEl.textContent = formatBytes(file.size);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'btn-remove';
-        removeBtn.textContent = '✕';
-        removeBtn.addEventListener('click', () => {
-          selectedFiles.splice(i, 1);
-          renderFileList();
-        });
-
-        item.appendChild(nameEl);
-        item.appendChild(sizeEl);
-        item.appendChild(removeBtn);
-
-        if (error) {
-          const errEl = document.createElement('span');
-          errEl.className = 'file-error';
-          errEl.textContent = error;
-          item.appendChild(errEl);
-        }
-
-        listEl.appendChild(item);
-      });
-
-      // Total size counter
-      const total = selectedFiles.reduce((s, {file}) => s + file.size, 0);
-      const overTotal = total > TOTAL_LIMIT;
-      if (selectedFiles.length > 0) {
-        totalEl.style.display = '';
-        totalEl.textContent = `Total: ${formatBytes(total)} / ${formatBytes(TOTAL_LIMIT)}`;
-        totalEl.className = 'upload-total' + (overTotal ? ' upload-total--error' : '');
-      } else {
-        totalEl.style.display = 'none';
-      }
-
-      // Disable submit if any per-file error or total exceeded
-      const hasErrors = overTotal || selectedFiles.some(({error}) => error);
-      document.getElementById('submit-btn').disabled = hasErrors;
-    }
-
-    function addFiles(newFiles) {
-      for (const file of newFiles) {
-        // Skip duplicates (same name + size)
-        const isDupe = selectedFiles.some(
-          ({file: f}) => f.name === file.name && f.size === file.size
-        );
-        if (isDupe) continue;
-        selectedFiles.push({file, error: validateFile(file)});
-      }
-      renderFileList();
-    }
-
-    const uploadZone = document.getElementById('upload-zone');
-    const fileInput  = document.getElementById('file-input');
-
-    document.getElementById('upload-browse-trigger').addEventListener('click', (e) => {
+    host.innerHTML = voices.map((v) => {
+      const on = S.narrator === v.id;
+      const off = v.available === false;
+      let why = '';
+      if (off) why = v.availability_reason || 'Not available on this server';
+      let hearWhy = '';
+      if (voiceSource.source !== 'voices') hearWhy = voiceSource.why || 'Samples are not available';
+      else if (off) hearWhy = 'Voice not available';
+      else if (!v.sample_url) hearWhy = 'No sample for this voice';
+      else if (sampleFail[v.id]) hearWhy = sampleFail[v.id];
+      const hear = playing === v.id ? '■ Stop' : (hearWhy ? 'No sample' : '▶ Hear');
+      const avail = v.available == null ? 'availability unknown' : '';
+      const availTip = v.available == null && v.availability_reason ? v.availability_reason : '';
+      const bk = [v.backend, v.model, avail].filter(Boolean).join(' · ');
+      return `<div class="voice${on ? ' on' : ''}${off ? ' off' : ''}">
+        <button type="button" class="pick" role="radio" aria-checked="${on}" data-id="${esc(v.id)}" aria-label="${esc(v.label)}${off ? ', not available' : ''}"${off ? ' disabled' : ''}></button>
+        <span class="top"><span class="nm">${esc(v.label)}</span>
+          <button type="button" class="hear" data-hear="${esc(v.id)}"${hearWhy ? ` disabled title="${esc(hearWhy)}"` : ''} aria-label="${playing === v.id ? 'Stop' : 'Hear'} ${esc(v.label)}">${hear}</button></span>
+        ${v.tagline ? `<span class="tag">${esc(v.tagline)}</span>` : ''}
+        ${bk ? `<span class="bk"${availTip ? ` title="${esc(availTip)}"` : ''}>${esc(bk)}</span>` : ''}
+        ${why ? `<span class="why">${esc(why)}</span>` : ''}
+        ${sampleFail[v.id] && !off ? `<span class="why">${esc(sampleFail[v.id])}</span>` : ''}
+      </div>`;
+    }).join('');
+  }
+  $('voices').addEventListener('click', async (e) => {
+    const hear = e.target.closest('[data-hear]');
+    if (hear) {
       e.stopPropagation();
-      fileInput.click();
-    });
-    uploadZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => {
-      addFiles(Array.from(fileInput.files));
-      fileInput.value = ''; // allow re-selecting the same file
-    });
-    uploadZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadZone.classList.add('drag-over');
-    });
-    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-    // Recursively collect all File objects from a FileSystemEntry (file or directory)
-    async function getAllFilesFromEntry(entry) {
-      if (entry.isFile) {
-        return new Promise((resolve, reject) => entry.file(resolve, reject));
-      }
-      // Directory: readEntries returns up to 100 at a time; loop until empty
-      const reader = entry.createReader();
-      const files = [];
-      let batch;
-      do {
-        batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-        for (const child of batch) {
-          const result = await getAllFilesFromEntry(child);
-          if (Array.isArray(result)) files.push(...result);
-          else files.push(result);
-        }
-      } while (batch.length > 0);
-      return files;
-    }
-
-    uploadZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      uploadZone.classList.remove('drag-over');
-      const newFiles = [];
-      for (const item of Array.from(e.dataTransfer.items)) {
-        const entry = item.webkitGetAsEntry();
-        if (!entry) continue;
-        const result = await getAllFilesFromEntry(entry);
-        if (Array.isArray(result)) newFiles.push(...result);
-        else newFiles.push(result);
-      }
-      addFiles(newFiles);
-    });
-
-    document.getElementById('add-url').addEventListener('click', () =>
-      addRepeatableRow('url-list', 'https://example.com/article'));
-
-    document.getElementById('add-github').addEventListener('click', () =>
-      addRepeatableRow('github-list', 'owner/repo'));
-
-    const form           = document.getElementById('job-form');
-    const submitBtn      = document.getElementById('submit-btn');
-    const errorPanel     = document.getElementById('error-panel');
-    const progressPanel  = document.getElementById('progress-panel');
-    const stagesList     = document.getElementById('stages-list');
-    const appBody        = document.getElementById('app-body');
-    const appLeft        = document.getElementById('app-left');
-    const resultVideo    = document.getElementById('result-video');
-    const downloadsPanel = document.getElementById('downloads-panel');
-    const downloadsList  = document.getElementById('downloads-list');
-
-    // State
-    let stageEls = {};    // node name → { item, dot }
-    let seenStages = [];  // ordered list
-    let finalized = false;
-    let activeES = null;
-    let currentJobId = null;
-
-    function showError(msg) {
-      errorPanel.textContent = msg;
-      errorPanel.style.display = 'block';
-    }
-
-    function hideError() {
-      errorPanel.style.display = 'none';
-    }
-
-    function resetUI() {
-      hideError();
-      appBody.classList.remove('is-active', 'is-complete');
-      progressPanel.style.display = 'none';
-      downloadsPanel.style.display = 'none';
-      stagesList.innerHTML = '';
-      downloadsList.innerHTML = '';
-      resultVideo.removeAttribute('src');
-      resultVideo.style.display = 'none';
-      document.getElementById('completion-card').style.display = 'none';
-      document.getElementById('btn-watch').style.display = '';
-      stageEls = {};
-      seenStages = [];
-      finalized = false;
-    }
-
-    function ensureStage(node) {
-      if (stageEls[node]) return stageEls[node];
-      const label = STAGE_LABELS[node] || node;
-      const item = document.createElement('div');
-      item.className = 'stage-item pending';
-      const dot = document.createElement('span');
-      dot.className = 'stage-dot';
-      const nameEl = document.createElement('span');
-      nameEl.className = 'stage-name';
-      nameEl.textContent = label;
-      item.appendChild(dot);
-      item.appendChild(nameEl);
-      stagesList.appendChild(item);
-      stageEls[node] = { item, dot };
-      seenStages.push(node);
-      return stageEls[node];
-    }
-
-    const CHECKMARK_SVG = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    const CROSS_SVG     = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2l5 5M7 2l-5 5" stroke="#c0392b" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-
-    function setStageStatus(node, status) {
-      const el = ensureStage(node);
-      el.item.className = `stage-item ${status}`;
-      el.dot.className = `stage-dot ${status}`;
-      if (status === 'done')   el.dot.innerHTML = CHECKMARK_SVG;
-      if (status === 'failed') el.dot.innerHTML = CROSS_SVG;
-      if (status === 'running' || status === 'pending') el.dot.innerHTML = '';
-    }
-
-    function markAllPriorDone(currentNode) {
-      // Mark any previously running stage as done
-      for (const n of seenStages) {
-        if (n === currentNode) break;
-        const el = stageEls[n];
-        if (el && el.item.classList.contains('running')) {
-          setStageStatus(n, 'done');
-        }
-      }
-    }
-
-    function handleEvent(data) {
-      if (data.done) return;  // terminal event handled in onmessage
-
-      const node = data.node;
-      if (!node) return;
-
-      const updates = data.updates || {};
-      const status = updates.status;
-
-      ensureStage(node);
-      markAllPriorDone(node);
-
-      if (status === 'failed') {
-        setStageStatus(node, 'failed');
-      } else {
-        setStageStatus(node, 'running');
-      }
-
-      // Keep the status dropdown in sync with the current stage
-      if (currentJobId) window.jobStatus?.updateStage(currentJobId, node);
-    }
-
-    async function finalizeJob(jobId) {
-      if (finalized) return;
-      finalized = true;
-
-      // Mark all running stages as done
-      for (const n of seenStages) {
-        const el = stageEls[n];
-        if (el && el.item.classList.contains('running')) {
-          setStageStatus(n, 'done');
-        }
-      }
-
-      // Fetch final job state
-      let job;
+      const id = hear.dataset.hear;
+      if (playing === id) { audio && audio.pause(); playing = null; renderVoices(); return; }
+      if (audio) audio.pause();
+      const v = voices.find((x) => x.id === id);
+      hear.textContent = 'Loading';
+      hear.disabled = true;
       try {
-        const r = await fetch(`/api/jobs/${jobId}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        job = await r.json();
-      } catch (e) {
-        showError(`Could not fetch job result: ${e.message}`);
-        submitBtn.disabled = false;
-        return;
-      }
-
-      if (job.status === 'failed') {
-        window.jobStatus?.resolve(jobId, 'failed');
-        showError(job.error || 'Job failed for an unknown reason.');
-        submitBtn.disabled = false;
-        return;
-      }
-
-      window.jobStatus?.resolve(jobId, 'completed');
-
-      const outputFiles = job.output_files || [];
-      const hasVideo = outputFiles.includes('final.mp4');
-
-      // Show completion card (keep progress panel visible)
-      const card = document.getElementById('completion-card');
-      const watchBtn = document.getElementById('btn-watch');
-      const againBtn = document.getElementById('btn-again');
-
-      watchBtn.href = `/library/${jobId}`;
-      card.style.display = 'block';
-
-      if (!hasVideo) {
-        watchBtn.style.display = 'none';
-      }
-
-      againBtn.addEventListener('click', () => {
-        card.style.display = 'none';
-        resetUI();
-        submitBtn.disabled = false;
-      }, { once: true });
-
-      submitBtn.disabled = false;
-    }
-
-    function startSSE(jobId) {
-      if (activeES) {
-        activeES.close();
-        activeES = null;
-      }
-
-      progressPanel.style.display = 'block';
-      appBody.classList.add('is-active');
-
-      const es = new EventSource(`/api/jobs/${jobId}/events`);
-      activeES = es;
-
-      es.onmessage = (evt) => {
-        let data;
-        try { data = JSON.parse(evt.data); } catch { return; }
-
-        if (data.done) {
-          es.close();
-          activeES = null;
-          finalizeJob(jobId);
+        const r = await fetch(v.sample_url);
+        if (!r.ok) {
+          let why = `Sample failed (HTTP ${r.status})`;
+          try { const j = await r.json(); if (j && j.detail) why = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch {}
+          sampleFail[id] = why;
+          renderVoices();
           return;
         }
-        handleEvent(data);
-      };
-
-      es.onerror = () => {
-        es.close();
-        activeES = null;
-        finalizeJob(jobId);
-      };
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      resetUI();
-      submitBtn.disabled = true;
-
-      const topic   = document.getElementById('topic').value.trim();
-
-      const hasFiles = selectedFiles.length > 0 && !selectedFiles.some(({error}) => error);
-      const totalSize = selectedFiles.reduce((s, {file}) => s + file.size, 0);
-      if (totalSize > TOTAL_LIMIT) {
-        showError(`Total file size (${formatBytes(totalSize)}) exceeds the ${formatBytes(TOTAL_LIMIT)} limit`);
-        submitBtn.disabled = false;
-        return;
-      }
-
-      let resp, job;
-      try {
-        if (hasFiles) {
-          // Multipart path: files + form fields → /api/jobs/upload
-          const fd = new FormData();
-          fd.append('topic',         topic);
-          fd.append('effort',        document.getElementById('effort').value);
-          fd.append('audience',      document.getElementById('audience').value);
-          fd.append('tone',          document.getElementById('tone').value);
-          fd.append('theme',         document.getElementById('theme').value);
-          fd.append('template',      document.getElementById('template').value);
-          fd.append('speed',         document.getElementById('speed').value);
-          fd.append('burn_captions', document.getElementById('burn-captions').checked ? 'true' : 'false');
-          fd.append('quiz',          document.getElementById('quiz').checked ? 'true' : 'false');
-          fd.append('qa_density',    document.getElementById('qa-density').value);
-          for (const url of getRepeatableValues('url-list'))    fd.append('urls', url);
-          for (const repo of getRepeatableValues('github-list')) fd.append('github', repo);
-          for (const {file} of selectedFiles)                   fd.append('files', file);
-
-          resp = await fetch('/api/jobs/upload', { method: 'POST', body: fd });
-        } else {
-          // JSON path: no files → /api/jobs
-          const body = {
-            topic,
-            effort:        document.getElementById('effort').value,
-            audience:      document.getElementById('audience').value,
-            tone:          document.getElementById('tone').value,
-            theme:         document.getElementById('theme').value,
-            template:      document.getElementById('template').value || null,
-            speed:         parseFloat(document.getElementById('speed').value) || 1.0,
-            burn_captions: document.getElementById('burn-captions').checked,
-            quiz:          document.getElementById('quiz').checked,
-            qa_density:    document.getElementById('qa-density').value,
-            urls:          getRepeatableValues('url-list'),
-            github:        getRepeatableValues('github-list'),
-          };
-          resp = await fetch('/api/jobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-        }
-
-        if (!resp.ok) {
-          const text = await resp.text();
-          throw new Error(`HTTP ${resp.status}: ${text}`);
-        }
-        job = await resp.json();
+        const blob = await r.blob();
+        audio = new Audio(URL.createObjectURL(blob));
+        audio.addEventListener('ended', () => { playing = null; renderVoices(); });
+        await audio.play();
+        playing = id;
       } catch (err) {
-        showError(`Failed to start job: ${err.message}`);
-        submitBtn.disabled = false;
-        return;
+        sampleFail[id] = 'Could not play the sample';
       }
-
-      currentJobId = job.id;
-      window.jobStatus?.set(job.id, topic);
-      startSSE(job.id);
-    });
-
-    // ── Help tooltips ──────────────────────────────────────────
-    const helpTip = document.getElementById('help-tip');
-
-    function showTip(btn) {
-      const tip = btn.dataset.tip;
-      if (!tip) return;
-      helpTip.textContent = tip;
-      helpTip.style.display = 'block';
-      const rect = btn.getBoundingClientRect();
-      const tipW = helpTip.offsetWidth;
-      const tipH = helpTip.offsetHeight;
-      let top = rect.bottom + 6;
-      let left = rect.left;
-      if (top + tipH > window.innerHeight - 8) top = rect.top - tipH - 6;
-      if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
-      helpTip.style.top = Math.max(8, top) + 'px';
-      helpTip.style.left = Math.max(8, left) + 'px';
+      renderVoices();
+      return;
     }
+    const pick = e.target.closest('.pick');
+    if (!pick || pick.disabled) return;
+    S.narrator = S.narrator === pick.dataset.id ? null : pick.dataset.id;
+    changed();
+  });
 
-    function hideTip() { helpTip.style.display = 'none'; }
+  // ── Attachments ────────────────────────────────────────────────────────
+  const FILE_LIMITS = { text: 2 * 1024 * 1024, image: 5 * 1024 * 1024, pdf: 20 * 1024 * 1024, docx: 10 * 1024 * 1024 };
+  const TOTAL_LIMIT = 24 * 1024 * 1024;
+  const TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1', '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini', '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
+  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+  function fileCategory(f) {
+    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (IMAGE_EXTS.has(ext)) return 'image';
+    if (ext === '.pdf') return 'pdf';
+    if (ext === '.docx') return 'docx';
+    if (TEXT_EXTS.has(ext)) return 'text';
+    return 'unsupported';
+  }
+  function validateFile(f) {
+    const c = fileCategory(f);
+    if (c === 'unsupported') return 'Unsupported type';
+    if (f.size > FILE_LIMITS[c]) return `Over the ${fmtBytes(FILE_LIMITS[c])} limit`;
+    return null;
+  }
+  const totalSize = () => S.files.reduce((a, x) => a + x.file.size, 0);
+  const filesInvalid = () => totalSize() > TOTAL_LIMIT || S.files.some((x) => x.error);
+  function renderTags() {
+    const tags = [
+      ...S.files.map((x, i) => `<span class="chip tag${x.error ? ' bad' : ''}" title="${esc(x.error ? x.error : fmtBytes(x.file.size))}"><span class="nm">${esc(x.file.name)}</span>${x.error ? `<span class="c-danger">${esc(x.error)}</span>` : ''}<button type="button" class="x" data-rm="f${i}" aria-label="Remove ${esc(x.file.name)}">✕</button></span>`),
+      ...S.urls.map((u, i) => `<span class="chip tag"><span class="k">link</span><span class="nm">${esc(u)}</span><button type="button" class="x" data-rm="u${i}" aria-label="Remove ${esc(u)}">✕</button></span>`),
+      ...S.github.map((u, i) => `<span class="chip tag"><span class="k">repo</span><span class="nm">${esc(u)}</span><button type="button" class="x" data-rm="g${i}" aria-label="Remove ${esc(u)}">✕</button></span>`),
+    ];
+    $('tags').innerHTML = tags.join('');
+    const t = totalSize();
+    $('attach-note').innerHTML = esc('Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.') + (S.files.length ? ` <span class="${t > TOTAL_LIMIT ? 'c-danger' : ''}">${esc(fmtBytes(t))} attached.</span>` : '');
+    $('submit').disabled = filesInvalid();
+  }
+  $('tags').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm]');
+    if (!b) return;
+    const k = b.dataset.rm[0], i = Number(b.dataset.rm.slice(1));
+    ({ f: S.files, u: S.urls, g: S.github })[k].splice(i, 1);
+    renderTags();
+  });
+  function addFiles(list) {
+    for (const file of list) {
+      if (S.files.some((x) => x.file.name === file.name && x.file.size === file.size)) continue;
+      S.files.push({ file, error: validateFile(file) });
+    }
+    renderTags();
+  }
+  $('attach-btn').addEventListener('click', () => {
+    const open = $('attach').hidden;
+    $('attach').hidden = !open;
+    $('attach-btn').setAttribute('aria-expanded', String(open));
+  });
+  $('drop').addEventListener('click', () => $('file-input').click());
+  $('file-input').addEventListener('change', () => { addFiles(Array.from($('file-input').files)); $('file-input').value = ''; });
+  $('drop').addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('over'); });
+  $('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'));
+  $('drop').addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('over'); addFiles(Array.from(e.dataTransfer.files || [])); });
+  function addFrom(inputId, list, check) {
+    const el = $(inputId);
+    const v = el.value.trim();
+    if (!v) return;
+    const bad = check(v);
+    if (bad) { el.setCustomValidity(bad); el.reportValidity(); return; }
+    el.setCustomValidity('');
+    if (!list.includes(v)) list.push(v);
+    el.value = '';
+    renderTags();
+  }
+  const addUrl = () => addFrom('url-in', S.urls, (v) => (/^https?:\/\/\S+\.\S+/.test(v) ? '' : 'Use a full link starting with https://'));
+  const addGh = () => addFrom('gh-in', S.github, (v) => (/^[\w.-]+\/[\w.-]+$/.test(v.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')) ? '' : 'Use owner/repo, for example nicglazkov/Chalkboard'));
+  $('url-add').addEventListener('click', addUrl);
+  $('gh-add').addEventListener('click', addGh);
+  $('url-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
+  $('gh-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addGh(); } });
+  $('url-in').addEventListener('input', () => $('url-in').setCustomValidity(''));
+  $('gh-in').addEventListener('input', () => $('gh-in').setCustomValidity(''));
 
-    document.querySelectorAll('.help-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation(); // prevent <details> toggle when inside <summary>
-        showTip(btn);
-      });
-    });
+  // ── Topic ──────────────────────────────────────────────────────────────
+  const topic = $('topic');
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) $('kbd').textContent = '⌘';
+  topic.addEventListener('input', () => { $('chars').textContent = `${topic.value.trim().length} chars`; });
+  topic.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('gen').requestSubmit(); } });
 
-    document.addEventListener('click', hideTip);
+  // ── Estimate (from finished runs with matching settings) ───────────────
+  let estTimer = null, estSeq = 0;
+  function queueEstimate() { clearTimeout(estTimer); estTimer = setTimeout(loadEstimate, 250); }
+  async function loadEstimate() {
+    const seq = ++estSeq;
+    const effort = S.research ? 'high' : S.effort;
+    const p = new URLSearchParams({ effort, quality: S.quality || '', narrator: S.narrator || '', research: String(S.research) });
+    const res = await getJSON(`/api/estimate?${p}`);
+    if (seq !== estSeq) return;
+    const card = $('est-card');
+    const line = $('est-line');
+    if (!res.ok || !res.data) {
+      const why = missingWhy(res, 'The estimate');
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk" title="${esc(why)}">Unknown</div><div class="mono muted">${esc(why)}</div>`;
+      line.innerHTML = unknownHtml(why, 'cost unknown');
+      return;
+    }
+    const d = res.data;
+    const n = d.based_on_runs || 0;
+    if (d.median_seconds == null) {
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk">No estimate yet: fewer than 3 similar runs</div>
+        <div class="kv"><span>Similar finished runs</span><span>${esc(String(n))}</span></div>`;
+    } else {
+      const big = d.median_seconds >= 60 ? `~${Math.round(d.median_seconds / 60)} min` : `~${Math.round(d.median_seconds)} s`;
+      const range = d.p25_seconds != null && d.p75_seconds != null ? `${fmtSpan(d.p25_seconds)} to ${fmtSpan(d.p75_seconds)}` : null;
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num">${esc(big)}</div>
+        <div class="kv"><span>Middle half of runs</span><span>${range ? esc(range) : unknownHtml('Not enough runs for a range')}</span></div>
+        <div class="kv"><span>Typical cost</span><span>${d.median_cost_usd != null ? esc(fmtUsd(d.median_cost_usd)) : unknownHtml('These runs did not record a cost')}</span></div>
+        <div class="kv"><span>Based on</span><span>${esc(String(n))} finished run${n === 1 ? '' : 's'}${d.basis ? ' · ' + esc(d.basis) : ''}</span></div>`;
+    }
+    line.innerHTML = d.median_cost_usd != null
+      ? `typical cost ${esc(fmtUsd(d.median_cost_usd))} · median of ${esc(String(n))} similar runs`
+      : unknownHtml(n < 3 ? 'Fewer than 3 similar runs have finished' : 'Similar runs did not record a cost', 'cost unknown');
+  }
 
-    // ── Prefill from query params (re-generate from library) ──────
-    (function prefillFromQuery() {
-      const p = new URLSearchParams(location.search);
-      if (!p.has('topic')) return;
-
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val != null) el.value = val;
-      };
-
-      setVal('topic',    p.get('topic'));
-      setVal('effort',   p.get('effort'));
-      setVal('audience', p.get('audience'));
-      setVal('tone',     p.get('tone'));
-      setVal('theme',    p.get('theme'));
-      setVal('speed',    p.get('speed'));
-      setVal('template', p.get('template'));
-
-      // Open Style section so user can see the pre-filled settings
-      const styleDetails = document.querySelector('details.advanced');
-      if (styleDetails) styleDetails.open = true;
-
-      // Clean up the URL so it doesn't re-trigger on refresh
-      history.replaceState(null, '', '/');
-    })();
-
-    // ── Reconnect to active job on page load ──────────────────────
-    // If there's a running job in localStorage and the user navigated
-    // back to this page, replay past events to rebuild stage state
-    // and reconnect SSE for the live tail.
-    (async function reconnectActiveJob() {
-      // Don't reconnect if this is a re-generate prefill
-      if (new URLSearchParams(location.search).has('topic')) return;
-
-      const stored = window.jobStatus?.get();
-      if (!stored || (stored.status !== 'running' && stored.status !== 'pending')) return;
-
-      let job;
-      try {
-        const r = await fetch(`/api/jobs/${stored.id}`);
-        if (!r.ok) return;
-        job = await r.json();
-      } catch { return; }
-
-      // Show progress panel and disable form submit
-      currentJobId = stored.id;
-      progressPanel.style.display = 'block';
-      appBody.classList.add('is-active');
-      submitBtn.disabled = true;
-
-      // Replay past events to reconstruct stage checkpoints
-      for (const event of (job.events || [])) {
-        handleEvent(event);
+  // ── Recent ─────────────────────────────────────────────────────────────
+  async function loadRecent() {
+    const [lib, jobs, vs] = await Promise.all([getJSON('/api/library?limit=4&sort=newest'), getJobs(), getVoices()]);
+    const rows = [];
+    if (jobs.ok && Array.isArray(jobs.data)) {
+      for (const j of jobs.data.filter((x) => x.status === 'running' || x.status === 'pending').slice(0, 2)) {
+        const wb = buildWorkbench(j);
+        rows.push(`<a href="/progress/?job=${encodeURIComponent(j.id)}"><span class="t">${esc(j.topic)}</span><span class="m c-gold">● ${j.status === 'pending' ? 'queued' : 'running'}${wb.active ? ' · ' + esc(wb.active.name.toLowerCase()) : ''}</span></a>`);
       }
-
-      // If job already finished while we were away, finalize immediately
-      if (job.status === 'completed' || job.status === 'failed') {
-        finalizeJob(stored.id);
-        return;
+    }
+    if (lib.ok && lib.data) {
+      for (const v of lib.data.videos.slice(0, 4 - Math.min(rows.length, 2))) {
+        const meta = ['done', fmtDuration(v.duration_sec), fmtAgo(parseTs(v.created_at))].filter(Boolean).join(' · ');
+        rows.push(`<a href="/library/${encodeURIComponent(v.run_id)}"><span class="t">${esc(v.title || v.topic)}</span><span class="m c-ok">${esc(meta)}</span></a>`);
       }
+    }
+    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="mono muted" style="margin:0">Nothing yet. Your first video shows up here.</p>' : `<p class="mono muted" style="margin:0">${esc(missingWhy(lib, 'The library'))}</p>`);
+  }
 
-      // Reconnect SSE for live updates going forward
-      startSSE(stored.id);
-    })();
-  </script>
+  // ── Submit ─────────────────────────────────────────────────────────────
+  function showError(html) { $('form-error').innerHTML = html; $('form-error').hidden = false; }
+  $('gen').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('form-error').hidden = true;
+    const t = topic.value.trim();
+    if (!t) { showError('<div class="err"><div class="err-title">Add a topic first</div><p class="muted">One clear sentence is enough.</p></div>'); topic.focus(); return; }
+    if (filesInvalid()) { showError('<div class="err"><div class="err-title">Some attachments cannot be sent</div><p class="muted">Remove the files marked in red, or keep the total under 24 MB.</p></div>'); return; }
+    const body = {
+      topic: t,
+      effort: S.research ? 'high' : S.effort,
+      audience: S.audience, tone: S.tone, theme: S.theme,
+      template: S.template || null,
+      speed: S.speed || 1.0,
+      burn_captions: S.burn, quiz: S.quiz,
+      qa_density: S.qa_density,
+      quality: S.quality || null,
+      narrator: S.narrator || null,
+      urls: S.urls, github: S.github,
+    };
+    const btn = $('submit');
+    btn.disabled = true;
+    btn.textContent = 'Starting';
+    let res;
+    if (S.files.length) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(body)) {
+        if (Array.isArray(v)) v.forEach((x) => fd.append(k, x));
+        else if (v != null) fd.append(k, typeof v === 'boolean' ? String(v) : v);
+      }
+      for (const { file } of S.files) fd.append('files', file);
+      res = await getJSON('/api/jobs/upload', { method: 'POST', body: fd });
+    } else {
+      res = await getJSON('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    if (!res.ok || !res.data || !res.data.id) {
+      btn.disabled = false;
+      btn.textContent = 'Generate video';
+      showError(`<div class="err" role="alert"><div class="err-title">The server did not start the job</div><p class="muted">${esc(res.error || 'No response.')}${res.status ? ` (HTTP ${res.status})` : ''}</p></div>`);
+      return;
+    }
+    location.href = `/progress/?job=${encodeURIComponent(res.data.id)}`;
+  });
+
+  // ── Defaults and prefill ───────────────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  const prefilled = params.has('topic');
+  function applyPrefill() {
+    for (const k of ['audience', 'tone', 'theme', 'template', 'quality', 'qa_density']) if (params.has(k)) S[k] = params.get(k);
+    const eff = params.get('effort');
+    if (eff === 'high') S.research = true; else if (eff) S.effort = eff;
+    if (params.has('speed')) S.speed = parseFloat(params.get('speed')) || 1.0;
+    if (params.get('quiz') === 'true') S.quiz = true;
+    if (params.get('burn_captions') === 'true') S.burn = true;
+    if (params.get('narrator')) S.narrator = params.get('narrator');
+    topic.value = params.get('topic') || '';
+    $('speed').value = S.speed;
+    $('burn').checked = S.burn;
+    $('style').open = true;
+    $('output').open = true;
+    history.replaceState(null, '', '/');
+  }
+
+  (async function init() {
+    const meta = await getMeta();
+    const d = (meta && meta.defaults) || {};
+    if (!prefilled) {
+      for (const k of ['audience', 'tone', 'theme', 'quality']) if (d[k]) S[k] = d[k];
+      if (d.effort === 'high') S.research = true; else if (d.effort) S.effort = d.effort;
+      if (d.narrator) S.narrator = d.narrator;
+    } else applyPrefill();
+    voiceSource = await getVoices();
+    voices = voiceSource.list || [];
+    if (S.narrator && !voices.some((v) => v.id === S.narrator && v.available !== false)) S.narrator = null;
+    if (voiceSource.source !== 'voices') { $('voices-note').hidden = false; $('voices-note').textContent = voiceSource.why || ''; }
+    topic.dispatchEvent(new Event('input'));
+    changed();
+    renderTags();
+  })();
+  renderChips();
+  summaries();
+  loadRecent();
+})();
+</script>
 </body>
 </html>

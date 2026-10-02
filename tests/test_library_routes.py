@@ -122,3 +122,21 @@ def test_list_limit_capped_at_100(lib_client):
     tc, store, _ = lib_client
     resp = tc.get("/api/library?limit=999")
     assert resp.json()["limit"] == 100
+
+
+def test_delete_rejects_dot_segments(tmp_path):
+    """DELETE /api/library/%2e%2e?files=true must not rmtree the output dir's parent."""
+    out = tmp_path / "out"
+    out.mkdir()
+    sentinel = tmp_path / "keep.txt"
+    sentinel.write_text("x")
+    store = SQLiteLibraryStore(str(tmp_path / "lib.db"))
+    asyncio.run(store.init())
+    app = FastAPI()
+    app.include_router(make_library_router(store, output_dir=out))
+    tc = TestClient(app)
+    for rid in ("%2e%2e", "%2e"):
+        resp = tc.delete(f"/api/library/{rid}?files=true")
+        assert resp.status_code == 404
+    assert sentinel.exists()
+    assert out.exists()

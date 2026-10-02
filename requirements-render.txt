@@ -1,0 +1,5 @@
+# Extra dependencies for RENDER_BACKEND=local (render on this machine instead of Docker).
+# Also needs system packages: a TeX distribution with latex + dvisvgm, ffmpeg, and the
+# cairo/pango libraries (see README > Rendering).
+-r requirements.txt
+manim==0.21.0

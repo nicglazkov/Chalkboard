@@ -18,7 +18,7 @@ def _make_fake_png(path: Path) -> Path:
 
 def _mock_response(passed: bool, issues: list) -> MagicMock:
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({"passed": passed, "issues": issues}))]
+    msg.content = [MagicMock(type="text", text=json.dumps({"passed": passed, "issues": issues}))]
     return msg
 
 
@@ -28,7 +28,7 @@ def test_visual_qa_returns_passed_when_no_issues(tmp_path):
     frame = _make_fake_png(qa_dir / "frame_00.png")
 
     with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [frame]
         MockClient.return_value.messages.create.return_value = _mock_response(True, [])
         result = visual_qa(tmp_path / "final.mp4", qa_dir)
@@ -45,7 +45,7 @@ def test_visual_qa_reports_issues_on_failure(tmp_path):
     issues = [{"severity": "error", "description": "Text extends off-screen at right edge"}]
 
     with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [frame]
         MockClient.return_value.messages.create.return_value = _mock_response(False, issues)
         result = visual_qa(tmp_path / "final.mp4", qa_dir)
@@ -61,7 +61,7 @@ def test_visual_qa_sends_image_blocks_to_claude(tmp_path):
     frame = _make_fake_png(qa_dir / "frame_00.png")
 
     with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [frame]
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = _mock_response(True, [])
@@ -122,7 +122,7 @@ def test_visual_qa_density_normal_uses_30s_interval(tmp_path):
     frame = _make_fake_png(qa_dir / "frame_00.png")
 
     with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [frame]
         MockClient.return_value.messages.create.return_value = _mock_response(True, [])
         visual_qa(tmp_path / "final.mp4", qa_dir, density="normal")
@@ -138,7 +138,7 @@ def test_visual_qa_density_high_uses_15s_interval(tmp_path):
     frame = _make_fake_png(qa_dir / "frame_00.png")
 
     with patch("pipeline.visual_qa._extract_frames") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [frame]
         MockClient.return_value.messages.create.return_value = _mock_response(True, [])
         visual_qa(tmp_path / "final.mp4", qa_dir, density="high")
@@ -156,12 +156,13 @@ def test_segment_boundary_timestamps_basic():
         {"actual_duration_sec": 2.0},
     ]
     timestamps = _segment_boundary_timestamps(segments, max_frames=20)
-    # Should include t=0.5, end of each segment, midpoint of 4s segment
+    # Intro sample, then each segment's settled end frame: 0.8s before the
+    # boundary (before the hand-off fade), or the midpoint for short segments.
     ts_values = [t for t, _, _ in timestamps]
     assert 0.5 in ts_values          # intro sample
-    assert 3.0 in ts_values          # end of segment 0
-    assert 7.0 in ts_values          # end of segment 1
-    assert 9.0 in ts_values          # end of segment 2
+    assert 2.2 in ts_values          # end of segment 0 (3.0 - 0.8)
+    assert 6.2 in ts_values          # end of segment 1 (7.0 - 0.8)
+    assert 8.2 in ts_values          # end of segment 2 (9.0 - 0.8)
 
 
 def test_segment_boundary_timestamps_midpoint_for_long_segment():
@@ -188,7 +189,7 @@ def test_visual_qa_uses_segment_timestamps_when_provided(tmp_path):
     segments = [{"actual_duration_sec": 3.0, "text": "Hello world"}]
 
     with patch("pipeline.visual_qa._extract_frames_at_timestamps") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [(frame, 3.0, 0, "Hello world")]
         MockClient.return_value.messages.create.return_value = _mock_response(True, [])
         from pipeline.visual_qa import visual_qa
@@ -206,7 +207,7 @@ def test_visual_qa_frame_label_includes_segment_context(tmp_path):
     segments = [{"actual_duration_sec": 3.0, "text": "Bubble sort compares adjacent elements"}]
 
     with patch("pipeline.visual_qa._extract_frames_at_timestamps") as mock_extract, \
-         patch("pipeline.visual_qa.anthropic.Anthropic") as MockClient:
+         patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         mock_extract.return_value = [(frame, 3.0, 0, "Bubble sort compares adjacent elements")]
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = _mock_response(True, [])

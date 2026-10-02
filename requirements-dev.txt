@@ -1,0 +1,5 @@
+# Test dependencies: pip install -r requirements-dev.txt
+# (add requirements-render.txt too to run the Manim-gated design-system tests).
+-r requirements.txt
+pytest
+pytest-asyncio

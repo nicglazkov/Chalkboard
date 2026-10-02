@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Status · Chalkboard</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="/app.css?v=5">
+  <script src="/app.js?v=5"></script>
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Main" data-page="status"></nav>
+  <main class="main" id="main">
+    <div class="page" style="max-width:980px">
+      <div class="eyebrow"><span class="pip"></span>Status</div>
+      <h1 class="h1">Are we <em>working?</em></h1>
+      <div class="overall unknown" id="overall" aria-live="polite">
+        <span class="big-dot" aria-hidden="true"></span>
+        <span class="msg" id="overall-msg">Checking</span>
+        <span class="when" id="overall-when"></span>
+        <button type="button" class="btn" id="refresh">Check again</button>
+      </div>
+      <div class="checks" id="checks"><div class="shimmer" style="height:280px;border-radius:0"></div></div>
+      <div class="foot" id="foot">Each check probes the real service when you load this page (cached up to 60 s). Expand a row to see what was probed.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  const { esc, fmtAgo, fmtStamp, parseTs, getStatus, missingWhy, STATE_WORD } = window.CB;
+  const $ = (id) => document.getElementById(id);
+  const MSG = {
+    ok: 'Everything is ready to make videos.',
+    degraded: 'Videos can run, but something needs a look.',
+    down: 'Something is broken. Videos will likely fail.',
+    unknown: 'Some checks could not be verified right now.',
+  };
+  const LABEL = { ok: 'ok', warn: 'needs a look', down: 'down', unknown: 'unknown' };
+  let checkedAt = null, cachedNote = '';
+  const openIds = new Set();
+
+  function evidenceText(ev) {
+    if (ev == null || ev === '') return null;
+    if (typeof ev === 'string') return ev;
+    try { return JSON.stringify(ev, null, 2); } catch { return String(ev); }
+  }
+
+  async function load(force) {
+    $('refresh').disabled = true;
+    const res = await getStatus(force);
+    $('refresh').disabled = false;
+    const box = $('overall');
+    if (!res.ok || !res.data) {
+      box.className = 'overall unknown';
+      $('overall-msg').textContent = 'Status unknown.';
+      $('overall-when').textContent = '';
+      $('checks').innerHTML = `<div class="state" style="border:0"><p class="state-title">No status to show</p><p>${esc(missingWhy(res, 'The status check'))}</p></div>`;
+      return;
+    }
+    const d = res.data;
+    const overall = MSG[d.overall] ? d.overall : 'unknown';
+    box.className = `overall ${overall}`;
+    $('overall-msg').textContent = MSG[overall];
+    checkedAt = parseTs(d.checked_at);
+    cachedNote = d.cached ? ` (cached result${d.cache_ttl_s ? `, refreshed every ${d.cache_ttl_s}s` : ''})` : '';
+    paintWhen();
+    const checks = Array.isArray(d.checks) ? d.checks : [];
+    if (!checks.length) { $('checks').innerHTML = '<div class="state" style="border:0"><p class="state-title">No checks returned</p><p>The server answered but listed no checks.</p></div>'; return; }
+    $('checks').innerHTML = checks.map((c) => {
+      const state = LABEL[c.state] ? c.state : 'unknown';
+      const ev = evidenceText(c.evidence);
+      const at = parseTs(c.checked_at);
+      const sub = [c.summary, typeof c.detail === 'string' ? c.detail : ''].filter(Boolean).join(' · ');
+      const det = c.detail && typeof c.detail === 'object' ? Object.entries(c.detail) : [];
+      return `<details class="check st-${state}" data-id="${esc(c.id)}"${openIds.has(c.id) ? ' open' : ''}>
+        <summary><span class="sd" aria-hidden="true"></span>
+          <span><span class="nm">${esc(c.name || c.id)}</span><span class="sub">${esc(sub || 'No summary')}</span></span>
+          <span class="st">${esc(LABEL[state])}<span class="sr-only">. Show evidence</span></span>
+          <span class="chev" aria-hidden="true">▾</span></summary>
+        <div class="ev">
+          ${det.length ? `<div class="label">Details</div>${det.map(([k, v]) => `<div class="kv"><span>${esc(k.replace(/_/g, ' '))}</span><span>${esc(v == null ? 'unknown' : typeof v === 'object' ? JSON.stringify(v) : String(v))}</span></div>`).join('')}` : ''}
+          <div class="label">What was probed</div>
+          ${ev ? `<pre>${esc(ev)}</pre>` : '<span class="mono muted">No evidence was returned for this check.</span>'}
+          <span class="mono faint">${at ? `checked ${esc(fmtStamp(c.checked_at))} (${esc(fmtAgo(at))})` : 'check time not reported'}</span>
+        </div></details>`;
+    }).join('');
+    document.querySelectorAll('.check').forEach((el) => el.addEventListener('toggle', () => { if (el.open) openIds.add(el.dataset.id); else openIds.delete(el.dataset.id); }));
+  }
+  function paintWhen() { $('overall-when').textContent = checkedAt ? `checked ${fmtAgo(checkedAt)}${cachedNote}` : 'check time not reported'; }
+  $('refresh').addEventListener('click', () => load(true));
+  load(true);
+  setInterval(paintWhen, 5000);
+  setInterval(() => load(true), 60000);
+})();
+</script>
+</body>
+</html>

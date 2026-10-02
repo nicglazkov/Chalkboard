@@ -386,3 +386,45 @@ def test_graph_layout_checker_escalates_at_max_attempts(tmp_path):
         ))
 
     assert result["status"] == "failed"
+
+
+def test_after_layout_checker_renders_anyway_when_only_layout_warnings_remain():
+    from pipeline.graph import _after_layout_checker
+    state = {"code_feedback": "overlap", "code_attempts": 3,
+             "layout_renderable": True, "interactive": False}
+    assert _after_layout_checker(state) == "render_trigger"
+
+
+def test_after_layout_checker_escalates_when_scene_crashed():
+    from pipeline.graph import _after_layout_checker
+    state = {"code_feedback": "crash", "code_attempts": 3,
+             "layout_renderable": False, "interactive": False}
+    assert _after_layout_checker(state) == "escalate_to_user"
+
+
+def test_after_layout_checker_interactive_still_escalates():
+    from pipeline.graph import _after_layout_checker
+    state = {"code_feedback": "overlap", "code_attempts": 3,
+             "layout_renderable": True, "interactive": True}
+    assert _after_layout_checker(state) == "escalate_to_user"
+
+
+def test_claude_review_rejection_retries_manim_below_limit():
+    from pipeline.graph import _after_code_validator
+    state = {"code_feedback": "nit", "code_feedback_advisory": True,
+             "claude_review_failures": 1, "code_attempts": 0}
+    assert _after_code_validator(state) == "manim_agent"
+
+
+def test_claude_review_rejection_proceeds_to_layout_past_limit():
+    from pipeline.graph import _after_code_validator, CLAUDE_REVIEW_ADVISORY_LIMIT
+    state = {"code_feedback": "nit", "code_feedback_advisory": True,
+             "claude_review_failures": CLAUDE_REVIEW_ADVISORY_LIMIT + 1, "code_attempts": 0}
+    assert _after_code_validator(state) == "layout_checker"
+
+
+def test_hard_failure_never_bypasses_to_layout():
+    from pipeline.graph import _after_code_validator
+    state = {"code_feedback": "SyntaxError", "code_feedback_advisory": False,
+             "claude_review_failures": 9, "code_attempts": 1}
+    assert _after_code_validator(state) == "manim_agent"

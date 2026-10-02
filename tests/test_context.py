@@ -132,9 +132,9 @@ def test_load_context_blocks_docx_extracts_text(tmp_path):
     f = tmp_path / "notes.docx"
     mock_doc = MagicMock()
     mock_doc.paragraphs = [
-        MagicMock(text="First paragraph"),
-        MagicMock(text="Second paragraph"),
-        MagicMock(text=""),  # empty — should be filtered
+        MagicMock(type="text", text="First paragraph"),
+        MagicMock(type="text", text="Second paragraph"),
+        MagicMock(type="text", text=""),  # empty — should be filtered
     ]
     with patch("pipeline.context.DocxDocument", return_value=mock_doc):
         blocks = load_context_blocks([f])

@@ -84,12 +84,12 @@ def test_openai_tts_passes_speed_to_api(tmp_path):
     mock_response = MagicMock()
     mock_response.content = _make_wav_bytes()
     mock_openai = MagicMock()
-    mock_openai.audio.speech.create.return_value = mock_response
+    mock_openai.OpenAI.return_value.audio.speech.create.return_value = mock_response
 
     with patch("pipeline.tts.openai_tts.openai", mock_openai):
         asyncio.run(generate_audio(segments, tmp_path / "out.wav", speed=1.5))
 
-    call_kwargs = mock_openai.audio.speech.create.call_args.kwargs
+    call_kwargs = mock_openai.OpenAI.return_value.audio.speech.create.call_args.kwargs
     assert call_kwargs["speed"] == 1.5
 
 
@@ -99,12 +99,12 @@ def test_openai_tts_default_speed_is_1(tmp_path):
     mock_response = MagicMock()
     mock_response.content = _make_wav_bytes()
     mock_openai = MagicMock()
-    mock_openai.audio.speech.create.return_value = mock_response
+    mock_openai.OpenAI.return_value.audio.speech.create.return_value = mock_response
 
     with patch("pipeline.tts.openai_tts.openai", mock_openai):
         asyncio.run(generate_audio(segments, tmp_path / "out.wav"))
 
-    call_kwargs = mock_openai.audio.speech.create.call_args.kwargs
+    call_kwargs = mock_openai.OpenAI.return_value.audio.speech.create.call_args.kwargs
     assert call_kwargs.get("speed", 1.0) == 1.0
 
 

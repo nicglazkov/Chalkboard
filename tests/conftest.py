@@ -37,3 +37,21 @@ def mock_anthropic_client():
     client = MagicMock()
     client.messages = MagicMock()
     return client
+
+
+@pytest.fixture(autouse=True)
+def _fresh_llm_clients():
+    """pipeline.llm caches clients; tests that patch anthropic.Anthropic need a fresh one."""
+    from pipeline import llm
+    from pipeline.tts import kokoro_tts
+    llm._clients.clear()
+    kokoro_tts._pipeline.cache_clear()
+    yield
+    llm._clients.clear()
+    kokoro_tts._pipeline.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_default_narrator(monkeypatch):
+    """Tests must not inherit a NARRATOR from the developer's .env."""
+    monkeypatch.setattr("pipeline.render_trigger.NARRATOR", "")

@@ -212,3 +212,67 @@ def test_upload_endpoint_cleans_up_tmp_dir_on_unexpected_error(tmp_path, monkeyp
     from pathlib import Path
     for d in created_dirs:
         assert not Path(d).exists(), f"temp dir {d} was not cleaned up"
+
+
+def test_meta_reports_defaults_and_narrators():
+    from fastapi.testclient import TestClient
+    from server.app import create_app
+    from server.jobs import JobStore
+    from unittest.mock import AsyncMock, MagicMock
+    lib = MagicMock(); lib.init = AsyncMock(); lib.get_video = AsyncMock(return_value=None)
+    client = TestClient(create_app(store=JobStore(), library_store=lib))
+    data = client.get("/api/meta").json()
+    assert {"quality", "narrator", "effort"} <= set(data["defaults"])
+    ids = {n["id"] for n in data["narrators"]}
+    assert {"aria", "milo", "kokoro"} <= ids
+    # `configured` (key set), not a claim the voice works: /api/voices probes that.
+    assert next(n for n in data["narrators"] if n["id"] == "kokoro")["configured"] is True
+
+
+@pytest.mark.parametrize("field,value", [
+    ("quality", "8k"), ("narrator", "bob"), ("effort", "extreme"), ("qa_density", "max"),
+])
+def test_upload_endpoint_rejects_invalid_fields(client, field, value):
+    """The multipart route validates like the JSON route (422) before saving files."""
+    tc, store = client
+
+    async def must_not_save(files, tmp_dir):
+        raise AssertionError("validate_and_save called for an invalid request")
+
+    with patch("server.routes.validate_and_save", new=must_not_save):
+        resp = tc.post("/api/jobs/upload", data={"topic": "t", field: value})
+
+    assert resp.status_code == 422
+    assert store.list() == []
+
+
+def test_upload_endpoint_forwards_quality_and_narrator(client):
+    tc, store = client
+
+    async def no_files(files, tmp_dir):
+        return []
+
+    with patch("server.routes.asyncio.create_task"), \
+         patch("server.routes.validate_and_save", new=no_files):
+        resp = tc.post("/api/jobs/upload",
+                       data={"topic": "t", "quality": "4k", "narrator": "milo", "template": ""})
+
+    assert resp.status_code == 202
+    job = store.get(resp.json()["id"])
+    assert (job.quality, job.narrator, job.template) == ("4k", "milo", None)
+
+
+def test_job_events_carry_server_timestamps():
+    from server.jobs import Job
+    job = Job(id="j", topic="t", effort="low", audience="beginner", tone="casual",
+              theme="chalkboard", template=None, speed=1.0)
+    job.append_event({"node": "render", "updates": {"status": "running"}})
+    assert job.events[0]["ts"].endswith("+00:00")
+
+
+def test_speed_out_of_range_is_rejected():
+    import pytest
+    from pydantic import ValidationError
+    from server.models import CreateJobRequest
+    with pytest.raises(ValidationError):
+        CreateJobRequest(topic="t", speed=0)

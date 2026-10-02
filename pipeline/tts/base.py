@@ -5,8 +5,16 @@ from typing import Callable
 
 
 # Signature all backends must implement:
-# generate_audio(segments, output_path, speed=1.0) -> tuple[Path, list[float]]
-# Returns (wav_path, list_of_actual_duration_sec_per_segment)
+# generate_audio(segments, output_path, speed=1.0, *, voice=None, model=None)
+#   -> (wav_path, durations) or (wav_path, durations, cue_times)
+# durations: actual seconds per segment. cue_times (optional): per segment, the
+# time in seconds from the segment start of each [[k]] cue marker, in marker
+# order (see pipeline/cues.py). Segments carry clean `text` and, when they have
+# markers, the marked `cue_text`; speak the clean text. Without cue_times,
+# render_trigger estimates them proportionally.
+# Optional keyword on_segment(index, chars): call it as each segment's audio is
+# done (chars = length of the text spoken); render_trigger publishes it as live
+# `tts` progress. It may be called from a worker thread.
 
 
 def _build_atempo(speed: float) -> str:
