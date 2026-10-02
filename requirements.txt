@@ -3,6 +3,7 @@ langgraph-checkpoint-sqlite>=3.0.3
 aiosqlite>=0.20
 anthropic>=0.77.1
 kokoro>=0.9.4
+transformers>=4.44
 soundfile
 numpy
 pydantic>=2.0
@@ -19,3 +20,4 @@ sse-starlette>=1.8.0
 # Optional TTS backends (uncomment as needed):
 openai
 # elevenlabs
+python-multipart

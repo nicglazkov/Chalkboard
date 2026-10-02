@@ -1,7 +1,5 @@
 # pipeline/agents/manim_agent.py
-import json
-import anthropic
-from config import CLAUDE_MODEL
+from pipeline.llm import call_json, get_client, has_pdf
 from pipeline.retry import api_call_with_retry, TIMEOUT_MANIM_AGENT
 from pipeline.state import PipelineState
 
@@ -238,6 +236,14 @@ THEME_SPECS = {
 }
 
 
+SCHEMA = {
+    "type": "object",
+    "properties": {"manim_code": {"type": "string"}},
+    "required": ["manim_code"],
+    "additionalProperties": False,
+}
+
+
 def _format_segments(segments: list[dict]) -> str:
     n = len(segments)
     header = f"Total segments: {n} (use _d[0] through _d[{max(0, n-1)}])"
@@ -251,9 +257,7 @@ def _format_segments(segments: list[dict]) -> str:
 
 async def manim_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
     if client is None:
-        has_pdf = context_blocks and any(b.get("type") == "document" for b in context_blocks)
-        kwargs = {"default_headers": {"anthropic-beta": "pdfs-2024-09-25"}} if has_pdf else {}
-        client = anthropic.Anthropic(**kwargs)
+        client = get_client(pdf=has_pdf(context_blocks))
 
     user_msg = (
         f"Create a Manim animation for this educational script.\n\n"
@@ -283,25 +287,12 @@ async def manim_agent(state: PipelineState, client=None, context_blocks=None) ->
         content = user_msg
 
     def _call():
-        return client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=16384,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": content}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": {"manim_code": {"type": "string"}},
-                        "required": ["manim_code"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
+        # Streams: scene code is long and thinking adds latency.
+        return call_json(
+            "manim", system=SYSTEM_PROMPT, content=content, schema=SCHEMA,
+            max_tokens=48000, client=client, stream=True,
         )
 
-    response = await api_call_with_retry(_call, timeout=TIMEOUT_MANIM_AGENT, label="manim_agent")
+    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_MANIM_AGENT, label="manim_agent")
 
-    data = json.loads(response.content[0].text)
     return {"manim_code": data["manim_code"], "status": "validating"}

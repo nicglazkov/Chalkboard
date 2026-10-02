@@ -25,7 +25,7 @@ INVALID_SYNTAX = "from manim import *\nclass Bad(\n    def broken"
 
 def _mock_response(verdict: str, feedback: str) -> MagicMock:
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({"verdict": verdict, "feedback": feedback}))]
+    msg.content = [MagicMock(type="text", text=json.dumps({"verdict": verdict, "feedback": feedback}))]
     return msg
 
 
@@ -34,7 +34,7 @@ def test_code_validator_passes_valid_code(base_state):
     base_state["script"] = "Hello world."
     mock_resp = _mock_response("approved", "Looks correct.")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 
@@ -46,7 +46,7 @@ def test_code_validator_fails_on_syntax_error_without_claude_call(base_state):
     base_state["manim_code"] = INVALID_SYNTAX
     base_state["code_attempts"] = 0
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         result = asyncio.run(code_validator(base_state))
 
     MockClient.assert_not_called()
@@ -60,7 +60,7 @@ def test_code_validator_increments_attempts_on_semantic_fail(base_state):
     base_state["code_attempts"] = 1
     mock_resp = _mock_response("needs_revision", "Scene doesn't show hash tables.")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 
@@ -81,7 +81,7 @@ class ChalkboardScene(Scene):
     base_state["script"] = "Hello world."
     mock_resp = _mock_response("needs_revision", "self.wait uses hardcoded float")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 
@@ -110,7 +110,7 @@ class ChalkboardScene(Scene):
     base_state["script"] = "Hello world."
     mock_resp = _mock_response("needs_revision", "Must inherit ChalkboardSceneBase.")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 
@@ -143,7 +143,7 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
     base_state["script"] = "Hello world."
     mock_resp = _mock_response("needs_revision", "Missing begin_segment call for segment 0.")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 
@@ -176,7 +176,7 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
     base_state["script"] = "Hello world."
     mock_resp = _mock_response("needs_revision", "Missing end_layout_check() call.")
 
-    with patch("pipeline.agents.code_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(code_validator(base_state))
 

@@ -37,3 +37,12 @@ def mock_anthropic_client():
     client = MagicMock()
     client.messages = MagicMock()
     return client
+
+
+@pytest.fixture(autouse=True)
+def _fresh_llm_clients():
+    """pipeline.llm caches clients; tests that patch anthropic.Anthropic need a fresh one."""
+    from pipeline import llm
+    llm._clients.clear()
+    yield
+    llm._clients.clear()

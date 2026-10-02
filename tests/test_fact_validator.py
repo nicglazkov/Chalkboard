@@ -9,7 +9,7 @@ from pipeline.agents.fact_validator import fact_validator
 
 def _mock_response(verdict: str, feedback: str) -> MagicMock:
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({"verdict": verdict, "feedback": feedback}))]
+    msg.content = [MagicMock(type="text", text=json.dumps({"verdict": verdict, "feedback": feedback}))]
     return msg
 
 
@@ -17,7 +17,7 @@ def test_fact_validator_approved(base_state):
     base_state["script"] = "B-trees are self-balancing trees."
     mock_resp = _mock_response("approved", "Accurate.")
 
-    with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(fact_validator(base_state))
 
@@ -30,7 +30,7 @@ def test_fact_validator_needs_revision_increments_attempts(base_state):
     base_state["script_attempts"] = 1
     mock_resp = _mock_response("needs_revision", "B-trees are not hash maps.")
 
-    with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_resp
         result = asyncio.run(fact_validator(base_state))
 
@@ -43,7 +43,7 @@ def test_fact_validator_effort_low_uses_light_prompt(base_state):
     base_state["effort_level"] = "low"
     mock_resp = _mock_response("approved", "OK")
 
-    with patch("pipeline.agents.fact_validator.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_resp
         asyncio.run(fact_validator(base_state))

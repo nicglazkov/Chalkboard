@@ -1,6 +1,16 @@
 # pipeline/retry.py
 import asyncio
 
+try:
+    import anthropic as _anthropic
+    # Request errors that will fail the same way on every attempt.
+    _FATAL = (
+        _anthropic.BadRequestError, _anthropic.AuthenticationError,
+        _anthropic.PermissionDeniedError, _anthropic.NotFoundError,
+    )
+except ImportError:  # pragma: no cover
+    _FATAL = ()
+
 # ---------------------------------------------------------------------------
 # Exception
 # ---------------------------------------------------------------------------
@@ -13,13 +23,15 @@ class TimeoutExhausted(Exception):
 # Timeout constants (seconds) — tune these as needed
 # ---------------------------------------------------------------------------
 
-TIMEOUT_SCRIPT_AGENT   = 120.0   # script_agent (may use web search tool)
-TIMEOUT_RESEARCH_AGENT = 120.0   # research_agent (web search, may take multiple queries)
-TIMEOUT_FACT_VALIDATOR =  60.0   # fact_validator
-TIMEOUT_MANIM_AGENT    = 180.0   # manim_agent (max_tokens=16384)
-TIMEOUT_CODE_VALIDATOR =  60.0   # code_validator
-TIMEOUT_LAYOUT_CHECKER =  90.0   # layout_checker (Docker dry-run — scales with animation count)
-TIMEOUT_VISUAL_QA      =  90.0   # visual_qa (5 base64 images)
+# Claude calls think before answering, so budgets are generous; the SDK retries
+# 429/5xx on its own inside each attempt.
+TIMEOUT_SCRIPT_AGENT   = 300.0   # script_agent (may use web search tool)
+TIMEOUT_RESEARCH_AGENT = 300.0   # research_agent (web search, may take multiple queries)
+TIMEOUT_FACT_VALIDATOR = 180.0   # fact_validator
+TIMEOUT_MANIM_AGENT    = 900.0   # manim_agent (streams up to 48k tokens)
+TIMEOUT_CODE_VALIDATOR = 240.0   # code_validator
+TIMEOUT_LAYOUT_CHECKER = 180.0   # layout_checker (headless dry-run — scales with animation count)
+TIMEOUT_VISUAL_QA      = 240.0   # visual_qa (several base64 frames)
 TIMEOUT_TTS_SEGMENT    =  30.0   # OpenAI + ElevenLabs per-segment
 TIMEOUT_TTS_KOKORO     = 120.0   # Kokoro full call (includes model load)
 
@@ -31,12 +43,15 @@ TIMEOUT_TTS_KOKORO     = 120.0   # Kokoro full call (includes model load)
 async def api_call_with_retry(fn, timeout, max_attempts=3, label="API call"):
     """
     Run sync callable `fn` in a thread with a timeout.
-    Retry up to `max_attempts` times on any exception or timeout.
-    Raises TimeoutExhausted when all attempts are exhausted.
+    Retry up to `max_attempts` times on timeouts and transient errors.
+    Raises TimeoutExhausted when all attempts are exhausted, or immediately for
+    request errors that cannot succeed on retry (bad request, auth, 404).
     """
     for attempt in range(1, max_attempts + 1):
         try:
             return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout)
+        except _FATAL as e:
+            raise TimeoutExhausted(f"{label} failed: {e}") from e
         except (asyncio.TimeoutError, Exception) as e:
             if attempt == max_attempts:
                 raise TimeoutExhausted(

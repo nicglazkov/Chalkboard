@@ -24,7 +24,7 @@ FAKE_QUESTIONS = [
 
 def _make_mock_response(questions):
     response = MagicMock()
-    response.content = [MagicMock()]
+    response.content = [MagicMock(type="text")]
     response.content[0].text = json.dumps({"questions": questions})
     return response
 
@@ -40,7 +40,7 @@ def test_generates_quiz_json(tmp_path, monkeypatch):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = _make_mock_response(FAKE_QUESTIONS)
 
-    with patch("anthropic.Anthropic", return_value=mock_client):
+    with patch("pipeline.llm.anthropic.Anthropic", return_value=mock_client):
         result = _generate_quiz(run_id)
 
     assert result == run_dir / "quiz.json"
@@ -55,7 +55,7 @@ def test_returns_none_when_no_script(tmp_path, monkeypatch):
     (tmp_path / run_id).mkdir()
     monkeypatch.setattr("main.OUTPUT_DIR", str(tmp_path))
 
-    with patch("anthropic.Anthropic"):
+    with patch("pipeline.llm.anthropic.Anthropic"):
         result = _generate_quiz(run_id)
 
     assert result is None
@@ -72,7 +72,7 @@ def test_quiz_json_structure(tmp_path, monkeypatch):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = _make_mock_response(FAKE_QUESTIONS)
 
-    with patch("anthropic.Anthropic", return_value=mock_client):
+    with patch("pipeline.llm.anthropic.Anthropic", return_value=mock_client):
         _generate_quiz(run_id)
 
     questions = json.loads((run_dir / "quiz.json").read_text())
@@ -96,7 +96,7 @@ def test_passes_script_to_claude(tmp_path, monkeypatch):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = _make_mock_response(FAKE_QUESTIONS)
 
-    with patch("anthropic.Anthropic", return_value=mock_client):
+    with patch("pipeline.llm.anthropic.Anthropic", return_value=mock_client):
         _generate_quiz(run_id)
 
     call_args = mock_client.messages.create.call_args

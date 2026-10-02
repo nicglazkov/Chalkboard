@@ -18,7 +18,7 @@ def test_script_agent_returns_script_and_segments(base_state):
     segments = [{"text": "B-trees are balanced.", "estimated_duration_sec": 1.2}]
     mock_response = _make_claude_response("B-trees are balanced.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         result = asyncio.run(script_agent(base_state))
@@ -37,7 +37,7 @@ def test_script_agent_sets_needs_web_search_when_flagged(base_state):
     mock_response = MagicMock()
     mock_response.content = [MagicMock(type="text", text=content)]
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         MockClient.return_value.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         result = asyncio.run(script_agent(base_state))
@@ -51,7 +51,7 @@ def test_script_agent_includes_feedback_in_revision(base_state):
     segments = [{"text": "Revised script.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Revised script.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -68,7 +68,7 @@ def test_script_agent_includes_audience_in_prompt(base_state):
     segments = [{"text": "Expert content.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Expert content.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -83,7 +83,7 @@ def test_script_agent_uses_default_audience_when_not_set(base_state):
     segments = [{"text": "Default audience.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Default audience.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -98,7 +98,7 @@ def test_script_agent_includes_tone_in_prompt(base_state):
     segments = [{"text": "Socratic content.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Socratic content.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -113,7 +113,7 @@ def test_script_agent_uses_default_tone_when_not_set(base_state):
     segments = [{"text": "Casual content.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Casual content.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -131,7 +131,7 @@ def test_script_agent_with_context_blocks_sends_list_content(base_state):
     segments = [{"text": "Script.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Script.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -148,7 +148,7 @@ def test_script_agent_without_context_blocks_sends_string_content(base_state):
     segments = [{"text": "Script.", "estimated_duration_sec": 1.0}]
     mock_response = _make_claude_response("Script.", segments)
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
         client_instance.messages.create.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
@@ -178,7 +178,7 @@ def test_research_brief_injected_into_message(base_state):
     base_state["script"] = ""
     base_state["script_segments"] = []
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
         instance.messages.create.return_value = _mock_response()
         from pipeline.agents.script_agent import script_agent
@@ -196,7 +196,7 @@ def test_web_search_disabled_when_brief_present(base_state):
     base_state["research_brief"] = "Some research."
     base_state["research_sources"] = []
 
-    with patch("pipeline.agents.script_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
         instance.messages.create.return_value = _mock_response()
         from pipeline.agents.script_agent import script_agent
@@ -205,4 +205,4 @@ def test_web_search_disabled_when_brief_present(base_state):
     call_kwargs = instance.messages.create.call_args.kwargs
     tools = call_kwargs.get("tools", _anthropic.NOT_GIVEN)
     if tools is not _anthropic.NOT_GIVEN:
-        assert not any(t.get("type") == "web_search_20250305" for t in (tools or []))
+        assert not any(t.get("name") == "web_search" for t in (tools or []))

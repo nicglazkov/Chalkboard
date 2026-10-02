@@ -4,8 +4,7 @@ import base64
 import json
 import subprocess
 from pathlib import Path
-import anthropic
-from config import CLAUDE_MODEL
+from pipeline.llm import call_json
 from pipeline.retry import api_call_with_retry, TIMEOUT_VISUAL_QA
 
 SCHEMA = {
@@ -161,9 +160,6 @@ def visual_qa(
                         dry-run get extra frame samples.
     Returns {"passed": bool, "issues": [{"severity": "warning"|"error", "description": str}]}
     """
-    if client is None:
-        client = anthropic.Anthropic()
-
     spf, max_f = _QA_DENSITY.get(density, _QA_DENSITY["normal"])
 
     if segments:
@@ -227,14 +223,9 @@ def visual_qa(
         })
 
     def _call():
-        return client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": content}],
-            output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-        )
+        return call_json("visual_qa", content=content, schema=SCHEMA, max_tokens=8000, client=client)
 
-    response = asyncio.run(
+    data, _ = asyncio.run(
         api_call_with_retry(_call, timeout=TIMEOUT_VISUAL_QA, label="visual_qa")
     )
-    return json.loads(response.content[0].text)
+    return data

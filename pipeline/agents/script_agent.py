@@ -1,7 +1,5 @@
 # pipeline/agents/script_agent.py
-import json
-import anthropic
-from config import CLAUDE_MODEL
+from pipeline.llm import call_json, get_client, has_pdf, web_search_tool
 from pipeline.retry import api_call_with_retry, TIMEOUT_SCRIPT_AGENT
 from pipeline.state import PipelineState
 
@@ -35,6 +33,30 @@ TONE_INSTRUCTIONS = {
 }
 
 
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "script": {"type": "string"},
+        "segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "estimated_duration_sec": {"type": "number"},
+                },
+                "required": ["text", "estimated_duration_sec"],
+                "additionalProperties": False,
+            },
+        },
+        "needs_web_search": {"type": "boolean"},
+    },
+    "required": ["title", "script", "segments", "needs_web_search"],
+    "additionalProperties": False,
+}
+
+
 def _build_user_message(state: PipelineState) -> str:
     topic = state["topic"]
     effort = state["effort_level"]
@@ -62,14 +84,12 @@ def _build_user_message(state: PipelineState) -> str:
 
 async def script_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
     if client is None:
-        has_pdf = context_blocks and any(b.get("type") == "document" for b in context_blocks)
-        kwargs = {"default_headers": {"anthropic-beta": "pdfs-2024-09-25"}} if has_pdf else {}
-        client = anthropic.Anthropic(**kwargs)
+        client = get_client(pdf=has_pdf(context_blocks))
 
     tools = []
     # Skip web_search if research_agent already provided a brief (effort=high path)
     if (state.get("user_approved_search") or state["effort_level"] == "high") and not state.get("research_brief"):
-        tools = [{"type": "web_search_20250305", "name": "web_search"}]
+        tools = [web_search_tool("script")]
 
     if context_blocks:
         content = [
@@ -84,50 +104,12 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
         content = _build_user_message(state)
 
     def _call():
-        return client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": content}],
-            tools=tools if tools else anthropic.NOT_GIVEN,
-            output_config={
-                "format": {
-                    "type": "json_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "script": {"type": "string"},
-                            "segments": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "text": {"type": "string"},
-                                        "estimated_duration_sec": {"type": "number"},
-                                    },
-                                    "required": ["text", "estimated_duration_sec"],
-                                    "additionalProperties": False,
-                                },
-                            },
-                            "needs_web_search": {"type": "boolean"},
-                        },
-                        "required": ["title", "script", "segments", "needs_web_search"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
+        return call_json(
+            "script", system=SYSTEM_PROMPT, content=content, schema=SCHEMA,
+            tools=tools or None, client=client,
         )
 
-    response = await api_call_with_retry(_call, timeout=TIMEOUT_SCRIPT_AGENT, label="script_agent")
-
-    text_block = next((b for b in reversed(response.content) if b.type == "text"), None)
-    if text_block is None:
-        raise RuntimeError(
-            f"script_agent: no text block in response. "
-            f"Content types: {[b.type for b in response.content]}"
-        )
-    data = json.loads(text_block.text)
+    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_SCRIPT_AGENT, label="script_agent")
     return {
         "title": data.get("title", ""),
         "script": data["script"],

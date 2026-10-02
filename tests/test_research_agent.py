@@ -21,7 +21,7 @@ def _mock_response(brief=DUMMY_BRIEF, sources=None):
 
 def test_research_agent_returns_brief(base_state):
     base_state["effort_level"] = "high"
-    with patch("pipeline.agents.research_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
         instance.messages.create.return_value = _mock_response()
         result = asyncio.run(research_agent(base_state))
@@ -31,19 +31,19 @@ def test_research_agent_returns_brief(base_state):
 
 def test_research_agent_uses_web_search_tool(base_state):
     base_state["effort_level"] = "high"
-    with patch("pipeline.agents.research_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
         instance.messages.create.return_value = _mock_response()
         asyncio.run(research_agent(base_state))
     call_kwargs = instance.messages.create.call_args.kwargs
     tools = call_kwargs.get("tools", [])
-    assert any(t.get("type") == "web_search_20250305" for t in tools)
+    assert any(t.get("name") == "web_search" for t in tools)
 
 
 def test_research_agent_includes_topic_in_message(base_state):
     base_state["topic"] = "explain quicksort"
     base_state["effort_level"] = "high"
-    with patch("pipeline.agents.research_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
         instance.messages.create.return_value = _mock_response()
         asyncio.run(research_agent(base_state))

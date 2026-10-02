@@ -1,7 +1,5 @@
 # pipeline/agents/research_agent.py
-import json
-import anthropic
-from config import CLAUDE_MODEL
+from pipeline.llm import call_json, web_search_tool
 from pipeline.retry import api_call_with_retry, TIMEOUT_RESEARCH_AGENT, TimeoutExhausted
 from pipeline.state import PipelineState
 
@@ -23,45 +21,31 @@ Set search_warning to a short plain-English sentence if any of these apply:
 Otherwise set search_warning to null."""
 
 
-async def research_agent(state: PipelineState, client=None) -> dict:
-    if client is None:
-        client = anthropic.Anthropic()
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "research_brief": {"type": "string"},
+        "sources": {"type": "array", "items": {"type": "string"}},
+        "search_warning": {"type": ["string", "null"]},
+    },
+    "required": ["research_brief", "sources", "search_warning"],
+    "additionalProperties": False,
+}
 
+
+async def research_agent(state: PipelineState, client=None) -> dict:
     def _call():
-        return client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": f"Topic: {state['topic']}"}],
-            # Always enabled: research_agent is only invoked on effort_level="high" (graph routing guarantees this)
-            tools=[{"type": "web_search_20250305", "name": "web_search"}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "research_brief": {"type": "string"},
-                            "sources": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "search_warning": {
-                                "type": ["string", "null"],
-                            },
-                        },
-                        "required": ["research_brief", "sources", "search_warning"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
+        # Always enabled: research_agent only runs at effort_level="high" (graph routing guarantees this)
+        return call_json(
+            "research", system=SYSTEM_PROMPT, content=f"Topic: {state['topic']}",
+            schema=SCHEMA, tools=[web_search_tool("research")], client=client,
         )
 
     try:
-        response = await api_call_with_retry(
+        data, _ = await api_call_with_retry(
             _call, timeout=TIMEOUT_RESEARCH_AGENT, label="research_agent"
         )
-    except TimeoutExhausted as e:
+    except (TimeoutExhausted, RuntimeError, ValueError) as e:
         warning = f"Web search failed after all retries ({e}) — script will rely on training data only."
         return {
             "research_brief": None,
@@ -69,20 +53,6 @@ async def research_agent(state: PipelineState, client=None) -> dict:
             "search_warning": warning,
         }
 
-    text_block = next((b for b in reversed(response.content) if b.type == "text"), None)
-    if text_block is None:
-        warning = (
-            f"Web search ran but returned no readable response "
-            f"(content types: {[b.type for b in response.content]}) — "
-            f"script will rely on training data only."
-        )
-        return {
-            "research_brief": None,
-            "research_sources": [],
-            "search_warning": warning,
-        }
-
-    data = json.loads(text_block.text)
     return {
         "research_brief": data["research_brief"],
         "research_sources": data["sources"],

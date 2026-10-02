@@ -12,16 +12,16 @@ DUMMY_CODE = "from manim import *\nclass ChalkboardScene(Scene):\n    def constr
 
 def _mock_response():
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({"manim_code": DUMMY_CODE}))]
+    msg.content = [MagicMock(type="text", text=json.dumps({"manim_code": DUMMY_CODE}))]
     return msg
 
 
 def _run_agent(state):
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
-        instance.messages.create.return_value = _mock_response()
+        instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = _mock_response()
         asyncio.run(manim_agent(state))
-    return instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    return instance.messages.stream.call_args.kwargs["messages"][0]["content"]
 
 
 # ── TEMPLATE_SPECS structure ─────────────────────────────────────────────────

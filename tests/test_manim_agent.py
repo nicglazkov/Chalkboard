@@ -8,7 +8,7 @@ from pipeline.agents.manim_agent import manim_agent
 
 def _mock_response(code: str) -> MagicMock:
     msg = MagicMock()
-    msg.content = [MagicMock(text=json.dumps({"manim_code": code}))]
+    msg.content = [MagicMock(type="text", text=json.dumps({"manim_code": code}))]
     return msg
 
 
@@ -33,8 +33,8 @@ def test_manim_agent_generates_chalkboard_scene(base_state):
     base_state["script_segments"] = [{"text": "B-trees are balanced.", "estimated_duration_sec": 2.0}]
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_resp
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         result = asyncio.run(manim_agent(base_state))
 
     assert "ChalkboardScene" in result["manim_code"]
@@ -49,12 +49,12 @@ def test_manim_agent_includes_durations_in_prompt(base_state):
     ]
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_resp
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
     content = messages[0]["content"]
     assert "1.5" in content
@@ -67,12 +67,12 @@ def test_manim_agent_includes_feedback_on_revision(base_state):
     base_state["code_feedback"] = "Missing import for MathTex"
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_resp
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
     assert "Missing import for MathTex" in messages[0]["content"]
 
@@ -83,12 +83,12 @@ def test_manim_agent_includes_theme_colors_in_prompt(base_state):
     base_state["theme"] = "light"
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_resp
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "#FAFAFA" in content  # light theme background
 
 
@@ -98,12 +98,12 @@ def test_manim_agent_colorful_theme_in_prompt(base_state):
     base_state["theme"] = "colorful"
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_resp
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "vibrant" in content.lower()
 
 
@@ -113,12 +113,12 @@ def test_manim_agent_defaults_to_chalkboard_theme(base_state):
     base_state.pop("theme", None)
     mock_resp = _mock_response(VALID_SCENE)
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_resp
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "#1C1C1C" in content  # chalkboard theme background
 
 
@@ -130,15 +130,15 @@ def test_manim_agent_with_context_blocks_sends_list_content(base_state):
         {"type": "text", "text": "class Tree: pass"},
     ]
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text='{"manim_code": "from manim import *"}')]
+    mock_response.content = [MagicMock(type="text", text='{"manim_code": "from manim import *"}')]
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.manim_agent import manim_agent
         asyncio.run(manim_agent(base_state, context_blocks=context_blocks))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, list)
     assert any("source material" in b.get("text", "") for b in content)
@@ -149,15 +149,15 @@ def test_manim_agent_without_context_blocks_sends_string_content(base_state):
     base_state["script"] = "Script."
     base_state["script_segments"] = [{"text": "S.", "estimated_duration_sec": 1.0}]
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text='{"manim_code": "from manim import *"}')]
+    mock_response.content = [MagicMock(type="text", text='{"manim_code": "from manim import *"}')]
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.manim_agent import manim_agent
         asyncio.run(manim_agent(base_state))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, str)
 
@@ -185,10 +185,10 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
         self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
 """
     mock_resp = MagicMock()
-    mock_resp.content = [MagicMock(text=json.dumps({"manim_code": code}))]
+    mock_resp.content = [MagicMock(type="text", text=json.dumps({"manim_code": code}))]
 
-    with patch("pipeline.agents.manim_agent.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_resp
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
+        MockClient.return_value.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         result = asyncio.run(manim_agent(base_state))
 
     assert "ChalkboardSceneBase" in result["manim_code"]

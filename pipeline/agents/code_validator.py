@@ -1,8 +1,7 @@
 # pipeline/agents/code_validator.py
 import ast
 import json
-import anthropic
-from config import CLAUDE_MODEL
+from pipeline.llm import call_json
 from pipeline.retry import api_call_with_retry, TIMEOUT_CODE_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
 
@@ -31,8 +30,6 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         }
 
     # Step 2: semantic review via Claude
-    if client is None:
-        client = anthropic.Anthropic()
     user_msg = (
         f"Review this Manim CE code for correctness and coherence with the script.\n\n"
         f"Script:\n{state['script']}\n\n"
@@ -71,16 +68,11 @@ async def code_validator(state: PipelineState, client=None) -> dict:
     )
 
     def _call():
-        return client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": user_msg}],
-            output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-        )
+        return call_json("code_validator", content=user_msg, schema=SCHEMA, max_tokens=8000, client=client)
 
-    response = await api_call_with_retry(_call, timeout=TIMEOUT_CODE_VALIDATOR, label="code_validator")
+    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_CODE_VALIDATOR, label="code_validator")
 
-    result = ValidationResult.model_validate_json(response.content[0].text)
+    result = ValidationResult.model_validate(data)
     if result.verdict == "needs_revision":
         return {
             "code_feedback": result.feedback,

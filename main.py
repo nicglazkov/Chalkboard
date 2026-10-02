@@ -74,9 +74,9 @@ def _report_context(blocks: list[dict], _yes: bool = False) -> bool:
     Print context token report. Returns True if pipeline should proceed, False to abort.
     Always prints the report. Prompts for confirmation only when tokens > 10k.
     """
-    import anthropic as _anthropic
+    from pipeline.llm import get_client
     try:
-        client = _anthropic.Anthropic()
+        client = get_client()
         token_count, context_window = measure_context(blocks, client)
         pct = int(token_count / context_window * 100)
         n_files = sum(
@@ -670,14 +670,36 @@ def _run_qa_loop(
         print(f"\n  [qa] re-rendered → {final_mp4}")
 
 
+QUIZ_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question":    {"type": "string"},
+                    "options":     {"type": "array", "items": {"type": "string"}},
+                    "answer":      {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["question", "options", "answer", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["questions"],
+    "additionalProperties": False,
+}
+
+
 def _generate_quiz(run_id: str) -> Path | None:
     """Generate MCQ comprehension questions for a completed run.
 
     Reads script.txt from the run directory, calls Claude, and writes
     quiz.json alongside the other output files. Returns the quiz path.
     """
-    import anthropic as _anthropic
-    from config import CLAUDE_MODEL
+    from pipeline.llm import call_json
 
     run_dir = Path(OUTPUT_DIR) / run_id
     script_path = run_dir / "script.txt"
@@ -686,51 +708,19 @@ def _generate_quiz(run_id: str) -> Path | None:
         return None
 
     script = script_path.read_text()
-    client = _anthropic.Anthropic()
-
     print("\n  [quiz] generating comprehension questions...")
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
+    data, _ = call_json(
+        "quiz",
         system="You generate educational multiple-choice comprehension questions for explainer videos.",
-        messages=[{
-            "role": "user",
-            "content": (
-                "Generate 4–6 multiple-choice comprehension questions for this educational script.\n\n"
-                f"{script}\n\n"
-                "For each question provide the question text, exactly 4 answer options (labelled A–D), "
-                "the correct answer letter, and a one-sentence explanation of why it is correct."
-            ),
-        }],
-        output_config={
-            "format": {
-                "type": "json_schema",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "questions": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "question":    {"type": "string"},
-                                    "options":     {"type": "array", "items": {"type": "string"}},
-                                    "answer":      {"type": "string"},
-                                    "explanation": {"type": "string"},
-                                },
-                                "required": ["question", "options", "answer", "explanation"],
-                                "additionalProperties": False,
-                            },
-                        },
-                    },
-                    "required": ["questions"],
-                    "additionalProperties": False,
-                },
-            }
-        },
+        content=(
+            "Generate 4–6 multiple-choice comprehension questions for this educational script.\n\n"
+            f"{script}\n\n"
+            "For each question provide the question text, exactly 4 answer options (labelled A–D), "
+            "the correct answer letter, and a one-sentence explanation of why it is correct."
+        ),
+        schema=QUIZ_SCHEMA,
     )
 
-    data = json.loads(response.content[0].text)
     questions = data["questions"]
 
     quiz_path = run_dir / "quiz.json"
