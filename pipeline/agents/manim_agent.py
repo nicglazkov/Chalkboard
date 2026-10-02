@@ -20,8 +20,20 @@ STRICT REQUIREMENTS:
 - Bind tokens to the run's theme at the top of construct():
     t = T(theme="chalkboard")     # or "light" / "colorful" per the theme block in the request
     self.camera.background_color = t.bg
-- Each narration segment gets an animation block followed by self.wait(remainder)
-- At the start of EVERY segment block, call self.begin_segment(N, duration=_d[N]) where N is the 0-based segment index
+- Each narration segment gets an animation block. Segment 0 starts with
+  self.begin_segment(0, duration=_d[0]); every later segment starts with
+  self.next_segment(N, duration=_d[N], clear=seg_items) (N is the 0-based index).
+- NARRATION SYNC IS AUTOMATIC: next_segment() holds the current frame until the
+  current segment's narration is almost over, fades out `clear`, then starts
+  segment N exactly when its narration starts. You do NOT need a remainder wait at
+  the end of a segment, and you must NOT build your own clock (no renderer.time,
+  no elapsed-time helpers). To leave a pause between beats inside a segment, use
+  the time that is actually left:
+    _w = self.segment_time_left() * 0.25
+    if _w > 0.05:
+        self.wait(_w)
+  Budget the animations of a segment to fit inside _d[N]; running long makes the
+  visuals lag the voice and the layout check rejects it.
 - At the END of construct(), call self.end_layout_check() BEFORE the final FadeOut cleanup:
     self.end_layout_check()
     self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
@@ -32,12 +44,8 @@ STRICT REQUIREMENTS:
     _d = _d + [2.0] * max(0, N - len(_d))
   Replace N with the exact integer from "Total segments: N" in the request.
 - Never hardcode a float literal as the argument to self.wait() — always use _d[i]
-- When an animation fills part of a segment's time, subtract the animation's run_time from _d[i].
-  IMPORTANT: self.wait(0) raises ValueError — Manim requires duration > 0. Always guard:
-    _r = max(0.0, _d[i] - X)
-    if _r > 0:
-        self.wait(_r)
-  NEVER write self.wait(max(0.0, ...)) directly — if the value is 0.0 it will crash.
+- IMPORTANT: self.wait(0) raises ValueError — Manim requires duration > 0. Always guard
+  computed waits (if _w > 0.05: self.wait(_w)); NEVER write self.wait(max(0.0, ...)).
 
 DESIGN SYSTEM — the vocabulary you MUST compose from.
 
@@ -363,17 +371,17 @@ CLEAN SLATE rule — mandatory at every segment boundary:
 4. Track all mobjects added in a segment in a list as you create them:
      seg_items = []
      elem = ...; reveal_with_emphasis(self, elem); seg_items.append(elem)
-5. At the start of every segment after the first, BEFORE introducing any new content:
-     self.play(*[FadeOut(m) for m in seg_items], run_time=0.5)
+5. Every segment after the first starts by clearing the previous one:
+     self.next_segment(N, duration=_d[N], clear=seg_items)
      seg_items = []
-   (If seg_items could be empty there, guard with `if seg_items:`.)
+   (an empty seg_items is fine: next_segment then just waits for the narration.)
 6. The persistent title is NEVER added to seg_items.
 7. A multi-segment element (e.g. a derivation spanning segments 1–3) is excluded from
    seg_items; FadeOut it explicitly at the segment where it is no longer needed.
 8. Leaving mobjects from a prior segment on screen while starting a new segment is the
    primary cause of visual overlap — treat this rule as strictly as the self.wait(0) guard.
-9. Call self.begin_segment(N, duration=_d[N]) at the start of each segment block (right after the
-   '# ── Segment N:' comment). Call self.end_layout_check() at the end of construct() BEFORE the
+9. Call self.begin_segment(0, duration=_d[0]) / self.next_segment(N, duration=_d[N], clear=seg_items)
+   right after each '# ── Segment N:' comment. Call self.end_layout_check() at the end of construct() BEFORE the
    final FadeOut. These are required — code_validator will reject code missing them.
 
 REQUIRED SCAFFOLD — every scene must follow this structure exactly:
@@ -413,14 +421,10 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
         self.begin_segment(0, duration=_d[0])
         seg_items = []
         # ... compose components + moves ...
-        _r = max(0.0, _d[0] - <animation_time>)
-        if _r > 0:
-            self.wait(_r)
 
         # ── Segment 1: <title> ──
-        self.play(*[FadeOut(m) for m in seg_items], run_time=0.5)
+        self.next_segment(1, duration=_d[1], clear=seg_items)
         seg_items = []
-        self.begin_segment(1, duration=_d[1])
         # ... compose components + moves ...
 
         # ── End ──

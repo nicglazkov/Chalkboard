@@ -188,7 +188,7 @@ def _check_begin_segment(tree: ast.AST, source: str = "") -> str | None:
             isinstance(func, ast.Attribute)
             and isinstance(func.value, ast.Name)
             and func.value.id == "self"
-            and func.attr == "begin_segment"
+            and func.attr in ("begin_segment", "next_segment")
         ):
             continue
         if not node.args:
@@ -204,7 +204,8 @@ def _check_begin_segment(tree: ast.AST, source: str = "") -> str | None:
         if not any(comment_line <= cl <= comment_line + 3 for cl in candidates):
             return (
                 f"line {comment_line}: missing `self.begin_segment({n}, "
-                f"duration=_d[{n}])` within 3 lines of `# ── Segment {n}:`. "
+                f"duration=_d[{n}])` (or `self.next_segment({n}, duration=_d[{n}], "
+                f"clear=seg_items)`) within 3 lines of `# ── Segment {n}:`. "
                 f"Every segment must start with begin_segment(N, duration=_d[N]) "
                 f"so ChalkboardSceneBase can track timing for the dry-run layout "
                 f"check."
@@ -870,7 +871,7 @@ def _check_design_system_imports(tree: ast.AST, source: str = "") -> str | None:
             isinstance(func, ast.Attribute)
             and isinstance(func.value, ast.Name)
             and func.value.id == "self"
-            and func.attr == "begin_segment"
+            and func.attr in ("begin_segment", "next_segment")
         ):
             has_segments = True
             break

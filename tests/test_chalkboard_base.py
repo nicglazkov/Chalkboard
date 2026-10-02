@@ -32,15 +32,19 @@ class _FakeScene(ChalkboardSceneBase):
         self._lc_budget = 0.0
         self._lc_done = False
         self._lc_violations = []
+        self._sync_target = 0.0
+        self._sync_tracked = 0.0
         self._REPORT_DIR = str(report_dir)
 
     def play(self, *args, run_time=None, **kwargs):
         # Don't call super() — no real Manim scene in tests
+        self._sync_tracked += run_time if run_time is not None else 1.0
         if not self._lc_done and self._lc_segment is not None:
             self._lc_run_time += run_time if run_time is not None else 1.0
 
     def wait(self, duration=1.0, **kwargs):
         # Don't call super() — no real Manim scene in tests
+        self._sync_tracked += duration
         if not self._lc_done and self._lc_segment is not None:
             self._lc_run_time += duration
 
@@ -452,3 +456,40 @@ def test_zone_collision_ignores_title_band_chrome(tmp_path):
 
     report = json.loads((tmp_path / "layout_report.json").read_text())
     assert [v for v in report["violations"] if v["type"] == "zone_collision"] == []
+
+
+
+# ── narration sync ────────────────────────────────────────────────────────────
+
+def test_short_segment_is_padded_to_its_narration(tmp_path):
+    s = _FakeScene(tmp_path)
+    s.begin_segment(0, duration=5.0)
+    s.play(run_time=2.0)
+    s.begin_segment(1, duration=3.0)          # pads 3.0s before starting segment 1
+    assert s._sync_tracked == pytest.approx(5.0)
+    s.play(run_time=1.0)
+    s.end_layout_check()
+    assert s._sync_tracked == pytest.approx(8.0)
+    assert json.loads((tmp_path / "layout_report.json").read_text())["passed"]
+
+
+def test_next_segment_holds_then_fades(tmp_path, monkeypatch):
+    import manim
+    monkeypatch.setattr(manim, "FadeOut", lambda m: m)   # FadeOut needs a real Mobject
+    s = _FakeScene(tmp_path)
+    s.begin_segment(0, duration=4.0)
+    s.play(run_time=1.0)
+    s.next_segment(1, duration=2.0, clear=[MockMobject(0, 0, 1, 1)], fade=0.5)
+    # hold until 3.5s, 0.5s fade, so segment 1 starts exactly at 4.0s
+    assert s._sync_tracked == pytest.approx(4.0)
+    assert s._lc_segment == 1
+
+
+def test_lagging_visuals_are_reported(tmp_path):
+    s = _FakeScene(tmp_path)
+    s.begin_segment(0, duration=2.0)
+    s.play(run_time=5.0)
+    s.begin_segment(1, duration=2.0)
+    s.end_layout_check()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    assert any(v["type"] == "sync_drift" for v in report["violations"])

@@ -125,8 +125,19 @@ class ChalkboardSceneBase:
 
     Public API (called by generated construct()):
         self.begin_segment(n, duration)   — start of each segment
+        self.next_segment(n, duration, clear=items)
+                                          — hold, clear, then begin segment n
         self.end_layout_check()           — BEFORE the final FadeOut
+
+    Narration sync: segment n always starts at (or after) the sum of the
+    budgets of segments 0..n-1 on the scene clock. If a segment's animations
+    run short, the scene waits out the gap, so visuals can never drift ahead
+    of the voiceover; next_segment() does that wait while the old content is
+    still on screen. Running long is reported as a timing violation.
     """
+
+    # Allowed lag of the visuals behind narration before it is a violation.
+    _SYNC_DRIFT_TOL = 2.0
 
     # Explicit override (tests set this). None means: use the
     # CHALKBOARD_REPORT_DIR env var, falling back to "/output".
@@ -139,6 +150,8 @@ class ChalkboardSceneBase:
         self._lc_budget: float = 0.0
         self._lc_done: bool = False
         self._lc_violations: list = []
+        self._sync_target: float = 0.0     # scene time at which the current segment should end
+        self._sync_tracked: float = 0.0    # fallback clock when there is no renderer (tests)
 
     # ------------------------------------------------------------------
     # Public API
@@ -147,14 +160,58 @@ class ChalkboardSceneBase:
     def begin_segment(self, n: int, duration: float) -> None:
         """Call at the start of every segment block in construct()."""
         if self._lc_segment is not None:
+            self._sync_to(self._sync_target)
             self._lc_check_segment()
         self._lc_segment = n
         self._lc_run_time = 0.0
         self._lc_budget = duration
+        self._sync_target = max(self._sync_target, 0.0) + duration
+
+    def next_segment(self, n: int, duration: float, clear=(), fade: float = 0.5) -> None:
+        """Finish the current segment and start segment n, in sync with narration.
+
+        Holds the current frame until `fade` seconds before the current
+        segment's narration ends, fades out `clear`, then begin_segment(n).
+        Use this instead of a manual remainder wait + FadeOut + begin_segment.
+        """
+        if self._lc_segment is not None:
+            self._sync_to(self._sync_target - (fade if clear else 0.0))
+        items = list(clear)
+        if items:
+            from manim import FadeOut
+            self.play(*[FadeOut(m) for m in items], run_time=fade)
+        self.begin_segment(n, duration)
+
+    def segment_time_left(self) -> float:
+        """Seconds of narration left in the current segment (never negative)."""
+        return max(0.0, self._sync_target - self._scene_time())
+
+    def _scene_time(self) -> float:
+        # Our own clock, not renderer.time: the layout dry-run renders at 1 fps
+        # and Manim rounds every animation up to whole frames there (a 0.4s
+        # play advances renderer.time by 1s), which would fake huge drift.
+        return self._sync_tracked
+
+    def _sync_to(self, target: float) -> None:
+        """Wait until the scene clock reaches `target`; flag excessive lag."""
+        now = self._scene_time()
+        gap = target - now
+        if gap > 0.02:
+            self.wait(gap)
+        elif -gap > self._SYNC_DRIFT_TOL and self._lc_segment is not None and not self._lc_done:
+            self._lc_violations.append({
+                "type": "sync_drift",
+                "segment": self._lc_segment,
+                "description": (
+                    f"Segment {self._lc_segment}: visuals are {-gap:.1f}s behind the narration "
+                    f"at the segment boundary. Shorten this segment's animations."
+                ),
+            })
 
     def end_layout_check(self) -> None:
         """Call BEFORE the final FadeOut at end of construct()."""
         if self._lc_segment is not None:
+            self._sync_to(self._sync_target)
             self._lc_check_segment()
         self._lc_done = True
         self._lc_write_report()
@@ -171,17 +228,27 @@ class ChalkboardSceneBase:
         is_internal_wait = (
             len(animations) == 1 and isinstance(animations[0], _Wait)
         )
-        if not self._lc_done and self._lc_segment is not None and not is_internal_wait:
-            self._lc_run_time += run_time if run_time is not None else 1.0
         if run_time is not None:
             kwargs["run_time"] = run_time
-        return super().play(*animations, **kwargs)
+        result = super().play(*animations, **kwargs)
+        if not is_internal_wait:
+            # Manim records the real run time of the last play() in self.duration
+            # (it honours run_time set on the animations themselves, e.g. a
+            # LaggedStart(run_time=3)); fall back to the kwarg, else Manim's 1s default.
+            actual = getattr(self, "duration", None)
+            if not isinstance(actual, (int, float)):
+                actual = run_time if run_time is not None else 1.0
+            self._sync_tracked += actual
+            if not self._lc_done and self._lc_segment is not None:
+                self._lc_run_time += actual
+        return result
 
     # ------------------------------------------------------------------
     # wait() override — accumulate duration
     # ------------------------------------------------------------------
 
     def wait(self, duration=1.0, **kwargs):
+        self._sync_tracked += duration
         if not self._lc_done and self._lc_segment is not None:
             self._lc_run_time += duration
         return super().wait(duration, **kwargs)
