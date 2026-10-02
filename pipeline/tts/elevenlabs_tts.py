@@ -56,6 +56,7 @@ async def generate_audio(
     *,
     voice: str | None = None,
     model: str | None = None,
+    on_segment=None,
 ) -> tuple[Path, list[float], list[list[float | None]]]:
     key = os.getenv("ELEVENLABS_API_KEY")
     if not key:
@@ -93,6 +94,8 @@ async def generate_audio(
                     lambda i=i: _call(i, ids), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
                 )
                 results.append((pcm, alignment))
+                if on_segment is not None:
+                    on_segment(i, len(texts[i]))
                 if rid:
                     ids.append(rid)
         else:
@@ -103,6 +106,8 @@ async def generate_audio(
                     pcm, alignment, _ = await api_call_with_retry(
                         lambda: _call(i, []), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
                     )
+                    if on_segment is not None:
+                        on_segment(i, len(texts[i]))
                     return pcm, alignment
 
             results = list(await asyncio.gather(*(_one(i) for i in range(len(texts)))))

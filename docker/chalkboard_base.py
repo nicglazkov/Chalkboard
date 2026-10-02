@@ -265,6 +265,9 @@ class ChalkboardSceneBase:
             self._sync_to(self._sync_target)
             self._lc_check_segment()
         self._lc_segment = n
+        if self._real_render():
+            # Live progress for the host: main._render_once parses this line.
+            print(f"CB_SEGMENT {n}", flush=True)
         self._lc_run_time = 0.0
         self._lc_budget = duration
         # Narration of segment n starts at the sum of the earlier budgets
@@ -640,6 +643,9 @@ class ChalkboardSceneBase:
             # Every self.cue(k): when the word is spoken vs when the cued
             # animation starts (scene clock = video time in a real render).
             "cue_log": self.__dict__.get("_cue_log", []),
+            # Which run wrote this file: "render" (a real render, scene clock =
+            # frames written) or "dry_run" (layout check / tests, tracked clock).
+            "mode": "render" if self._real_render() else "dry_run",
         }
         report_dir = report_dir_for(self._REPORT_DIR)
         report_path = Path(report_dir) / "layout_report.json"

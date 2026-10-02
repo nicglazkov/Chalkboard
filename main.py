@@ -271,9 +271,86 @@ def _generate_caption_files(run_dir: Path) -> tuple[Path | None, Path | None]:
 
 
 def _parse_manim_line(line: str) -> int | None:
-    """Return animation number if line is a Manim CE progress line, else None."""
-    m = re.match(r'Animation (\d+) :', line)
+    """Return animation number if line is a Manim CE progress line, else None.
+
+    Matches both the log line ("Animation 5 : Partial movie file written ...",
+    possibly after a timestamp/level prefix) and the progress bar
+    ("Animation 5: Create(...)")."""
+    m = re.search(r'\bAnimation (\d+) ?:', line)
     return int(m.group(1)) if m else None
+
+
+def _parse_segment_line(line: str) -> int | None:
+    """Segment index from the `CB_SEGMENT n` line ChalkboardSceneBase prints
+    when a segment starts in a real render."""
+    m = re.match(r'\s*CB_SEGMENT (\d+)\s*$', line)
+    return int(m.group(1)) if m else None
+
+
+def _segment_count(run_dir: Path) -> int | None:
+    try:
+        segs = json.loads((run_dir / "segments.json").read_text())
+        return len(segs) if isinstance(segs, list) else None
+    except Exception:
+        return None
+
+
+class _RenderProgress:
+    """Live render position, published as `render` telemetry events.
+
+    segment: 0-based index of the segment the renderer is in (from CB_SEGMENT).
+    animation: number of the animation Manim is on (1-based, from its output).
+    The total animation count is not known until the render ends (loops,
+    templates and waits all add animations), so `animations` stays None.
+    """
+    MIN_INTERVAL = 0.25
+
+    def __init__(self, segments: int | None):
+        self.segments = segments
+        self.segment: int | None = None
+        self.animation: int | None = None
+        self.changed = False
+        self._last_emit = 0.0
+        self._pending = False
+
+    def update(self, *, segment: int | None = None, animation: int | None = None) -> None:
+        import time as _time
+        seg_changed = segment is not None and segment != self.segment
+        if segment is not None:
+            self.segment = segment
+        if animation is not None and animation != self.animation:
+            self.animation = animation
+            self.changed = True
+        if seg_changed:
+            self.changed = True
+        now = _time.monotonic()
+        # Segment changes always go out; animation ticks are throttled.
+        if seg_changed or (self.changed and now - self._last_emit >= self.MIN_INTERVAL):
+            self._emit(now)
+        elif self.changed:
+            self._pending = True
+
+    def _emit(self, now: float) -> None:
+        from pipeline import telemetry
+        telemetry.emit("render", {"status": "running", "segment": self.segment,
+                                  "segments": self.segments, "animation": self.animation,
+                                  "animations": None})
+        self._last_emit = now
+        self._pending = False
+
+    def flush(self) -> None:
+        if self._pending:
+            import time as _time
+            self._emit(_time.monotonic())
+
+    def describe(self) -> str:
+        parts = []
+        if self.segment is not None:
+            total = f"/{self.segments}" if self.segments else ""
+            parts.append(f"segment {self.segment + 1}{total}")
+        if self.animation is not None:
+            parts.append(f"animation {self.animation}")
+        return ", ".join(parts) or "starting"
 
 
 def _extract_thumbnail(run_dir: Path) -> "Path | None":
@@ -317,25 +394,32 @@ def _render_once(run_id: str, output_dir: Path, verbose: bool, timeout: float, b
             raise RenderFailed(f"renderer exited with code {returncode}")
         video_path = None
     else:
-        total_anims = _count_animations(output_dir / run_id / "scene.py")
         anim_count = 0
         video_path = None
+        progress = _RenderProgress(_segment_count(run_dir))
 
         def on_line(line: str) -> None:
             nonlocal video_path, anim_count
             if line.startswith("RENDER_COMPLETE:"):
                 container_path = line.split(":", 1)[1].strip()
                 video_path = output_dir / Path(container_path).relative_to("/output")
+                return
+            seg = _parse_segment_line(line)
+            if seg is not None:
+                progress.update(segment=seg)
             else:
                 n = _parse_manim_line(line)
                 if n is not None:
-                    anim_count = n
-                    suffix = f"/{total_anims}" if total_anims else ""
-                    print(f"\r  [render] animation {anim_count}{suffix}...", end="", flush=True)
+                    anim_count = n + 1  # Manim numbers animations from 0
+                    progress.update(animation=anim_count)
+            if progress.changed:
+                print(f"\r  [render] {progress.describe()}...", end="", flush=True)
+                progress.changed = False
 
         returncode, lines_buffer, timed_out = subprocess_with_timeout(
             cmd, timeout, on_line=on_line, env=env,
         )
+        progress.flush()
         if anim_count:
             print()
         if timed_out:
@@ -681,6 +765,31 @@ async def run(
                 input_state = None  # resume from last checkpoint
 
 
+def _save_qa_report(run_dir: Path, result: dict, attempt: int, density: str) -> None:
+    """Persist visual QA to qa_report.json. The top-level result is the latest
+    check, which always describes the current final.mp4 (a failed re-render
+    restores the video that check looked at); `history` keeps every pass."""
+    from datetime import datetime, timezone
+    path = run_dir / "qa_report.json"
+    entry = {
+        "passed": bool(result.get("passed")),
+        "issues": result.get("issues", []),
+        "checked_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+        "attempt": attempt,
+        "density": density,
+    }
+    history = []
+    if attempt > 0:
+        try:
+            history = json.loads(path.read_text()).get("history", [])
+        except Exception:
+            history = []
+    try:
+        path.write_text(json.dumps({**entry, "history": history + [entry]}, indent=2))
+    except OSError as e:
+        print(f"  [qa] could not write {path}: {e}")
+
+
 def _run_qa_loop(
     run_id: str, final_mp4: Path,
     theme: str, audience: str, tone: str, effort_level: str,
@@ -702,6 +811,8 @@ def _run_qa_loop(
             density=qa_density,
             use_layout_report=(qa_attempt == 0),
         )
+        if result is not None:
+            _save_qa_report(output_dir / run_id, result, qa_attempt, qa_density)
         if result is None or result["passed"]:
             return
 
@@ -904,12 +1015,42 @@ def main():
         print("Note: resuming without context files. Pass --context or --url to include source material.")
 
     interactive = sys.stdin.isatty() and not args.yes
+    # Measured run record (run_stats.json): events are recorded through the
+    # telemetry sink (Claude usage, TTS) plus graph node and phase events.
+    from pipeline import run_stats, telemetry
+    recorder = run_stats.Recorder()
+    token = telemetry.set_sink(telemetry.Sink(recorder))
+    finished_ok = False
+    try:
+        finished_ok = _cli_run(args, thread_id, context_blocks, context_file_paths, interactive, recorder)
+    finally:
+        telemetry.reset_sink(token)
+        run_dir = Path(OUTPUT_DIR) / thread_id
+        settings = {"run_id": thread_id, "effort": args.effort, "quality": args.quality,
+                    "narrator": args.narrator, "source": "cli"}
+        settings.update({k: v for k, v in run_stats.manifest_settings(run_dir).items() if v is not None})
+        try:
+            run_stats.write(run_dir, run_stats.build(
+                recorder.events, started_at=recorder.started_at, finished_at=telemetry.now_iso(),
+                settings=settings, result="done" if finished_ok else "failed",
+                resumed=bool(args.run_id),
+            ))
+        except Exception as e:
+            print(f"  [run_stats] not written: {e}")
+
+
+def _cli_run(args, thread_id: str, context_blocks, context_file_paths, interactive: bool, recorder) -> bool:
+    """Pipeline + render + QA + quiz for the CLI. True when the requested output exists."""
+    def _progress(event: dict) -> None:
+        _print_progress(event)
+        recorder.record_graph(event)
+
     asyncio.run(run(
         args.topic, args.effort, thread_id,
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
         speed=args.speed, template=args.template, interactive=interactive,
-        quality=args.quality, narrator=args.narrator,
+        quality=args.quality, narrator=args.narrator, on_progress=_progress,
     ))
 
     run_dir = Path(OUTPUT_DIR) / thread_id
@@ -927,16 +1068,20 @@ def main():
             (run_dir / "final.mp4").unlink(missing_ok=True)
             shutil.rmtree(run_dir / "media", ignore_errors=True)
 
+    ok = True
     if not args.no_render:
         if args.preview:
             while True:
                 try:
+                    recorder.record("render", {"status": "running"})
                     preview = _render_preview(thread_id)
+                    recorder.record("render", {"status": "done"})
                     print(f"\nPreview → {preview}")
                     print(f"\nTo render the full video:")
                     print(f"  python main.py --topic {args.topic!r} --run-id {thread_id}")
                     break
                 except RenderFailed as e:
+                    recorder.record("render", {"status": "failed"})
                     print(f"\n  [render] all 3 attempts failed: {e}")
                     if not interactive:
                         raise SystemExit(1)
@@ -948,8 +1093,12 @@ def main():
         else:
             while True:
                 try:
+                    recorder.record("render", {"status": "running"})
                     final = _render(thread_id, verbose=args.verbose, burn_captions=args.burn_captions)
+                    recorder.record("render", {"status": "done"})
                     print(f"\nDone → {final}")
+                    if args.qa_density != "zero":
+                        recorder.record("visual_qa", {"status": "running"})
                     _run_qa_loop(
                         thread_id, final,
                         theme=args.theme, audience=args.audience,
@@ -959,8 +1108,11 @@ def main():
                         qa_density=args.qa_density,
                         burn_captions=args.burn_captions,
                     )
+                    if args.qa_density != "zero":
+                        recorder.record("visual_qa", {"status": "done"})
                     break
                 except RenderFailed as e:
+                    recorder.record("render", {"status": "failed"})
                     print(f"\n  [render] all 3 attempts failed: {e}")
                     if not interactive:
                         raise SystemExit(1)
@@ -969,11 +1121,15 @@ def main():
                     if action == "retry_render":
                         continue
                     raise SystemExit("Aborted.")
+            ok = (run_dir / "final.mp4").exists()
     else:
         print(f"\nDone. Output files in output/{thread_id}/")
 
     if args.quiz:
+        recorder.record("quiz", {"status": "running"})
         _generate_quiz(thread_id)
+        recorder.record("quiz", {"status": "done"})
+    return ok
 
 
 if __name__ == "__main__":

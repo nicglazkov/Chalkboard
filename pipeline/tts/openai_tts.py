@@ -26,7 +26,8 @@ MAX_CONCURRENT = 6  # segments synthesized in parallel
 
 
 async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0,
-                         *, voice: str | None = None, model: str | None = None) -> tuple[Path, list[float]]:
+                         *, voice: str | None = None, model: str | None = None,
+                         on_segment=None) -> tuple[Path, list[float]]:
     if openai is None:
         raise ImportError("Install openai: pip install openai")
 
@@ -48,13 +49,17 @@ async def generate_audio(segments: list[dict], output_path: Path, speed: float =
             actual_nframes = len(frames) // (wf.getnchannels() * wf.getsampwidth())
             return params, frames, actual_nframes / wf.getframerate()
 
-    async def _one(seg: dict):
+    async def _one(i: int, seg: dict):
+        text = strip_cues(segment_cue_text(seg))
         async with gate:
-            return await api_call_with_retry(
-                lambda: _call(strip_cues(segment_cue_text(seg))), timeout=TIMEOUT_TTS_SEGMENT, label="openai_tts"
+            out = await api_call_with_retry(
+                lambda: _call(text), timeout=TIMEOUT_TTS_SEGMENT, label="openai_tts"
             )
+        if on_segment is not None:
+            on_segment(i, len(text))
+        return out
 
-    results = await asyncio.gather(*(_one(s) for s in segments))
+    results = await asyncio.gather(*(_one(i, s) for i, s in enumerate(segments)))
 
     wav_params = results[0][0]
     with wave.open(str(output_path), "wb") as out_wav:

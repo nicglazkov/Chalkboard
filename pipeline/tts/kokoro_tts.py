@@ -23,7 +23,7 @@ def _pipeline():
     return KPipeline(lang_code="a")
 
 
-def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = None):
+def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = None, on_segment=None):
     if KPipeline is None:
         raise ImportError("Install kokoro: pip install kokoro")
     pipeline = _pipeline()
@@ -31,7 +31,7 @@ def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = 
     durations: list[float] = []
     cue_times: list[list[float | None]] = []
 
-    for segment in segments:
+    for index, segment in enumerate(segments):
         clean, offsets = parse_cues(segment_cue_text(segment))
         seg_chunks: list[np.ndarray] = []
         # KPipeline yields Result objects (graphemes, phonemes, audio when
@@ -52,6 +52,8 @@ def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = 
         durations.append(dur)
         all_audio.append(seg_audio)
         cue_times.append(cue_times_from_tokens(clean, offsets, tokens, dur))
+        if on_segment is not None:
+            on_segment(index, len(clean))
 
     full_audio = np.concatenate(all_audio) if all_audio else np.array([], dtype=np.float32)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,10 +62,11 @@ def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = 
 
 
 async def generate_audio(segments: list[dict], output_path: Path, speed: float = 1.0,
-                         *, voice: str | None = None, model: str | None = None):
-    """Returns (wav_path, durations, cue_times); see pipeline/cues.py."""
+                         *, voice: str | None = None, model: str | None = None, on_segment=None):
+    """Returns (wav_path, durations, cue_times); see pipeline/cues.py.
+    on_segment(index, chars) is called as each segment finishes (from a worker thread)."""
     path, durations, cue_times = await api_call_with_retry(
-        lambda: _generate_sync(segments, output_path, voice),
+        lambda: _generate_sync(segments, output_path, voice, on_segment),
         timeout=TIMEOUT_TTS_KOKORO,
         label="kokoro_tts",
     )
