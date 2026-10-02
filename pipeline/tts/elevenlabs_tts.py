@@ -1,26 +1,36 @@
 # pipeline/tts/elevenlabs_tts.py
-# Requires: pip install elevenlabs
+"""ElevenLabs narration over the REST API (httpx; no SDK needed).
+
+Segments are synthesized separately (their durations drive the animation), so
+the joins are where narration usually sounds stitched together. On models that
+support request stitching (eleven_v4, multilingual_v2, ...) segments are made
+in order and each request names the previous ones (previous_request_ids) plus
+the neighbouring text, so intonation carries across segment boundaries.
+eleven_v3 rejects both (verified 2026-10-02), so it runs in parallel without.
+"""
 import asyncio
 import os
 import wave
 from pathlib import Path
+
+import httpx
+
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_SEGMENT
 from pipeline.tts.base import _apply_speed_to_wav
 
-try:
-    from elevenlabs import ElevenLabs
-except ImportError:
-    ElevenLabs = None  # type: ignore[assignment,misc]
-
+API = "https://api.elevenlabs.io/v1/text-to-speech/{voice}"
 ELEVENLABS_VOICE_ID = "1iNDh1muacMMMHXvS7Ym"  # "Skye" (narrator "aria"); override with ELEVENLABS_VOICE_ID
-ELEVENLABS_MODEL_ID = "eleven_v3"
+ELEVENLABS_MODEL_ID = "eleven_v4"
 SAMPLE_RATE = 24000
-# Segments synthesized at once. Plans cap concurrent requests (Free 2, Starter 3,
-# Creator 5, Pro 10); 429s are retried.
+# Parallel requests when stitching is unavailable. Plans cap concurrency
+# (Free 2, Starter 3, Creator 5, Pro 10); 429s back off and retry.
 MAX_CONCURRENT = int(os.getenv("ELEVENLABS_CONCURRENCY", "3"))
-# Pass neighbouring segment text so prosody flows across segment joins.
-# Models that reject it (400) fall back to plain requests automatically.
-CONTEXT = os.getenv("ELEVENLABS_CONTEXT", "1") != "0"
+STITCH = os.getenv("ELEVENLABS_STITCH", "1") != "0"
+_NO_STITCH_MODELS = ("eleven_v3",)
+
+
+def _supports_stitching(model_id: str) -> bool:
+    return STITCH and not model_id.startswith(_NO_STITCH_MODELS)
 
 
 async def generate_audio(
@@ -31,51 +41,59 @@ async def generate_audio(
     voice: str | None = None,
     model: str | None = None,
 ) -> tuple[Path, list[float]]:
-    if ElevenLabs is None:
-        raise ImportError("Install elevenlabs: pip install elevenlabs")
-
+    key = os.getenv("ELEVENLABS_API_KEY")
+    if not key:
+        raise RuntimeError("ELEVENLABS_API_KEY is not set")
     voice_id = voice or os.getenv("ELEVENLABS_VOICE_ID") or ELEVENLABS_VOICE_ID
     model_id = model or os.getenv("ELEVENLABS_MODEL_ID") or ELEVENLABS_MODEL_ID
-    client = ElevenLabs()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    gate = asyncio.Semaphore(MAX_CONCURRENT)
-    # eleven_v3 rejects previous_text/next_text (verified 2026-10-02).
-    use_context = [CONTEXT and not model_id.startswith("eleven_v3")]
     texts = [s["text"] for s in segments]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    client = httpx.Client(timeout=TIMEOUT_TTS_SEGMENT, headers={"xi-api-key": key})
 
-    def _call(i: int):
-        kwargs = dict(voice_id=voice_id, text=texts[i], model_id=model_id, output_format="pcm_24000")
-        if use_context[0]:
+    def _call(i: int, previous_ids: list[str]) -> tuple[bytes, str | None]:
+        body: dict = {"text": texts[i], "model_id": model_id}
+        if _supports_stitching(model_id):
             if i > 0:
-                kwargs["previous_text"] = texts[i - 1]
+                body["previous_text"] = texts[i - 1]
             if i + 1 < len(texts):
-                kwargs["next_text"] = texts[i + 1]
-        try:
-            pcm = b"".join(client.text_to_speech.convert(**kwargs))
-        except Exception as e:  # model without context support: retry plain, once for all
-            if use_context[0] and ("previous_text" in str(e) or "next_text" in str(e)):
-                use_context[0] = False
-                kwargs.pop("previous_text", None)
-                kwargs.pop("next_text", None)
-                pcm = b"".join(client.text_to_speech.convert(**kwargs))
-            else:
-                raise
-        return pcm, len(pcm) / (SAMPLE_RATE * 2)
+                body["next_text"] = texts[i + 1]
+            if previous_ids:
+                body["previous_request_ids"] = previous_ids[-3:]
+        r = client.post(API.format(voice=voice_id), params={"output_format": "pcm_24000"}, json=body)
+        if r.status_code != 200:
+            raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:300]}")
+        return r.content, r.headers.get("request-id")
 
-    async def _one(i: int):
-        async with gate:
-            return await api_call_with_retry(
-                lambda: _call(i), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
-            )
+    try:
+        if _supports_stitching(model_id):
+            pcms, ids = [], []
+            for i in range(len(texts)):
+                pcm, rid = await api_call_with_retry(
+                    lambda i=i: _call(i, ids), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
+                )
+                pcms.append(pcm)
+                if rid:
+                    ids.append(rid)
+        else:
+            gate = asyncio.Semaphore(MAX_CONCURRENT)
 
-    results = await asyncio.gather(*(_one(i) for i in range(len(segments))))
+            async def _one(i: int):
+                async with gate:
+                    pcm, _ = await api_call_with_retry(
+                        lambda: _call(i, []), timeout=TIMEOUT_TTS_SEGMENT, label="elevenlabs_tts"
+                    )
+                    return pcm
+
+            pcms = list(await asyncio.gather(*(_one(i) for i in range(len(texts)))))
+    finally:
+        client.close()
 
     with wave.open(str(output_path), "wb") as out_wav:
         out_wav.setnchannels(1)
         out_wav.setsampwidth(2)
         out_wav.setframerate(SAMPLE_RATE)
-        out_wav.writeframes(b"".join(pcm for pcm, _ in results))
-    durations = [d for _, d in results]
+        out_wav.writeframes(b"".join(pcms))
+    durations = [len(p) / (SAMPLE_RATE * 2) for p in pcms]
 
     if speed != 1.0:
         _apply_speed_to_wav(output_path, speed)

@@ -23,7 +23,7 @@ class NarratorSpec(TypedDict):
     tagline: str
 
 
-_ELEVEN_MODEL = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v3")
+_ELEVEN_MODEL = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v4")
 
 NARRATORS: dict[str, NarratorSpec] = {
     # Free, local (GPU if available)
