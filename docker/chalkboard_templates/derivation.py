@@ -14,16 +14,20 @@ from ._base import _TemplateBase
 
 try:
     from chalkboard_components import EquationGroup  # type: ignore[import-not-found]
-    from chalkboard_moves import derivation_step, emphasize_term
+    from chalkboard_moves import _on_screen, derivation_step, emphasize_term
 except ImportError:
     from docker.chalkboard_components import EquationGroup  # noqa: F401
-    from docker.chalkboard_moves import derivation_step, emphasize_term
+    from docker.chalkboard_moves import _on_screen, derivation_step, emphasize_term
 
 from manim import FadeIn, FadeOut, UP, VGroup
 
 _MAX_W = 12.4
 _BOTTOM_Y = -2.7   # derivation stays above the caption band
 _CAPTION_Y = -3.3
+# Lines visible at once. Longer derivations scroll: older lines slide up and
+# out, so a 7-step derivation stays as large as a 4-step one.
+_WINDOW = 4
+_MAX_UPSCALE = 1.3
 
 
 class DerivationTemplate(_TemplateBase):
@@ -93,8 +97,14 @@ class DerivationTemplate(_TemplateBase):
         eq = EquationGroup(lines, colors=colors, isolate=emph or None, theme=self.theme)
         top = title.get_bottom()[1] - t.space("lg")
         max_h = top - _BOTTOM_Y
-        if eq.width > _MAX_W or eq.height > max_h:
-            eq.scale(min(_MAX_W / eq.width, max_h / eq.height))
+        # Fit the tallest run of _WINDOW consecutive lines (not the whole
+        # derivation) into the space, and let short derivations grow a little.
+        w = min(_WINDOW, len(lines))
+        window_h = max(
+            eq.lines[i].get_top()[1] - eq.lines[i + w - 1].get_bottom()[1]
+            for i in range(len(lines) - w + 1)
+        )
+        eq.scale(min(_MAX_W / eq.width, max_h / window_h, _MAX_UPSCALE))
         # Center the block horizontally, hang it from just under the title.
         eq.set_x(0)
         eq.align_to(UP * top, UP)
@@ -116,6 +126,7 @@ class DerivationTemplate(_TemplateBase):
             last = seg_idx == n_seg - 1
             batch = range(line_idx, len(lines)) if last else range(line_idx, line_idx + 1)
             for k in batch:
+                used += self._scroll(eq, k, top)
                 derivation_step(scene, eq, k)
                 used += self._rt("emphasis") if k == 0 else self._rt("settle")
                 st = steps[k] if k < len(steps) else {}
@@ -134,3 +145,23 @@ class DerivationTemplate(_TemplateBase):
             line_idx = batch[-1] + 1
             self._rest(dur, used)
         self.equation = eq
+
+    def _scroll(self, eq, k: int, top: float) -> float:
+        """Before revealing line k, slide the window so lines k-_WINDOW+1..k fit
+        under `top`. Returns the time spent (0 when no scroll is needed)."""
+        first = k - _WINDOW + 1
+        if first <= 0:
+            return 0.0
+        dy = top - eq.lines[first].get_top()[1]
+        if dy <= 0.01:
+            return 0.0
+        scene = self.scene
+        leaving = [eq.lines[j] for j in range(first) if _on_screen(scene, eq.lines[j])]
+        staying = [eq.lines[j] for j in range(first, k) if _on_screen(scene, eq.lines[j])]
+        for j in range(k, len(eq.lines)):        # not on screen yet: move instantly
+            eq.lines[j].shift(UP * dy)
+        anims = [FadeOut(m, shift=UP * dy) for m in leaving] + [m.animate.shift(UP * dy) for m in staying]
+        if not anims:
+            return 0.0
+        scene.play(*anims, **self._motion("snap"))
+        return self._rt("snap")
