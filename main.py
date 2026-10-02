@@ -579,6 +579,7 @@ async def run(
     template: str | None = None,
     on_progress: "Callable[[dict], None] | None" = None,
     interactive: bool = True,
+    quality: str | None = None,
 ) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
@@ -589,6 +590,7 @@ async def run(
             "topic": topic, "effort_level": effort, "audience": audience,
             "tone": tone, "theme": theme, "context_file_paths": context_file_paths or [],
             "speed": speed, "template": template, "interactive": interactive,
+            "quality": quality,
         }
 
         # Resuming a thread that already has a checkpoint: continue from where it
@@ -739,6 +741,9 @@ def main():
                         help="Visual color theme for the animation")
     parser.add_argument("--template", choices=TEMPLATE_CHOICES, default=None,
                         help="Animation template: algorithm, code, compare, howto, timeline")
+    parser.add_argument("--quality", choices=["low", "medium", "high", "4k"], default=None,
+                        help="Render resolution: low=480p15, medium=720p30, high=1080p60, 4k=2160p60 "
+                             "(default: MANIM_QUALITY)")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip the render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream renderer output to terminal")
@@ -832,6 +837,7 @@ def main():
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
         speed=args.speed, template=args.template, interactive=interactive,
+        quality=args.quality,
     ))
 
     if not args.no_render:

@@ -30,7 +30,7 @@ async def render_trigger(state: PipelineState) -> dict:
     (run_dir / "manifest.json").write_text(json.dumps({
         "run_id": run_id,
         "scene_class_name": "ChalkboardScene",
-        "quality": MANIM_QUALITY,
+        "quality": state.get("quality") or MANIM_QUALITY,
         "topic": state["topic"],
         "title": state.get("title", ""),
         "effort": state.get("effort_level", "medium"),

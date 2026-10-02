@@ -110,6 +110,18 @@ def _job_to_response(job: Job) -> JobResponse:
     )
 
 
+# Strong references to running job tasks: the event loop only keeps weak ones,
+# so an unreferenced task can be garbage-collected mid-run.
+_running_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _running_tasks.add(task)
+    task.add_done_callback(_running_tasks.discard)
+    return task
+
+
 def make_router(store: JobStore, library_store: LibraryStore | None = None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -120,9 +132,10 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             tone=req.tone, theme=req.theme, template=req.template, speed=req.speed,
             burn_captions=req.burn_captions, quiz=req.quiz,
             urls=req.urls, github=req.github, qa_density=req.qa_density,
+            quality=req.quality,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
-        asyncio.create_task(run_job(job, output_dir, library_store=library_store))
+        _spawn(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
     @router.post("/jobs/upload", status_code=202, response_model=JobResponse)
@@ -137,6 +150,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         burn_captions: bool = Form(False),
         quiz: bool = Form(False),
         qa_density: str = Form("normal"),
+        quality: str = Form(""),
         urls: list[str] = Form(default=[]),
         github: list[str] = Form(default=[]),
         files: list[UploadFile] = File(default=[]),
@@ -162,10 +176,10 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             tone=tone, theme=theme, template=template or None, speed=speed,
             burn_captions=burn_captions, quiz=quiz,
             urls=urls, github=github, qa_density=qa_density,
-            upload_dir=upload_dir,
+            upload_dir=upload_dir, quality=quality or None,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
-        asyncio.create_task(run_job(job, output_dir, library_store=library_store))
+        _spawn(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
     @router.get("/jobs", response_model=list[JobResponse])

@@ -17,6 +17,7 @@ class CreateJobRequest(BaseModel):
     urls: list[str] = []
     github: list[str] = []
     qa_density: Literal["zero", "normal", "high"] = "normal"
+    quality: Literal["low", "medium", "high", "4k"] | None = None   # None = server default
 
 
 class JobResponse(BaseModel):

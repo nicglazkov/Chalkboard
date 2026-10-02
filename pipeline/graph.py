@@ -81,6 +81,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "research_sources": state.get("research_sources", []),
         "search_warning": state.get("search_warning"),
         "interactive": state.get("interactive", True),
+        "quality": state.get("quality"),
     }
 
 

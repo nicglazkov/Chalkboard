@@ -36,6 +36,7 @@ class Job:
     urls: list[str] = field(default_factory=list)
     github: list[str] = field(default_factory=list)
     qa_density: _QADensity = "normal"
+    quality: str | None = None
     upload_dir: Path | None = None          # temp dir for uploaded files; deleted after run
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
@@ -67,13 +68,14 @@ class JobStore:
                burn_captions: bool = False, quiz: bool = False,
                urls: list[str] | None = None, github: list[str] | None = None,
                qa_density: _QADensity = "normal",
-               upload_dir: Path | None = None) -> Job:
+               upload_dir: Path | None = None,
+               quality: str | None = None) -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
                   tone=tone, theme=theme, template=template, speed=speed,
                   burn_captions=burn_captions, quiz=quiz,
                   urls=urls or [], github=github or [],
-                  qa_density=qa_density, upload_dir=upload_dir)
+                  qa_density=qa_density, upload_dir=upload_dir, quality=quality)
         self._jobs[job_id] = job
         return job
 
@@ -97,8 +99,17 @@ async def _do_render(run_id: str, verbose: bool = False, burn_captions: bool = F
         return None
 
 
+# Jobs beyond this many wait their turn (renders are CPU-heavy; TTS shares one GPU).
+_job_slots = asyncio.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "3")))
+
+
 async def run_job(job: Job, output_dir: Path, library_store=None) -> None:
     """Execute the full pipeline + render for a job. Updates job.status in place."""
+    async with _job_slots:
+        await _run_job(job, output_dir, library_store)
+
+
+async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
     job.status = "running"
 
     def _on_progress(event: dict) -> None:
@@ -147,6 +158,7 @@ async def run_job(job: Job, output_dir: Path, library_store=None) -> None:
             context_blocks=context_blocks,
             on_progress=_on_progress,
             interactive=False,
+            quality=job.quality,
         )
 
         # render_trigger writes manifest.json as its final step.

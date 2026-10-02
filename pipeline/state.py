@@ -33,3 +33,4 @@ class PipelineState(TypedDict):
     research_sources: list[str]
     search_warning: str | None
     interactive: bool
+    quality: str | None   # "low" | "medium" | "high" | "4k"; None = MANIM_QUALITY
