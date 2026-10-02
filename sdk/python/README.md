@@ -44,6 +44,58 @@ for event in client.stream_events(job.id):
 client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
 ```
 
+### Quality and narrator
+
+`create_job` takes `quality` (`"low"`, `"medium"`, `"high"`, `"4k"`;
+default `"medium"`, pass `None` to leave it to the server) and an
+optional `narrator` (`"aria"`, `"milo"`, `"kokoro"`, `"alloy"`). Both are
+keyword-only; `narrator` is only sent when you set it.
+
+```python
+job = client.create_job(topic="Fourier series", quality="high", narrator="milo")
+```
+
+## Self-hosted server
+
+The same client works against this repo's FastAPI server
+(`python run_server.py`, which binds `127.0.0.1:8000` by default). Point
+`base_url` at its `/api` prefix (no `/v1`). The local server has no
+auth, so `api_key` can be omitted whenever `base_url` is not the hosted
+default:
+
+```python
+from chalkboard import ChalkboardClient
+
+client = ChalkboardClient(base_url="http://127.0.0.1:8000/api")
+
+info = client.meta()                 # GET /api/meta
+print(info["defaults"])              # quality, narrator, tts_backend, effort, ...
+print([n["id"] for n in info["narrators"] if n["available"]])
+
+job = client.create_job(topic="How hash tables work", quality=None, narrator="aria")
+final = client.wait_for_completion(job.id, timeout=1800)
+client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
+
+videos = client.list_videos(q="hash")              # GET /api/library
+client.delete_video(videos[0].run_id, files=True)  # also removes output/<run_id>/
+```
+
+`meta()` returns a plain dict: `defaults`, `narrators` (each with `id`,
+`label`, `tagline`, `backend`, `model`, `available`), `render_backend`,
+`model` and `running_jobs`. Narrators whose backend API key is missing on
+the server come back with `available: false`.
+
+What the self-hosted server supports: `create_job`, `get_job`,
+`list_jobs`, `stream_events`, `wait_for_completion`, `download_file`,
+`meta`, `list_videos`, `get_video`, `delete_video`. The rest are
+hosted-only and fail locally with a 404 or 405 `ChalkboardError`:
+`cancel_job`, `retry_job`, `rerender_job`, `list_webhooks`,
+`list_api_keys`. The local server ignores the hosted-only request fields
+(`email_on_complete`, `model`), the `status` filter on `list_videos`, and
+the `Idempotency-Key` header. To pick the Claude model on a self-hosted
+server, set `CLAUDE_MODEL` (or `CLAUDE_MODEL_<AGENT>`) in the server's
+environment instead.
+
 ## Test mode
 
 Pass a `chk_test_…` key (creatable at <https://chalkboard.studio/account>)
@@ -117,4 +169,4 @@ in [github.com/nicglazkov/Chalkboard](https://github.com/nicglazkov/Chalkboard).
 The pipeline can be self-hosted (clone the repo, set `ANTHROPIC_API_KEY`,
 run `python run_server.py`) and the SDK works against either the hosted
 endpoint at <https://chalkboard.studio> or your own deployment via the
-`base_url=` kwarg.
+`base_url=` kwarg (see [Self-hosted server](#self-hosted-server)).

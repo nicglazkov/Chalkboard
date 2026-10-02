@@ -58,20 +58,26 @@ class ChalkboardClient:
         config: ChalkboardConfig | None = None,
     ):
         if config is None:
-            if not api_key:
+            # The hosted API needs a key. A self-hosted server (this repo's
+            # `run_server.py`, base_url like "http://127.0.0.1:8000/api") has
+            # no auth, so the key is optional once base_url points elsewhere.
+            if not api_key and base_url == DEFAULT_BASE_URL:
                 raise ValueError("api_key (or config) is required")
             config = ChalkboardConfig(
-                api_key=api_key, base_url=base_url, timeout=timeout,
+                api_key=api_key or "", base_url=base_url, timeout=timeout,
             )
         self.config = config
         self._http = httpx.Client(
             base_url=config.base_url,
             timeout=config.timeout,
-            headers={
-                "Authorization": f"Bearer {config.api_key}",
-                "User-Agent": config.user_agent,
-            },
+            headers=self._headers(),
         )
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"User-Agent": self.config.user_agent}
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+        return headers
 
     # ── Lifecycle ───────────────────────────────────────────────────────────
     def close(self) -> None:
@@ -124,9 +130,10 @@ class ChalkboardClient:
         github: list[str] | None = None,
         qa_density: str = "normal",
         email_on_complete: bool = True,
-        quality: str = "medium",
+        quality: str | None = "medium",
         model: str | None = None,
         idempotency_key: str | None = None,
+        narrator: str | None = None,
     ) -> JobResponse:
         """Submit a new job.
 
@@ -134,6 +141,12 @@ class ChalkboardClient:
         Reusing the same key with the same body within 24 hours replays
         the original response (no duplicate paid job); reusing it with
         a different body raises ChalkboardConflictError.
+
+        `quality` is "low" | "medium" | "high" | "4k"; pass None to omit it
+        and let the server use its default (MANIM_QUALITY on a self-hosted
+        server). `narrator` ("aria" | "milo" | "kokoro" | "alloy") is only
+        sent when set; None means the server default. `meta()` lists the
+        narrators a self-hosted server can actually use.
         """
         body: dict[str, Any] = {
             "topic": topic,
@@ -143,8 +156,11 @@ class ChalkboardClient:
             "urls": list(urls or []), "github": list(github or []),
             "qa_density": qa_density,
             "email_on_complete": email_on_complete,
-            "quality": quality,
         }
+        if quality is not None:
+            body["quality"] = quality
+        if narrator is not None:
+            body["narrator"] = narrator
         if template is not None:
             body["template"] = template
         if model is not None:
@@ -159,6 +175,17 @@ class ChalkboardClient:
     def list_jobs(self) -> list[JobResponse]:
         resp = self._request("GET", "/jobs")
         return [JobResponse.from_dict(d) for d in resp.json()]
+
+    def meta(self) -> dict:
+        """Server defaults and capabilities (`GET /meta`).
+
+        On a self-hosted server this returns `defaults` (quality, narrator,
+        tts_backend, effort, audience, tone, theme), `narrators` (id, label,
+        tagline, backend, model, available), `render_backend`, `model` and
+        `running_jobs`. Returned as a plain dict; the hosted API may not
+        expose this endpoint (raises ChalkboardNotFoundError then)."""
+        resp = self._request("GET", "/meta")
+        return resp.json()
 
     def cancel_job(self, job_id: str) -> dict:
         """Request cancellation. Returns the API's `{"status": "cancelling"}`
@@ -278,8 +305,11 @@ class ChalkboardClient:
         resp = self._request("GET", f"/library/{run_id}")
         return VideoMeta.from_dict(resp.json())
 
-    def delete_video(self, run_id: str) -> None:
-        self._request("DELETE", f"/library/{run_id}")
+    def delete_video(self, run_id: str, *, files: bool = False) -> None:
+        """Remove a video from the library index. `files=True` also deletes
+        the run's output directory (self-hosted server; only sent when set)."""
+        params = {"files": "true"} if files else None
+        self._request("DELETE", f"/library/{run_id}", params=params)
 
     # ── Webhooks ────────────────────────────────────────────────────────────
     # Webhook management is gated to ID-token / cookie auth on the server
@@ -304,10 +334,7 @@ class ChalkboardClient:
         with httpx.Client(
             base_url=self.config.base_url.rsplit("/v1", 1)[0],
             timeout=self.config.timeout,
-            headers={
-                "Authorization": f"Bearer {self.config.api_key}",
-                "User-Agent": self.config.user_agent,
-            },
+            headers=self._headers(),
         ) as alt:
             resp = alt.get("/account/api-keys")
             if resp.status_code >= 400:

@@ -77,7 +77,7 @@ class VideoMeta:
             speed=float(d.get("speed", 1.0)),
             status=d.get("status", "completed"),
             model=d.get("model", ""),
-            narrator=d.get("narrator", ""),
+            narrator=d.get("narrator") or "",
             test_mode=bool(d.get("test_mode", False)),
             output_files=list(d.get("output_files") or []),
             urls=dict(d.get("urls") or {}),
