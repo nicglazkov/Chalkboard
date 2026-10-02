@@ -37,6 +37,7 @@ Pick from the request; leave the rest at defaults.
 | Narration style | `--tone casual|formal|socratic` |
 | Look | `--theme chalkboard|light|colorful` |
 | Resolution | `--quality low|medium|high|4k` (480p15 / 720p30 / 1080p60 / 2160p60). Set it on the first run; it is fixed once the pipeline finishes |
+| Voice | `--narrator aria|milo|reid|grace` (ElevenLabs `eleven_v4`, needs `ELEVENLABS_API_KEY`), `kokoro` (free, local), `alloy` (OpenAI). Default: `NARRATOR` in `.env`, else `TTS_BACKEND` |
 | Scene structure | `--template algorithm` (array step-through), `code` (code walkthrough), `compare` (A vs B), `derivation` (step-by-step math), `howto` (numbered steps), `timeline` (dated events). Omit to let the agent decide |
 | Source material | `--context PATH` (files/dirs, repeatable), `--context-ignore GLOB`, `--url URL`, `--github owner/repo` |
 | Pace | `--speed 1.15` |
