@@ -47,6 +47,7 @@ async def layout_checker(state: PipelineState) -> dict:
         return {
             "code_feedback": f"Layout check failed to start: {e}",
             "code_attempts": attempts + 1,
+            "layout_renderable": False,
         }
 
     try:
@@ -63,9 +64,11 @@ async def layout_checker(state: PipelineState) -> dict:
                 "Simplify the scene — reduce total mobjects or animation count."
             ),
             "code_attempts": attempts + 1,
+            "layout_renderable": False,
         }
 
     if not report_path.exists():
+        # Crash during the dry-run: never renderable as-is.
         # The traceback's tail names the failing line; the head is import noise.
         stderr_text = stderr.decode(errors="replace")[-1500:]
         return {
@@ -76,6 +79,7 @@ async def layout_checker(state: PipelineState) -> dict:
                 f"Error output:\n{stderr_text}"
             ),
             "code_attempts": attempts + 1,
+            "layout_renderable": False,
         }
 
     try:
@@ -84,14 +88,18 @@ async def layout_checker(state: PipelineState) -> dict:
         return {
             "code_feedback": f"Layout report unreadable: {e}",
             "code_attempts": attempts + 1,
+            "layout_renderable": False,
         }
 
     if report.get("passed"):
-        return {"code_feedback": None}
+        return {"code_feedback": None, "layout_renderable": True}
 
+    # The scene ran end to end; only geometry/timing complaints remain. Routing
+    # may render it anyway once retries run out (better than no video).
     return {
         "code_feedback": _format_violations(report.get("violations", [])),
         "code_attempts": attempts + 1,
+        "layout_renderable": True,
     }
 
 

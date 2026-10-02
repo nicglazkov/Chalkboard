@@ -34,6 +34,11 @@ def _after_layout_checker(state: PipelineState) -> str:
     if not state.get("code_feedback"):   # None = passed → render
         return "render_trigger"
     if state["code_attempts"] >= 3:
+        # Out of retries. A scene that runs but still has layout complaints is
+        # rendered anyway (visual QA gets a pass at it); a crashing one escalates.
+        if state.get("layout_renderable") and not state.get("interactive", True):
+            print("  [layout_checker] retries exhausted; rendering the last scene despite layout warnings")
+            return "render_trigger"
         return "escalate_to_user"
     return "manim_agent"
 

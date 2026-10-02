@@ -34,3 +34,4 @@ class PipelineState(TypedDict):
     search_warning: str | None
     interactive: bool
     quality: str | None   # "low" | "medium" | "high" | "4k"; None = MANIM_QUALITY
+    layout_renderable: bool  # last dry-run completed (only layout violations, no crash)
