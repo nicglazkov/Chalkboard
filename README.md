@@ -300,21 +300,28 @@ OpenAI TTS uses its native speed parameter (0.25 to 4.0). Kokoro and ElevenLabs 
 
 ---
 
-## TTS backends
+## Narration (TTS)
 
-| Backend      | Quality | Cost         | Requires                                                    |
-| ------------ | ------- | ------------ | ----------------------------------------------------------- |
-| `openai`     | Great   | API          | `OPENAI_API_KEY`                                            |
-| `elevenlabs` | Great   | API          | `pip install elevenlabs`, `ELEVENLABS_API_KEY`              |
-| `kokoro`     | Best    | Free (local) | PyTorch 2.4+, `espeak-ng` (**not available on Intel Macs**) |
+Pick a voice per run with `--narrator` (CLI), `narrator` (API) or the Narrator menu in the web UI, or set a default with `NARRATOR` in `.env`:
 
-Set `TTS_BACKEND` in `.env`. `.env.example` ships with `openai` (works everywhere); the code default when unset is `kokoro`.
+| Narrator | Backend | Voice | Needs |
+| -------- | ------- | ----- | ----- |
+| `aria`   | ElevenLabs `eleven_v4` | Skye: young, bright, a little nerdy | `ELEVENLABS_API_KEY` |
+| `milo`   | ElevenLabs `eleven_v4` | Bradley: earnest male narrator | `ELEVENLABS_API_KEY` |
+| `reid`   | ElevenLabs `eleven_v4` | Matt: natural, conversational male | `ELEVENLABS_API_KEY` |
+| `grace`  | ElevenLabs `eleven_v4` | Layla: warm, clear female | `ELEVENLABS_API_KEY` |
+| `kokoro` | Kokoro-82M (local) | `af_heart` | PyTorch 2.4+, `espeak-ng`; free |
+| `alloy`  | OpenAI `gpt-4o-mini-tts` | alloy | `OPENAI_API_KEY` |
 
-- **OpenAI** synthesizes segments in parallel (up to 6 at once). Configure with `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`), `OPENAI_TTS_VOICE` (default `alloy`) and `OPENAI_TTS_INSTRUCTIONS` (delivery instructions, sent only to `gpt-*` models).
-- **Kokoro** loads its model once per process and runs on the GPU when CUDA is available. Voice: `KOKORO_VOICE` (default `af_heart`). Install `espeak-ng` with `brew install espeak-ng` / `apt install espeak-ng`.
-- **ElevenLabs** voice: `ELEVENLABS_VOICE_ID` (default "George").
+With no narrator set, `TTS_BACKEND` (`kokoro`, `openai`, `elevenlabs`) picks the backend with its default voice.
 
-> **Intel Mac users:** PyTorch 2.4+ has no x86_64 macOS wheels. Use `openai` or `elevenlabs`.
+Why these: the four ElevenLabs voices won a blind listening test (April 2026) against OpenAI, Fish and Gemini voices. Eleven v4 (September 2026) led the Artificial Analysis TTS arena when this was written and supports **request stitching**: segments are synthesized separately (their lengths drive the animation), and v4 is told about the neighbouring segments so intonation carries across the joins. `eleven_v3` rejects stitching, so it runs segments in parallel without context. Compare voices on your own machine with `python scripts/tts_bench.py --out bench/` (same script for every voice, with timing and a Whisper round-trip check).
+
+- **ElevenLabs**: `ELEVENLABS_MODEL_ID` (default `eleven_v4`), `ELEVENLABS_VOICE_ID` (used with `TTS_BACKEND=elevenlabs`), `ELEVENLABS_STITCH=0` to turn stitching off, `ELEVENLABS_CONCURRENCY` for parallel v3 requests (match your plan's limit). Cost is roughly 1-3k characters per 1-3 minute video.
+- **Kokoro** loads its model once per process and runs on the GPU when CUDA is available. Voice: `KOKORO_VOICE`. Install `espeak-ng` with `brew install espeak-ng` / `apt install espeak-ng`.
+- **OpenAI** synthesizes segments in parallel (up to 6 at once). Configure with `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE` and `OPENAI_TTS_INSTRUCTIONS` (sent only to `gpt-*` models).
+
+> **Intel Mac users:** PyTorch 2.4+ has no x86_64 macOS wheels, so Kokoro is unavailable. Use an ElevenLabs or OpenAI narrator.
 
 ---
 

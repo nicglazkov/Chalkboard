@@ -52,7 +52,8 @@ pipeline/
     base.py             Backend registry (get_backend), atempo helpers
     kokoro_tts.py       Local TTS (PyTorch), model cached per process
     openai_tts.py       OpenAI TTS API, segments in parallel
-    elevenlabs_tts.py   ElevenLabs TTS API
+    elevenlabs_tts.py   ElevenLabs REST (httpx); request stitching on eleven_v4
+    voices.py           Named narrators: (backend, voice id, model) per name
 docker/                 Scene runtime (imported by every generated scene) + render image
   chalkboard_base.py        ChalkboardSceneBase mixin: per-segment bounding-box, zone and timing checks
   chalkboard_style.py       House typography: shared LaTeX preamble, text/code fonts (applied on import)
@@ -329,7 +330,7 @@ The persistent title is never in `seg_items`; multi-segment elements are faded o
 | `TIMEOUT_CODE_VALIDATOR` | 240s | code_validator |
 | `TIMEOUT_LAYOUT_CHECKER` | 180s | layout_checker |
 | `TIMEOUT_VISUAL_QA` | 240s | visual_qa |
-| `TIMEOUT_TTS_SEGMENT` | 30s | OpenAI, ElevenLabs (per segment) |
+| `TIMEOUT_TTS_SEGMENT` | 60s | OpenAI, ElevenLabs (per segment) |
 | `TIMEOUT_TTS_KOKORO` | 120s | Kokoro (full call) |
 
 ---
@@ -348,14 +349,15 @@ async def generate_audio(
 
 - **OpenAI** (`openai_tts.py`): segments synthesized in parallel (`asyncio.gather`, at most `MAX_CONCURRENT = 6` at once), each through `api_call_with_retry`; results are concatenated in segment order. `speed=` goes to the API. Env: `OPENAI_TTS_MODEL` (default `gpt-4o-mini-tts`), `OPENAI_TTS_VOICE` (default `alloy`), `OPENAI_TTS_INSTRUCTIONS` (sent only when the model name starts with `gpt-`).
 - **Kokoro** (`kokoro_tts.py`): `KPipeline` is created once per process (`functools.cache` on `_pipeline()`, so it runs on the GPU when CUDA is available and is not reloaded per job). Voice: `KOKORO_VOICE` (default `af_heart`). Tests clear the cache in `conftest.py`.
-- **ElevenLabs** (`elevenlabs_tts.py`): voice from `ELEVENLABS_VOICE_ID` (default "George").
+- **ElevenLabs** (`elevenlabs_tts.py`): plain REST via httpx (no SDK). Default model `eleven_v4`, default voice Skye. On models that support it (everything except `eleven_v3`, which rejects `previous_text`/`next_text`/`previous_request_ids` with `unsupported_model`, verified 2026-10-02) segments are synthesized **in order** and each request carries `previous_request_ids` (last 3), `previous_text` and `next_text`, so prosody carries across segment joins. v3 runs segments in parallel (`ELEVENLABS_CONCURRENCY`, default 3) without context. Env: `ELEVENLABS_MODEL_ID`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STITCH=0`.
+- **Narrators** (`voices.py`): `aria`/`milo`/`reid`/`grace` (ElevenLabs Skye/Bradley/Matt/Layla, ids pinned because the library renames voices; chosen in an April 2026 blind test), `kokoro`, `alloy`. `render_trigger` resolves `state["narrator"]` or `NARRATOR` (config) to a backend + `voice=`/`model=` kwargs; unset keeps the `TTS_BACKEND` default. The manifest records `narrator`. `scripts/tts_bench.py` compares voices on one script.
 - **Speed:** OpenAI natively; Kokoro and ElevenLabs generate at 1.0x and then `_apply_speed_to_wav` (ffmpeg `atempo`, chained via `_build_atempo` outside [0.5, 2.0]); durations are divided by `speed`.
 
 **Critical:** OpenAI returns WAV with an overflowed header (`nframes=0xFFFFFFFF`), so PCM is extracted with `wave.open()` and a clean WAV is written. ElevenLabs is requested as `pcm_24000` and wrapped manually. Kokoro produces clean PCM. Never concatenate raw response bytes.
 
 ### Adding a new TTS backend
 
-1. Create `pipeline/tts/yourbackend_tts.py` implementing `generate_audio(segments, output_path, speed=1.0)`
+1. Create `pipeline/tts/yourbackend_tts.py` implementing `generate_audio(segments, output_path, speed=1.0, *, voice=None, model=None)`
 2. Native speed: pass `speed` to the API. Otherwise call `_apply_speed_to_wav(output_path, speed)` and divide durations by `speed`
 3. Register it in `pipeline/tts/base.py` `get_backend()`
 4. Add it to the TTS table in `README.md`
