@@ -7,7 +7,7 @@ Both backends share one contract:
 
 The local backend needs `manim` (pip, already in requirements via the venv) plus a
 TeX distribution with `latex` and `dvisvgm` on PATH. It is several times faster than
-Docker (no container start, no image build) and is what the GPU box uses.
+Docker (no container start, no image build).
 """
 from __future__ import annotations
 

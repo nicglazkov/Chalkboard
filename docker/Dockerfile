@@ -1,5 +1,5 @@
 # Render image for RENDER_BACKEND=docker (machines without a local TeX install).
-# The GPU box and anyone with TeX Live use RENDER_BACKEND=local instead, which runs
+# Anyone with a local TeX Live install can use RENDER_BACKEND=local instead, which runs
 # the same docker/*.py runtime modules natively.
 FROM manimcommunity/manim:v0.21.0
 USER root

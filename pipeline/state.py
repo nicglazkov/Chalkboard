@@ -34,6 +34,6 @@ class PipelineState(TypedDict):
     search_warning: str | None
     interactive: bool
     quality: str | None   # "low" | "medium" | "high" | "4k"; None = MANIM_QUALITY
-    layout_renderable: bool
+    layout_renderable: bool  # last dry-run completed (only layout violations, no crash)
     claude_review_failures: int     # consecutive advisory rejections by Claude's code review
-    code_feedback_advisory: bool    # current code_feedback came from Claude review, not a hard check  # last dry-run completed (only layout violations, no crash)
+    code_feedback_advisory: bool    # current code_feedback came from Claude review, not a hard check

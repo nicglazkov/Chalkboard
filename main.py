@@ -103,7 +103,7 @@ def _report_context(blocks: list[dict], _yes: bool = False) -> bool:
                 f"Error: context files use {pct}% of the model context window. "
                 "Reduce files before proceeding."
             )
-        if token_count > 10_000 and not _yes:
+        if token_count > 10_000 and not _yes and sys.stdin.isatty():
             answer = input("\nContext is large. Proceed? (y/n): ").strip().lower()
             return answer == "y"
     except SystemExit:
@@ -435,8 +435,9 @@ async def _qa_regenerate_scene(
     run_id: str, qa_issues: str,
     theme: str, audience: str, tone: str, effort_level: str,
     context_blocks=None,
-) -> None:
+) -> bool:
     """Re-invoke manim_agent with QA feedback, overwrite scene.py in place.
+    Returns False (scene.py untouched) when the new code fails static checks.
 
     Note: this intentionally bypasses code_validator and layout_checker for
     speed — the QA loop cap (max_qa_attempts=2) bounds the blast radius. A
@@ -449,7 +450,11 @@ async def _qa_regenerate_scene(
     manifest = json.loads((run_dir / "manifest.json").read_text())
     topic = manifest["topic"]
     script = (run_dir / "script.txt").read_text()
-    segments = json.loads((run_dir / "segments.json").read_text())
+    # segments.json carries measured durations; the prompt formatter reads estimates.
+    segments = [
+        {**s, "estimated_duration_sec": s.get("actual_duration_sec", 0.0)}
+        for s in json.loads((run_dir / "segments.json").read_text())
+    ]
     current_code = (run_dir / "scene.py").read_text()
 
     state = {
@@ -477,7 +482,19 @@ async def _qa_regenerate_scene(
     else:
         result = await manim_agent(state)
 
+    # No full validation loop here (speed), but never swap in code that fails the
+    # deterministic checks: keep the scene that already rendered instead.
+    import ast as _ast
+    from pipeline.ast_guards import run_guards
+    try:
+        problems = run_guards(_ast.parse(result["manim_code"]), result["manim_code"])
+    except SyntaxError as e:
+        problems = f"syntax error: {e}"
+    if problems:
+        print(f"  [qa] regenerated scene failed static checks; keeping the current one ({problems[:200]})")
+        return False
     (run_dir / "scene.py").write_text(result["manim_code"])
+    return True
 
 
 def _render_preview_once(run_id: str, output_dir: Path, preview_mp4: Path) -> Path:
@@ -654,15 +671,26 @@ def _run_qa_loop(
 
         issues_text = "\n".join(f"[{i['severity']}] {i['description']}" for i in result["issues"])
         print(f"\n  [qa] regenerating scene to fix errors (attempt {qa_attempt + 1}/{max_qa_attempts})...")
-        asyncio.run(_qa_regenerate_scene(
+        run_dir = output_dir / run_id
+        prev_scene = (run_dir / "scene.py").read_text()
+        if not asyncio.run(_qa_regenerate_scene(
             run_id, issues_text, theme, audience, tone, effort_level,
             context_blocks=context_blocks,
-        ))
-        # Clear old render artifacts so the renderer re-renders the new scene.py
-        run_dir = output_dir / run_id
-        final_mp4.unlink(missing_ok=True)
+        )):
+            return
+        # Re-render the new scene.py, but keep the previous video until the new one exists.
+        backup = run_dir / "final.prev.mp4"
+        final_mp4.replace(backup)
         shutil.rmtree(run_dir / "media", ignore_errors=True)
-        final_mp4 = _render(run_id, verbose=verbose)
+        try:
+            final_mp4 = _render(run_id, verbose=verbose)
+        except RenderFailed as e:
+            print(f"\n  [qa] re-render failed ({e}); keeping the previous video")
+            (run_dir / "scene.py").write_text(prev_scene)
+            backup.replace(run_dir / "final.mp4")
+            _extract_thumbnail(run_dir)
+            return
+        backup.unlink(missing_ok=True)
         print(f"\n  [qa] re-rendered → {final_mp4}")
 
 
@@ -740,7 +768,7 @@ def main():
     parser.add_argument("--theme", choices=THEME_CHOICES, default=DEFAULT_THEME,
                         help="Visual color theme for the animation")
     parser.add_argument("--template", choices=TEMPLATE_CHOICES, default=None,
-                        help="Animation template: algorithm, code, compare, howto, timeline")
+                        help="Animation template: " + ", ".join(TEMPLATE_CHOICES))
     parser.add_argument("--quality", choices=["low", "medium", "high", "4k"], default=None,
                         help="Render resolution: low=480p15, medium=720p30, high=1080p60, 4k=2160p60 "
                              "(default: MANIM_QUALITY)")
@@ -839,6 +867,21 @@ def main():
         speed=args.speed, template=args.template, interactive=interactive,
         quality=args.quality,
     ))
+
+    run_dir = Path(OUTPUT_DIR) / thread_id
+    manifest_path = run_dir / "manifest.json"
+    if not manifest_path.exists():
+        print(f"\nPipeline stopped before producing a scene (run {thread_id}); nothing to render.")
+        print("Start a fresh run, ideally with a narrower topic or --effort high.")
+        raise SystemExit(1)
+    if args.quality:
+        manifest = json.loads(manifest_path.read_text())
+        if manifest.get("quality") != args.quality:
+            # Re-render an existing run at a new resolution.
+            manifest["quality"] = args.quality
+            manifest_path.write_text(json.dumps(manifest, indent=2))
+            (run_dir / "final.mp4").unlink(missing_ok=True)
+            shutil.rmtree(run_dir / "media", ignore_errors=True)
 
     if not args.no_render:
         if args.preview:
