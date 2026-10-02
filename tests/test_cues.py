@@ -122,6 +122,16 @@ def test_caption_lines_split_sentences():
     assert [text[a:b].strip() for a, b in spans] == ["First sentence here.", "Second one!", "Third?"]
 
 
+def test_caption_lines_split_long_sentences_without_orphans():
+    text = ("Here's a fact that feels almost magical: the derivative of e to the x "
+            "is just e to the x.")
+    spans = caption_lines(text)
+    assert [text[a:b].strip() for a, b in spans] == [
+        "Here's a fact that feels almost magical:",
+        "the derivative of e to the x is just e to the x."]
+    assert "".join(text[a:b] for a, b in spans) == text
+
+
 def test_char_time_interpolates_through_cues():
     clean, offs = parse_cues("aaaaaaaaa [[1]] bbbbbbbbb")   # 'b' at 10 of 19
     # Cue spoken late (at 8s of 10s): characters before it stretch.

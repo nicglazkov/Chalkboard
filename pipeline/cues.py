@@ -169,18 +169,28 @@ def caption_lines(text: str, max_chars: int = 84) -> list[tuple[int, int]]:
     Returns (start_char, end_char) spans covering the text in order.
     """
     spans: list[tuple[int, int]] = []
-    for m in re.finditer(r"[^.!?]+[.!?]*[\"')\]]*\s*", text):
-        a, b = m.start(), m.end()
+
+    def split(a: int, b: int) -> None:
         piece = text[a:b]
-        while len(piece.strip()) > max_chars:
-            cut = piece.rfind(", ", 0, max_chars)
-            if cut <= 0:
-                cut = piece.rfind(" ", 0, max_chars)
-            if cut <= 0:
-                break
-            spans.append((a, a + cut + 1))
-            a += cut + 1
-            piece = text[a:b]
-        if piece.strip():
+        if len(piece.strip()) <= max_chars:
+            if piece.strip():
+                spans.append((a, b))
+            return
+        mid = len(piece) // 2
+        # Prefer a clause break (", " / ": " / "; ") in the middle half, else
+        # the space nearest the middle: no orphaned one-word lines.
+        quarter = len(piece) // 4
+        clause = [i + 1 for i in range(quarter, 3 * quarter)
+                  if piece[i] in ",:;" and piece[i + 1] == " "]
+        spaces = [i for i, c in enumerate(piece) if c == " " and 0 < i < len(piece) - 1]
+        cands = clause or spaces
+        if not cands:
             spans.append((a, b))
+            return
+        cut = min(cands, key=lambda i: abs(i - mid))
+        split(a, a + cut + 1)
+        split(a + cut + 1, b)
+
+    for m in re.finditer(r"[^.!?]+[.!?]*[\"')\]]*\s*", text):
+        split(m.start(), m.end())
     return spans or [(0, len(text))]

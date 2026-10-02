@@ -542,7 +542,7 @@ Current `JobStore` is in-memory (jobs are lost on restart). Auth is not implemen
 
 ```bash
 pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
-pytest                        # 634 tests (with Manim + TeX installed)
+pytest                        # 635 tests (with Manim + TeX installed)
 pytest tests/test_graph.py    # one file
 ```
 
