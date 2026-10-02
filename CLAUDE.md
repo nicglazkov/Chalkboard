@@ -71,8 +71,9 @@ main.py               CLI entry point, async graph runner, render + QA + quiz
 run_server.py         uvicorn entrypoint (python run_server.py [--reload] [--port N] [--host H])
 requirements.txt          Pipeline + server dependencies
 requirements-render.txt   requirements.txt + manim==0.21.0 (local rendering)
+requirements-dev.txt      requirements.txt + pytest, pytest-asyncio
 server/
-  app.py              FastAPI app factory (create_app), startup backfill
+  app.py              FastAPI app factory (create_app), lifespan: library init + backfill
   jobs.py             Job dataclass, JobStore, run_job (MAX_CONCURRENT_JOBS semaphore), _do_render
   models.py           Pydantic CreateJobRequest / JobResponse
   routes.py           /api/jobs routes, /api/claude-status, task spawning
@@ -119,11 +120,12 @@ server/
 | `search_warning` | str \| None | Set by `research_agent` when search failed or found little; printed by `_print_progress` |
 | `interactive` | bool | `False` = never wait for stdin: `escalate_to_user` auto-aborts, `TimeoutExhausted` re-raises, layout-only failures render anyway. CLI: `sys.stdin.isatty() and not --yes`; server: always `False` |
 | `quality` | str \| None | `"low"` / `"medium"` / `"high"` / `"4k"`; `None` = `MANIM_QUALITY`. Written into `manifest.json` by `render_trigger` |
+| `narrator` | str \| None | Name from `pipeline/tts/voices.py` (`aria`, `milo`, `kokoro`, `alloy`); `None` = `NARRATOR`, else `TTS_BACKEND`'s default voice. Resolved by `render_trigger`, recorded in `manifest.json` |
 | `layout_renderable` | bool | Set by `layout_checker`: `True` when the last dry-run ran to completion (only layout/timing violations, no crash) |
-| `claude_review_failures` | int | Count of advisory rejections by code_validator's Claude review; reset to 0 by any hard failure |
+| `claude_review_failures` | int | Count of advisory rejections by code_validator's Claude review; reset to 0 by code_validator's own hard failures (syntax, Mobject arithmetic, AST guards). Layout failures leave it as is, so once it is over the limit later rejections go straight to the dry-run |
 | `code_feedback_advisory` | bool | `True` when the current `code_feedback` came from the Claude review, not a deterministic check |
 
-`_init_state` in `graph.py` fills defaults for the optional fields, including `quality`, `claude_review_failures` and `code_feedback_advisory`. `layout_renderable` has no default there; it is only read with `.get()`.
+`_init_state` in `graph.py` fills defaults for the optional fields, including `quality`, `narrator`, `claude_review_failures` and `code_feedback_advisory`. A new field has to be threaded through `state.py`, `_init_state`, `main.run()` (parameter and `input_state`) and `server/jobs.py` (`Job`, `JobStore.create`, the `run(...)` call). `layout_renderable` has no default there; it is only read with `.get()`.
 
 ### Critical invariant: None = approved
 
@@ -234,7 +236,7 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - No Claude call. Timeout `TIMEOUT_LAYOUT_CHECKER` = 180s
 - Writes `scene.py` and a stub `segments.json` (estimated durations) to `output/<run_id>/`, deletes any stale `layout_report.json`, then runs `render.check_cmd(run_dir)`: a native Python dry-run (local) or `docker run ... chalkboard-render --check`. Both set `dry_run=True`, `frame_rate=1`
 - `ChalkboardSceneBase` writes `layout_report.json`: `{"passed": bool, "violations": [{type, segment, description, ...}]}`
-- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks
+- Violation types: `timing_overrun` (1.5s tolerance), `off_screen` (0.1 unit tolerance), `overlap` (partial intersection; full containment is ignored), `zone_boundary_overlap` (containment across the left/right zones), `zone_collision` (a left-zone element crossing x = -0.5 while right-zone content is present, or the mirror case). Elements entirely above y = 2.9 (title band) are excluded from zone checks. `sync_drift` (visuals more than the tolerance behind the narration at a segment boundary) comes from `next_segment` / `end_layout_check`
 - Return values: passed → `code_feedback=None, layout_renderable=True`; violations → formatted feedback, `code_attempts + 1`, `layout_renderable=True`; crash, timeout, missing or unreadable report, failure to start → feedback with `layout_renderable=False` (the stderr tail is included for crashes)
 - `ChalkboardSceneBase` overrides `play()` (accumulates `run_time`, skipping `Wait` so `wait()` is not double counted) and `wait()` to measure per-segment time. Generated scenes call `self.begin_segment(n, duration=_d[n])` and `self.end_layout_check()`
 
@@ -436,7 +438,7 @@ After each full render, `_run_qa_loop()` → `_run_visual_qa()` → `pipeline/vi
 | `normal` (default) | 30s | 10 |
 | `high`  | 15s | 20 |
 
-Minimum 5 frames; with `segments.json`, frames are also sampled at segment boundaries, and on the first pass `layout_report.json` is cross-referenced. Claude (agent `visual_qa`) returns `{"passed": bool, "issues": [{severity, description}]}` with the scene code as reference. On `error` issues, `_qa_regenerate_scene()` re-invokes `manim_agent` with the issues as `code_feedback` (bypassing code_validator and layout_checker), deletes the old render and re-renders, up to 2 times. Warnings never trigger regeneration. QA exceptions are caught and the run continues.
+Minimum 5 frames; with `segments.json`, frames are also sampled at segment boundaries, and on the first pass `layout_report.json` is cross-referenced. Claude (agent `visual_qa`) returns `{"passed": bool, "issues": [{severity, description}]}` with the scene code as reference. On `error` issues, `_qa_regenerate_scene()` re-invokes `manim_agent` with the issues as `code_feedback`, using the run's theme, template, audience, tone and effort from `manifest.json` (so a resumed run keeps its settings). The new code must pass `run_guards` and the headless dry-run (`layout_checker`; only a crash rejects it, layout warnings do not); otherwise the current scene is kept. Code_validator's Claude review is skipped. The previous `final.mp4` is kept as `final.prev.mp4` until the re-render (with the same `burn_captions`) succeeds and is restored if it fails. Up to 2 times. Warnings never trigger regeneration. QA exceptions are caught and the run continues.
 
 ---
 
@@ -464,9 +466,9 @@ If a node raises, its output is not saved; the next resume re-runs that node fro
 
 ## Video Library
 
-`server/library.py`: `VideoMeta` (14 persisted fields: `run_id`, `topic`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`; `output_files` is computed from disk), the `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
+`server/library.py`: `VideoMeta` (16 persisted fields: `run_id`, `topic`, `title`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`, `narrator`; `init()` adds the `title` / `narrator` columns to older databases; `output_files` is computed from disk), the `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
 
-`_backfill(store, output_dir)` (`server/app.py`) indexes every `output/` directory with `manifest.json` and `final.mp4` at startup (idempotent; file mtime as `created_at`). Old manifests missing fields are read with `.get(field, default)`.
+`_backfill(store, output_dir)` (`server/app.py`) indexes every `output/` directory with `manifest.json` and `final.mp4` at startup and, throttled to once per 10 s, on `GET /api/library` so CLI runs show up without a restart (idempotent; file mtime as `created_at`; fills `narrator` on older rows). Consequence: `DELETE /api/library/{id}` without `?files=true` is undone by the next listing, because the files are still there; the web UI always deletes with `files=true`. Old manifests missing fields are read with `.get(field, default)`.
 
 Routes: `make_library_router(store)` (`GET/DELETE /api/library...`) and `make_pages_router()` (`/library`, `/library/{run_id}`).
 
@@ -480,9 +482,9 @@ python run_server.py --host 0.0.0.0   # serve the LAN; there is no auth
 python run_server.py --reload         # dev (kills in-flight jobs on reload)
 ```
 
-- **`server/app.py`**: `create_app(...)` factory, mounts `server/static/` at `/`, startup backfill. Module-level `app` for uvicorn.
+- **`server/app.py`**: `create_app(...)` factory, mounts `server/static/` at `/`, library init + backfill in the `lifespan` handler. Module-level `app` for uvicorn.
 - **`server/jobs.py`**: `Job` dataclass (status, events, output_files, async queue, pipeline params including `quality`), in-memory `JobStore`, `run_job(job, output_dir, library_store)` which waits on a module-level `asyncio.Semaphore(MAX_CONCURRENT_JOBS)` (default 3) and then runs pipeline + render + QA + quiz, `_do_render(run_id, burn_captions)`.
-- **`server/routes.py`**: `make_router(store, library_store)`. Job tasks are created with `_spawn()`, which keeps a strong reference in `_running_tasks` (the event loop only holds weak references, so an unreferenced task can be garbage-collected mid-run). `/api/claude-status` parses the Claude status RSS with a 5-minute cache.
+- **`server/routes.py`**: `make_router(store, library_store)`. Job tasks are created with `_spawn()`, which keeps a strong reference in `_running_tasks` (the event loop only holds weak references, so an unreferenced task can be garbage-collected mid-run). `/api/claude-status` parses the Claude status RSS with a 5-minute cache. `/api/meta` returns server defaults, the narrators (with `available` = API key present, Kokoro always), the resolved render backend, `CLAUDE_MODEL` and the count of pending/running jobs. The multipart upload route builds a `CreateJobRequest` from its form fields first, so it validates (422) exactly like the JSON route before any file is saved.
 - **`server/models.py`**: `CreateJobRequest` (topic, effort, audience, tone, theme, template, speed, burn_captions, quiz, urls, github, qa_density, quality), `JobResponse` (id, status, topic, events, error, output_files). The multipart upload route takes the same fields as form fields (`quality=""` means default).
 - **Frontend:** `index.html`, `library.html` and `video.html` each load `/app.css` and `/app.js` in `<head>`. `app.js` exposes helpers on `window.CB`, renders the nav (Generate / Library tabs, Claude status, jobs menu, theme toggle) and the `window.jobStatus` store. No build step. (`job-status.js` was removed; its role moved into `app.js`.)
 
@@ -495,6 +497,7 @@ python run_server.py --reload         # dev (kills in-flight jobs on reload)
 | `GET` | `/api/jobs/{id}/events` | SSE stream, one event per node update, then `{"done": true}` |
 | `GET` | `/api/jobs/{id}/files/{filename}` | Serve an output file (path-traversal-safe; also works for library runs) |
 | `GET` | `/api/claude-status` | Claude status summary |
+| `GET` | `/api/meta` | Defaults, narrators + availability, render backend, model, running jobs |
 
 Lifecycle: `pending → running → completed | failed`. `job.error` is set when the pipeline raises or the render fails (`"render failed; pipeline output preserved"`). `run_job` fetches URL/GitHub context, forwards `burn_captions` and `quality`, skips QA for `qa_density="zero"` or a failed render, and runs the quiz independently of render success.
 
@@ -518,7 +521,8 @@ Current `JobStore` is in-memory (jobs are lost on restart). Auth is not implemen
 ## Testing
 
 ```bash
-pytest                        # 569 tests
+pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
+pytest                        # 590 tests (with Manim + TeX installed)
 pytest tests/test_graph.py    # one file
 ```
 
@@ -532,7 +536,8 @@ pytest tests/test_graph.py    # one file
 ## Known issues / future work
 
 - **Docker render path untested on 0.21.0**: the image was updated with the design system but not re-run end to end.
-- **QA regeneration skips validation**: `_qa_regenerate_scene` writes the new scene straight to render without code_validator or layout_checker.
+- **Layout geometry checks are inert under Manim 0.21**: `_lc_check_segment` calls `m.get_bounding_box()`, which Cairo mobjects do not have (it resolves through Manim's deprecated auto-getter to a missing `bounding_box` attribute, raising `AttributeError`), and the exception is swallowed. So `off_screen`, `overlap`, `zone_boundary_overlap` and `zone_collision` never fire on real scenes; only timing and `sync_drift` do. The unit tests use fake mobjects that define `get_bounding_box`. Fixing it (bounding box from `get_all_points()`) changes how many scenes fail the dry-run, so it is a deliberate decision, not a drive-by fix.
+- **QA regeneration skips the Claude review**: `_qa_regenerate_scene` runs the AST guards and the dry-run, not code_validator's review.
 - **Kokoro multi-voice**: a single voice per run.
 - **High-effort web search gate**: `needs_web_search` is returned by script_agent but `user_approved_search` is never set to `True` by `main.py`.
 - **In-memory job store** and **no auth** on the server.

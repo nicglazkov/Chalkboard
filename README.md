@@ -343,7 +343,7 @@ Every run is checkpointed after each pipeline stage. If it crashes or you stop i
 python main.py --topic "..." --run-id <previous-run-id>
 ```
 
-The pipeline continues from the last completed stage. If the pipeline had already finished, it skips straight to rendering (an existing `final.mp4` is reused, not re-rendered).
+The pipeline continues from the last completed stage. If the pipeline had already finished, it skips straight to rendering (an existing `final.mp4` is reused, not re-rendered, unless `--quality` asks for a different resolution). Other options (`--template`, `--narrator`, `--theme`, ...) are not re-applied to a checkpointed run, and context (`--context`, `--url`, `--github`) has to be passed again.
 
 ### Preview, then full render
 
@@ -357,7 +357,7 @@ python main.py --topic "how B-trees work" --run-id <run-id>
 # → output/<run-id>/final.mp4 (plus visual QA)
 ```
 
-The render quality is stored in the run's `manifest.json` when the pipeline finishes, so pass `--quality` on the first command. It has no effect when resuming a run whose pipeline already completed.
+The render quality is stored in the run's `manifest.json` when the pipeline finishes. Passing a different `--quality` with `--run-id` updates the manifest and re-renders the finished run at that resolution (for example `--quality 4k` after a `low` first pass).
 
 ---
 
@@ -378,7 +378,8 @@ All settings can be set in `.env` or as environment variables (see `.env.example
 | `OPENAI_TTS_VOICE`        | `alloy`                               | OpenAI voice                                               |
 | `OPENAI_TTS_INSTRUCTIONS` | a teaching-voice prompt               | Delivery instructions (`gpt-*` TTS models only)            |
 | `KOKORO_VOICE`            | `af_heart`                            | Kokoro voice                                               |
-| `ELEVENLABS_VOICE_ID`     | George                                | ElevenLabs voice ID                                        |
+| `NARRATOR`                | unset                                 | Default narrator: `aria`, `milo`, `kokoro`, `alloy`        |
+| `ELEVENLABS_VOICE_ID`     | Skye (`1iNDh1muacMMMHXvS7Ym`)         | ElevenLabs voice for `TTS_BACKEND=elevenlabs`              |
 | `DEFAULT_EFFORT`          | `medium`                              | `low`, `medium`, `high`                                    |
 | `DEFAULT_AUDIENCE`        | `intermediate`                        | `beginner`, `intermediate`, `expert`                       |
 | `DEFAULT_TONE`            | `casual`                              | `casual`, `formal`, `socratic`                             |
@@ -419,6 +420,7 @@ The server runs up to `MAX_CONCURRENT_JOBS` jobs at once (default 3); further jo
 | `GET /api/jobs/{id}/events` | SSE stream | Live pipeline progress events |
 | `GET /api/jobs/{id}/files/{filename}` | Download | Serve `final.mp4`, `captions.srt`, etc. |
 | `GET /api/claude-status` | Claude status | Parsed Claude status feed (cached 5 minutes), shown in the UI nav |
+| `GET /api/meta` | Server info | Defaults (quality, narrator, effort, ...), narrators with availability, render backend, model, running jobs |
 
 ### Example
 
@@ -439,6 +441,7 @@ curl -s -X POST http://localhost:8000/api/jobs \
     "theme": "chalkboard",
     "template": "algorithm",
     "quality": "high",
+    "narrator": "aria",
     "speed": 1.25,
     "burn_captions": true,
     "quiz": true,
@@ -461,7 +464,7 @@ curl -s http://localhost:8000/api/jobs/<id>/events
 curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
 ```
 
-`quality` is `low`, `medium`, `high` or `4k`; omit it (or send `null`) to use the server's `MANIM_QUALITY`.
+`quality` is `low`, `medium`, `high` or `4k`; omit it (or send `null`) to use the server's `MANIM_QUALITY`. `narrator` is `aria`, `milo`, `kokoro` or `alloy`; omit it to use `NARRATOR` (or `TTS_BACKEND`). `GET /api/meta` lists the narrators and which ones this server has keys for. The multipart route validates these fields the same way (422 on an unknown value).
 
 ### Job response shape
 
@@ -505,7 +508,7 @@ All generated videos are indexed into a SQLite database (`library.db`); existing
 |--------|------|-------------|
 | `GET /api/library` | List videos | Supports `q`, `sort`, `limit`, `offset` query params |
 | `GET /api/library/{run_id}` | Get video | Full metadata + dynamic `output_files` list |
-| `DELETE /api/library/{run_id}` | Delete video | Removes from index (does not delete files) |
+| `DELETE /api/library/{run_id}` | Delete video | Removes from the index; `?files=true` also deletes `output/<run_id>/`. Without it the run is re-indexed on the next library listing, because its files are still in `output/` |
 
 ---
 
@@ -522,7 +525,7 @@ final  = client.wait_for_completion(job.id, timeout=600)
 client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
 ```
 
-The same client also works against a **self-hosted** Chalkboard: pass `base_url="http://localhost:8000/api/v1"` to the constructor. Self-hosted installs typically don't need an API key (this repo's server has no multi-tenant auth out of the box).
+The same client also works against a **self-hosted** Chalkboard (`python run_server.py`): pass `base_url="http://127.0.0.1:8000/api"` (no `/v1`) and leave out `api_key`, since this repo's server has no auth. Hosted-only methods (cancel, retry, rerender, webhooks, API keys) are not available there; see [`sdk/python/README.md`](sdk/python/README.md).
 
 Install:
 
@@ -539,6 +542,7 @@ Full SDK reference + examples: [`sdk/python/README.md`](sdk/python/README.md). H
 ### Run tests
 
 ```bash
+pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
 pytest
 ```
 
@@ -578,6 +582,7 @@ main.py              # CLI entry point
 run_server.py        # API server entry point
 requirements.txt         # pipeline + server
 requirements-render.txt  # adds manim 0.21.0 for local rendering
+requirements-dev.txt     # adds pytest + pytest-asyncio
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture, design decisions, and contribution guidelines.
