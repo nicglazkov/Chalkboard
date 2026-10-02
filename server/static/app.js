@@ -254,18 +254,30 @@
       }
       return push(node, status);
     };
+    // Server timestamps (ev.ts) give each step a start (t0) and end (t1), so
+    // step times survive a reload; steps without them fall back to live timing.
     for (const ev of events || []) {
       if (!ev || ev.done || !ev.node) continue;
       const node = ev.node;
       const u = ev.updates || {};
+      const ts = ev.ts ? Date.parse(ev.ts) : NaN;
+      let s;
       if (PSEUDO.has(node)) {
-        if (u.status === 'running') { claim(node, 'running'); continue; }
-        claim(node, u.status === 'failed' ? 'failed' : 'done');
+        if (u.status === 'running') {
+          s = claim(node, 'running');
+          if (!isNaN(ts) && s.t0 === undefined) s.t0 = ts;
+          continue;
+        }
+        s = claim(node, u.status === 'failed' ? 'failed' : 'done');
       } else {
-        claim(node, 'done');
+        s = claim(node, 'done');
       }
+      if (!isNaN(ts)) s.t1 = ts;
       const next = nextStage(node, u, opts);
-      if (next) push(next, 'running');
+      if (next) {
+        const n = push(next, 'running');
+        if (!isNaN(ts)) n.t0 = ts;
+      }
     }
     if (!steps.length) push('init', 'running');
     return steps;

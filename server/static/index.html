@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/app.css?v=2" />
-  <script src="/app.js?v=2"></script>
+  <link rel="stylesheet" href="/app.css?v=3" />
+  <script src="/app.js?v=3"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -450,12 +450,14 @@
         const label = stageLabel(x.node) + (x.attempt > 1 ? ` (attempt ${x.attempt})` : '');
         const sr = { done: 'done', failed: 'failed', running: 'in progress' }[x.status];
         let time = '';
-        if (t && x.status === 'running') time = fmtClock((now - t.t0) / 1000);
+        if (x.t0 !== undefined && x.status === 'running') time = fmtClock((now - x.t0) / 1000);
+        else if (x.t0 !== undefined && x.t1 !== undefined) { if (x.t1 - x.t0 >= 1000) time = fmtClock((x.t1 - x.t0) / 1000); }
+        else if (t && x.status === 'running') time = fmtClock((now - t.t0) / 1000);
         else if (t && t.t1 && t.t1 - t.t0 >= 1000) time = fmtClock((t.t1 - t.t0) / 1000);
         return `<li class="stage ${x.status}"${x.status === 'running' ? ' aria-current="step"' : ''}>
           <span class="stage-mark">${x.status === 'done' ? ICON_DONE : x.status === 'failed' ? ICON_FAIL : ''}</span>
           <span class="stage-name">${esc(label)}<span class="sr-only">, ${sr}</span></span>
-          <span class="stage-time" data-k="${i}:${esc(x.node)}">${time}</span></li>`;
+          <span class="stage-time" data-k="${i}:${esc(x.node)}"${x.status === 'running' && x.t0 !== undefined ? ` data-t0="${x.t0}"` : ''}>${time}</span></li>`;
       };
       stagesList.innerHTML = steps.map(row).join('') + pending.map((n) =>
         `<li class="stage pending"><span class="stage-mark"></span><span class="stage-name">${esc(stageLabel(n))}<span class="sr-only">, not started</span></span><span class="stage-time"></span></li>`).join('');
@@ -468,8 +470,9 @@
     function tick() {
       runClock.textContent = fmtClock((Date.now() - startedAt) / 1000);
       const el = stagesList.querySelector('.stage.running .stage-time');
-      const t = el && times[el.dataset.k];
-      if (t) el.textContent = fmtClock((Date.now() - t.t0) / 1000);
+      if (!el) return;
+      const t0 = Number(el.dataset.t0) || (times[el.dataset.k] || {}).t0;
+      if (t0) el.textContent = fmtClock((Date.now() - t0) / 1000);
     }
 
     function resetUI() {
