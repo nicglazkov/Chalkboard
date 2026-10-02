@@ -93,7 +93,7 @@ run = _pipeline_run
 
 
 async def _do_render(run_id: str, verbose: bool = False, burn_captions: bool = False) -> Path | None:
-    """Run Docker render. Returns path to final.mp4 or None on failure."""
+    """Render (local or Docker backend) and merge audio. Returns final.mp4, or None on failure."""
     try:
         final_mp4 = await asyncio.to_thread(_render, run_id, verbose, burn_captions)
         return final_mp4 if final_mp4.exists() else None
@@ -188,6 +188,7 @@ async def _run_job(job: Job, output_dir: Path, library_store=None) -> None:
                 tone=job.tone, effort_level=job.effort,
                 context_blocks=context_blocks,
                 qa_density=job.qa_density,
+                burn_captions=job.burn_captions,
             )
             job.append_event({"node": "visual_qa", "updates": {"status": "done"}})
 

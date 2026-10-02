@@ -437,11 +437,13 @@ async def _qa_regenerate_scene(
     context_blocks=None,
 ) -> bool:
     """Re-invoke manim_agent with QA feedback, overwrite scene.py in place.
-    Returns False (scene.py untouched) when the new code fails static checks.
+    Returns False (scene.py left as it was) when the new code fails the AST
+    guards or crashes in the headless dry-run.
 
-    Note: this intentionally bypasses code_validator and layout_checker for
-    speed — the QA loop cap (max_qa_attempts=2) bounds the blast radius. A
-    future improvement could run layout_checker before re-rendering here.
+    Skips code_validator's Claude review for speed; the QA loop cap
+    (max_qa_attempts=2) bounds the blast radius. Scene settings (theme,
+    template, ...) come from manifest.json when present, so a resumed run is
+    regenerated with the settings it was made with, not the CLI defaults.
     """
     from pipeline.agents.manim_agent import manim_agent
     output_dir = Path(OUTPUT_DIR).resolve()
@@ -471,8 +473,11 @@ async def _qa_regenerate_scene(
             "or elements extending off-screen."
         ),
         "code_attempts": 1,
-        "theme": theme, "audience": audience, "tone": tone,
-        "effort_level": effort_level,
+        "theme": manifest.get("theme") or theme,
+        "audience": manifest.get("audience") or audience,
+        "tone": manifest.get("tone") or tone,
+        "effort_level": manifest.get("effort") or effort_level,
+        "template": manifest.get("template"),
         "fact_feedback": None, "script_attempts": 0,
         "needs_web_search": False, "user_approved_search": False,
         "status": "validating", "context_file_paths": [],
@@ -659,6 +664,7 @@ def _run_qa_loop(
     theme: str, audience: str, tone: str, effort_level: str,
     context_blocks=None, verbose: bool = False,
     max_qa_attempts: int = 2, qa_density: str = "normal",
+    burn_captions: bool = False,
 ) -> None:
     """Run visual QA; if errors found, regenerate the Manim code and re-render (up to max_qa_attempts).
 
@@ -695,7 +701,7 @@ def _run_qa_loop(
         final_mp4.replace(backup)
         shutil.rmtree(run_dir / "media", ignore_errors=True)
         try:
-            final_mp4 = _render(run_id, verbose=verbose)
+            final_mp4 = _render(run_id, verbose=verbose, burn_captions=burn_captions)
         except RenderFailed as e:
             print(f"\n  [qa] re-render failed ({e}); keeping the previous video")
             (run_dir / "scene.py").write_text(prev_scene)
@@ -929,6 +935,7 @@ def main():
                         context_blocks=context_blocks,
                         verbose=args.verbose,
                         qa_density=args.qa_density,
+                        burn_captions=args.burn_captions,
                     )
                     break
                 except RenderFailed as e:
