@@ -449,3 +449,29 @@ def test_template_real_render_has_clean_layout(name, tmp_path):
     tmpl_cls, beats = _REAL_CASES[name]
     report = _run_real(tmpl_cls, beats, tmp_path)
     assert report["passed"], json.dumps(report["violations"], indent=2)
+
+
+@pytest.mark.parametrize("name", sorted(_REAL_CASES))
+def test_template_real_render_reveals_on_cues(name, tmp_path):
+    """With cue markers, every template lands its segment reveals on the
+    cued words: each segment's first cue is waited for, none is late."""
+    from manim import Scene, tempconfig
+    tmpl_cls, beats = _REAL_CASES[name]
+
+    class _S(ChalkboardSceneBase, Scene):
+        _REPORT_DIR = str(tmp_path)
+
+        def construct(self):
+            self._cues = {i: [1.2, 2.4] for i in range(4)}
+            tmpl_cls(self, beats=beats).render_all([4.0] * 4)
+            self.end_layout_check()
+
+    with tempconfig({"dry_run": True, "media_dir": str(tmp_path / "media"),
+                     "verbosity": "ERROR", "disable_caching": True}):
+        _S().render()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    assert report["passed"], json.dumps(report["violations"], indent=2)
+    log = report["cue_log"]
+    assert {e["segment"] for e in log if e["cue"] == 1} >= {0, 1}
+    for e in log:
+        assert e["visual_at"] == pytest.approx(e["spoken_at"], abs=0.6)

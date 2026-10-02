@@ -125,8 +125,9 @@ class DerivationTemplate(_TemplateBase):
                 caption = None
             last = seg_idx == n_seg - 1
             batch = range(line_idx, len(lines)) if last else range(line_idx, line_idx + 1)
-            for k in batch:
+            for j, k in enumerate(batch):
                 used += self._scroll(eq, k, top)
+                used += self._cue(j + 1)   # each new line lands on its cue word
                 derivation_step(scene, eq, k)
                 used += self._rt("emphasis") if k == 0 else self._rt("settle")
                 st = steps[k] if k < len(steps) else {}

@@ -34,6 +34,15 @@ CANVAS_SAFE_W = 13.0
 CANVAS_X_LIMIT = 6.6
 
 
+def scene_has_cue(scene, k: int) -> bool:
+    """True when the scene's current segment has cue marker [[k]]."""
+    has = getattr(scene, "has_cue", None)
+    try:
+        return callable(has) and has(k) is True
+    except Exception:
+        return False
+
+
 class _TemplateBase:
     """Base class. Subclasses set NAME, REQUIRED_KEYS, optionally
     OPTIONAL_KEYS, then implement _validate_beats() and render_all().
@@ -49,6 +58,12 @@ class _TemplateBase:
         self.theme = theme
         self.t = T(theme=theme)
         self._validate_beats()
+        # Templates cue the reveals they own; segments whose extra markers
+        # have no template beat are not a layout error.
+        try:
+            scene._cues_template_driven = True
+        except Exception:
+            pass
 
     # ── shared validation helpers ─────────────────────────────────
 
@@ -133,10 +148,36 @@ class _TemplateBase:
         return obj
 
     def _rest(self, duration: float, used: float) -> None:
-        """Wait out the remainder of a segment (never wait(0))."""
-        r = max(0.0, duration - used)
-        if r > 0:
+        """Wait out the remainder of a segment (never wait(0)). Uses the
+        scene's own narration clock when it has one, since cue waits and
+        frame rounding make `used` an underestimate."""
+        left = self._time_left()
+        r = max(0.0, duration - used) if left is None else left
+        if r > 0.02:
             self.scene.wait(r)
+
+    def _time_left(self):
+        fn = getattr(self.scene, "segment_time_left", None)
+        try:
+            v = fn() if callable(fn) else None
+        except Exception:
+            return None
+        return float(v) if isinstance(v, (int, float)) else None
+
+    def _cue(self, k: int = 1) -> float:
+        """Hold for cue marker [[k]] of the current segment when it exists,
+        so the next reveal lands on its word. Returns the seconds waited."""
+        has = getattr(self.scene, "has_cue", None)
+        try:
+            if callable(has) and has(k) is True:
+                before = self._time_left()
+                self.scene.cue(k)
+                after = self._time_left()
+                if before is not None and after is not None:
+                    return max(0.0, before - after)
+        except Exception:
+            pass
+        return 0.0
 
     # ── overridable in subclasses ─────────────────────────────────
 

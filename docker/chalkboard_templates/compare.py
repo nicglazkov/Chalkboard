@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from ._base import _TemplateBase
+from ._base import _TemplateBase, scene_has_cue
 
 try:
     from chalkboard_components import ChalkPanel  # type: ignore[import-not-found]
@@ -89,6 +89,7 @@ class CompareTemplate(_TemplateBase):
         right_panel.move_to(RIGHT * 3.5 + UP * center_y)
 
         # ── Segment 0: panels + divider ──
+        used += self._cue(1)
         compare_split(scene, left_panel, right_panel, add_divider=True, theme=self.theme)
         used += self._rt("snap") + self._rt("emphasis")
         self._rest(segment_durations[0], used)
@@ -125,8 +126,16 @@ class CompareTemplate(_TemplateBase):
                 l_obj = place(l_text, "l", "focus_secondary")
                 r_obj = place(r_text, "r", "focus_primary")
                 new += [l_obj, r_obj]
-            cascade_reveal(scene, new, lag_name="cascade", motion_name="emphasis")
-            used += self._rt("emphasis")
+            if scene_has_cue(scene, 2) and len(new) == 2:
+                # Left point on cue 1, right point on cue 2.
+                for c, obj in enumerate(new, start=1):
+                    used += self._cue(c)
+                    cascade_reveal(scene, [obj], lag_name="cascade", motion_name="emphasis")
+                    used += self._rt("emphasis")
+            else:
+                used += self._cue(1)
+                cascade_reveal(scene, new, lag_name="cascade", motion_name="emphasis")
+                used += self._rt("emphasis")
             shown += new
             i += len(batch)
             self._rest(dur, used)

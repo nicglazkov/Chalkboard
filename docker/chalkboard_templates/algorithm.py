@@ -86,6 +86,7 @@ class AlgorithmTemplate(_TemplateBase):
         used = self._show_title(title)
 
         cells = self._build_cells(self.beats["values"])
+        used += self._cue(1)
         cascade_reveal(scene, cells, lag_name="quick", motion_name="emphasis")
         used += self._rt("emphasis")
         # Re-parent the individually revealed cells under one row group so
@@ -119,12 +120,14 @@ class AlgorithmTemplate(_TemplateBase):
                 self._replace_cell_value(cells, vc["idx"], str(vc["to"]))
                 used += self._rt("snap")
 
+            used += self._cue(1)
             progressive_step(scene, cells, current_idx=step["active_idx"])
             counter.advance()
             used += self._rt("snap")
 
             callout = step.get("callout")
             if callout:
+                used += self._cue(2)
                 note = Callout(
                     callout,
                     cells[step["active_idx"]].get_top(),

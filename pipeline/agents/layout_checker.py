@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from config import OUTPUT_DIR
 from pipeline import render as render_backend
+from pipeline.cues import parse_cues, proportional_cue_times, segment_cue_text
 from pipeline.retry import TIMEOUT_LAYOUT_CHECKER
 from pipeline.state import PipelineState
 
@@ -25,10 +26,7 @@ async def layout_checker(state: PipelineState) -> dict:
     # render_trigger hasn't run yet, so we use estimated durations as placeholders.
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "scene.py").write_text(state["manim_code"])
-    stub_segments = [
-        {"text": s.get("text", ""), "actual_duration_sec": s.get("estimated_duration_sec", 2.0)}
-        for s in state.get("script_segments", [])
-    ]
+    stub_segments = [_stub_segment(s) for s in state.get("script_segments", [])]
     (run_dir / "segments.json").write_text(json.dumps(stub_segments))
 
     # Remove stale report from a previous attempt
@@ -101,6 +99,20 @@ async def layout_checker(state: PipelineState) -> dict:
         "code_attempts": attempts + 1,
         "layout_renderable": True,
     }
+
+
+def _stub_segment(s: dict) -> dict:
+    """segments.json entry for the dry-run. Before TTS exists, cue times are
+    estimated from each marker's character position in the estimated
+    duration, so self.cue(k) works and late cues are caught early. Measured
+    values (QA regeneration passes real segments) are kept as they are."""
+    raw = segment_cue_text(s)
+    clean, offsets = parse_cues(raw)
+    dur = s.get("actual_duration_sec", s.get("estimated_duration_sec", 2.0))
+    cues = s.get("cues")
+    if not isinstance(cues, list):
+        cues = proportional_cue_times(clean, offsets, dur)
+    return {"text": clean, "actual_duration_sec": dur, "cues": cues}
 
 
 def _format_violations(violations: list) -> str:

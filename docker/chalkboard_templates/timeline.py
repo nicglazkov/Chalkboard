@@ -71,6 +71,7 @@ class TimelineTemplate(_TemplateBase):
         axis = ChalkAxis(x_range=[0, n + 1, 1], length=_AXIS_LEN,
                          include_numbers=False, theme=self.theme)
         axis.move_to(UP * _AXIS_Y)
+        used += self._cue(1)
         reveal_with_emphasis(scene, axis, motion_name="snap")
         used += self._rt("snap")
         board = VGroup(axis)
@@ -121,6 +122,7 @@ class TimelineTemplate(_TemplateBase):
             anchor_y = _AXIS_Y + sign * 0.6
             block.align_to(UP * anchor_y, DOWN if above else UP)
 
+            used += self._cue(1)
             scene.play(GrowFromCenter(dot), FadeIn(stem), **self._motion("snap"))
             scene.play(LaggedStart(*[FadeIn(m) for m in stack], lag_ratio=t.lag("cascade")),
                        **self._motion("emphasis"))
@@ -135,6 +137,7 @@ class TimelineTemplate(_TemplateBase):
 
             callout = ev.get("callout")
             if callout:
+                used += self._cue(2)
                 caption = self._fit_text(callout, size="body", role="accent_meta", max_width=11.0)
                 caption.move_to(UP * _CAPTION_Y)
                 scene.play(FadeIn(caption), **self._motion("settle"))

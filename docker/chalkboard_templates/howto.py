@@ -94,6 +94,7 @@ class HowtoTemplate(_TemplateBase):
         rows = self._build_rows(steps, top=title.get_bottom()[1] - t.space("lg"))
         for row in rows:
             row.set_state("pending")
+        used += self._cue(1)
         cascade_reveal(scene, rows, lag_name="cascade", motion_name="emphasis")
         used += self._rt("emphasis")
         self._rest(segment_durations[0], used)
@@ -116,11 +117,13 @@ class HowtoTemplate(_TemplateBase):
             if seg_idx >= 2:
                 prev = rows[seg_idx - 2]
                 anims.append(Transform(prev, prev.copy().set_state("done")))
+            used += self._cue(1)
             scene.play(*anims, **self._motion("snap"))
             used += self._rt("snap")
 
             callout = step.get("callout")
             if callout:
+                used += self._cue(2)
                 anchor = cur.label.get_center().copy()
                 anchor[0] = _CALLOUT_ANCHOR_X
                 note = Callout(callout, anchor, role="accent_meta", size="body",

@@ -215,6 +215,9 @@ class ChalkboardSceneBase:
         self.next_segment(n, duration, clear=items)
                                           — hold, clear, then begin segment n
         self.end_layout_check()           — BEFORE the final FadeOut
+        self.cue(k)                       — wait for cue marker [[k]] of the
+                                            current segment's narration, so the
+                                            next play() starts on that word
 
     Narration sync: segment n always starts at (or after) the sum of the
     budgets of segments 0..n-1 on the scene clock. If a segment's animations
@@ -225,6 +228,18 @@ class ChalkboardSceneBase:
 
     # Allowed lag of the visuals behind narration before it is a violation.
     _SYNC_DRIFT_TOL = 2.0
+    # A cued animation starting later than this after its word is a violation.
+    _CUE_LATE_TOL = 0.6
+
+    # Word-level sync state. Class-level defaults so subclasses/test doubles
+    # that skip __init__ still work. _cues: {segment: [t1, t2, ...]} seconds
+    # from the segment's narration start (None = loaded lazily from
+    # segments.json next to the scene file; tests may assign it directly).
+    _cues = None
+    _seg_audio_start: float = 0.0
+    _seg_cue_calls: int = 0
+    # Set by templates: they cue what they can, so unused cues are not an error.
+    _cues_template_driven: bool = False
 
     # Explicit override (tests set this). None means: use the
     # CHALKBOARD_REPORT_DIR env var, falling back to "/output".
@@ -252,6 +267,10 @@ class ChalkboardSceneBase:
         self._lc_segment = n
         self._lc_run_time = 0.0
         self._lc_budget = duration
+        # Narration of segment n starts at the sum of the earlier budgets
+        # (the voiceover is the segments' audio back to back).
+        self._seg_audio_start = max(self._sync_target, 0.0)
+        self._seg_cue_calls = 0
         self._sync_target = max(self._sync_target, 0.0) + duration
 
     def next_segment(self, n: int, duration: float, clear=(), fade: float = 0.5) -> None:
@@ -273,11 +292,105 @@ class ChalkboardSceneBase:
         """Seconds of narration left in the current segment (never negative)."""
         return max(0.0, self._sync_target - self._scene_time())
 
+    # ------------------------------------------------------------------
+    # Word-level sync: cue markers
+    # ------------------------------------------------------------------
+
+    def cue(self, k: int) -> bool:
+        """Hold until cue marker [[k]] of the current segment is spoken.
+
+        The next self.play(...) then starts on that word. If the scene is
+        already past the cue, nothing waits and the lag is recorded (more
+        than _CUE_LATE_TOL is a `cue_late` violation). Unknown cue numbers
+        never crash a render: they warn and return False without waiting.
+        """
+        seg = self._lc_segment
+        if seg is None or self._lc_done:
+            return False
+        try:
+            k = int(k)
+            cues = self._cue_table().get(seg) or []
+            t = cues[k - 1] if 1 <= k <= len(cues) else None
+        except Exception:
+            t = None
+        if t is None:
+            print(f"chalkboard_base: segment {seg} has no cue {k!r}; not waiting", file=sys.stderr)
+            return False
+        self._seg_cue_calls = getattr(self, "_seg_cue_calls", 0) + 1
+        target = getattr(self, "_seg_audio_start", 0.0) + float(t)
+        now = self._scene_time()
+        gap = target - now
+        if gap > 0.02:
+            self.wait(gap)
+        lag = max(0.0, -gap)
+        log = self.__dict__.setdefault("_cue_log", [])
+        log.append({"segment": seg, "cue": k, "spoken_at": round(target, 3),
+                    "visual_at": round(self._scene_time(), 3), "lag": round(lag, 3)})
+        if lag > self._CUE_LATE_TOL:
+            self._lc_violations.append({
+                "type": "cue_late",
+                "segment": seg,
+                "cue": k,
+                "lag_sec": round(lag, 2),
+                "description": (
+                    f"Segment {seg}: the animation for cue [[{k}]] starts {lag:.1f}s after the "
+                    f"word is spoken. Shorten or move the animations before self.cue({k}) "
+                    f"so they finish before that word."
+                ),
+            })
+        return True
+
+    def has_cue(self, k: int) -> bool:
+        """True if the current segment has a time for cue marker [[k]]."""
+        if self._lc_segment is None:
+            return False
+        cues = self._cue_table().get(self._lc_segment) or []
+        return 1 <= int(k) <= len(cues) and cues[int(k) - 1] is not None
+
+    def _cue_table(self) -> dict:
+        if self._cues is None:
+            self._cues = self._load_cues()
+        elif isinstance(self._cues, list):
+            self._cues = dict(enumerate(self._cues))
+        return self._cues
+
+    def _load_cues(self) -> dict:
+        """Read per-segment `cues` from segments.json next to the scene file
+        (falling back to the report directory, where renders keep it)."""
+        candidates = []
+        mod = sys.modules.get(type(self).__module__)
+        f = getattr(mod, "__file__", None)
+        if f:
+            candidates.append(Path(f).resolve().parent / "segments.json")
+        candidates.append(Path(report_dir_for(self._REPORT_DIR)) / "segments.json")
+        for p in candidates:
+            try:
+                data = json.loads(p.read_text())
+            except Exception:
+                continue
+            if isinstance(data, list):
+                return {i: (s.get("cues") or []) for i, s in enumerate(data) if isinstance(s, dict)}
+        return {}
+
     def _scene_time(self) -> float:
-        # Our own clock, not renderer.time: the layout dry-run renders at 1 fps
-        # and Manim rounds every animation up to whole frames there (a 0.4s
-        # play advances renderer.time by 1s), which would fake huge drift.
+        # In a real render, the renderer's clock counts the frames actually
+        # written: Manim rounds every play up to whole frames and static waits
+        # down, so summing requested run_times drifts from the video. The
+        # layout dry-run renders at 1 fps (a 0.4s play would advance the
+        # renderer by 1s), so there, and in tests, use our own clock.
+        if self._real_render():
+            return float(self.renderer.time)
         return self._sync_tracked
+
+    def _real_render(self) -> bool:
+        r = getattr(self, "__dict__", {}).get("renderer")
+        if r is None or not isinstance(getattr(r, "time", None), (int, float)):
+            return False
+        try:
+            from manim import config
+            return not config.dry_run and config.frame_rate >= 10
+        except Exception:
+            return False
 
     def _sync_to(self, target: float) -> None:
         """Wait until the scene clock reaches `target`; flag excessive lag."""
@@ -351,6 +464,20 @@ class ChalkboardSceneBase:
 
     def _lc_check_segment(self) -> None:
         n = self._lc_segment
+
+        # 0. Word-level sync: a segment whose narration has cue markers must
+        # reveal its visuals on them (templates cue what they can).
+        cues = [c for c in (self._cue_table().get(n) or []) if c is not None]
+        if cues and not getattr(self, "_seg_cue_calls", 0) and not self._cues_template_driven:
+            self._lc_violations.append({
+                "type": "cue_unused",
+                "segment": n,
+                "description": (
+                    f"Segment {n}: the narration has {len(cues)} cue marker(s) but the scene never "
+                    f"calls self.cue(k). Put self.cue(k) right before the animation that shows "
+                    f"what the narration introduces at marker [[k]]."
+                ),
+            })
 
         # 1. Timing overrun
         # Tolerance of 1.5s accounts for: (a) the 0.5s inter-segment FadeOut that
@@ -510,6 +637,9 @@ class ChalkboardSceneBase:
         report = {
             "passed": len(self._lc_violations) == 0,
             "violations": self._lc_violations,
+            # Every self.cue(k): when the word is spoken vs when the cued
+            # animation starts (scene clock = video time in a real render).
+            "cue_log": self.__dict__.get("_cue_log", []),
         }
         report_dir = report_dir_for(self._REPORT_DIR)
         report_path = Path(report_dir) / "layout_report.json"

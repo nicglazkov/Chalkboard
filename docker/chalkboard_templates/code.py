@@ -94,6 +94,7 @@ class CodeTemplate(_TemplateBase):
         code.scale(min(max_w / code.width, max_h / code.height, 1.35))
         code.move_to(UP * ((title.get_bottom()[1] - t.space("md") + -3.7) / 2))
         code.set_x(_CODE_LEFT_X + code.width / 2)
+        used += self._cue(1)
         reveal_with_emphasis(scene, code)
         used += self._rt("emphasis")
         self._rest(segment_durations[0], used)
@@ -119,6 +120,7 @@ class CodeTemplate(_TemplateBase):
                 line.animate.set_color(primary if i in active else muted)
                 for i, line in enumerate(code.code_lines)
             ]
+            used += self._cue(1)
             scene.play(
                 LaggedStart(*highlights, lag_ratio=t.lag("quick")),
                 **self._motion("emphasis"),
@@ -127,6 +129,7 @@ class CodeTemplate(_TemplateBase):
 
             callout = step.get("callout")
             if callout:
+                used += self._cue(2)
                 first = code.code_lines[min(active)]
                 anchor = first.get_center().copy()
                 anchor[0] = max(_CALLOUT_ANCHOR_X, first.get_right()[0] + t.space("sm"))
