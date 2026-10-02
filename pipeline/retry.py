@@ -12,6 +12,12 @@ except ImportError:  # pragma: no cover
     _FATAL = ()
 
 
+def _is_busy(e: Exception) -> bool:
+    text = str(e)
+    return ("529" in text or "overloaded" in text.lower() or "429" in text
+            or "rate limit" in text.lower())
+
+
 def _is_fatal(e: Exception) -> bool:
     if isinstance(e, _FATAL):
         return True
@@ -64,7 +70,11 @@ async def api_call_with_retry(fn, timeout, max_attempts=3, label="API call"):
                 raise TimeoutExhausted(
                     f"{label} failed after {max_attempts} attempts: {e}"
                 )
+            # Overload / rate limits outlast the SDK's own short retries: back off.
+            busy = _is_busy(e)
+            delay = (20.0 * attempt) if busy else 2.0
             print(
-                f"  [{label}] failed ({type(e).__name__}) — "
-                f"retrying (attempt {attempt + 1}/{max_attempts})..."
+                f"  [{label}] failed ({type(e).__name__}{', service busy' if busy else ''}) — "
+                f"retrying in {delay:.0f}s (attempt {attempt + 1}/{max_attempts})..."
             )
+            await asyncio.sleep(delay)

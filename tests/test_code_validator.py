@@ -303,3 +303,21 @@ def test_code_validator_allows_legitimate_arithmetic_on_non_mobjects(base_state)
     result, _ = _run(base_state, OK_CODE)
     assert result["code_feedback"] is None
     assert result["code_attempts"] == 0
+
+
+def test_review_outage_does_not_fail_the_run(base_state):
+    """A 529/overload that outlasts retries skips the advisory review."""
+    import asyncio
+    from unittest.mock import patch
+    from pipeline.retry import TimeoutExhausted
+    from pipeline.agents.code_validator import code_validator
+    base_state["manim_code"] = VALID_CODE
+    base_state["code_attempts"] = 1
+
+    async def boom(*a, **k):
+        raise TimeoutExhausted("code_validator failed after 3 attempts: 529 overloaded")
+
+    with patch("pipeline.agents.code_validator.api_call_with_retry", new=boom):
+        result = asyncio.run(code_validator(base_state))
+    assert result["code_feedback"] is None
+    assert result["code_attempts"] == 1

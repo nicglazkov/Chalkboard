@@ -1,6 +1,6 @@
 # pipeline/agents/fact_validator.py
 from pipeline.llm import call_json
-from pipeline.retry import api_call_with_retry, TIMEOUT_FACT_VALIDATOR
+from pipeline.retry import api_call_with_retry, TimeoutExhausted, TIMEOUT_FACT_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
 
 EFFORT_INSTRUCTIONS = {
@@ -33,7 +33,11 @@ async def fact_validator(state: PipelineState, client=None) -> dict:
     def _call():
         return call_json("fact", content=user_msg, schema=SCHEMA, max_tokens=8000, client=client)
 
-    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_FACT_VALIDATOR, label="fact_validator")
+    try:
+        data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_FACT_VALIDATOR, label="fact_validator")
+    except TimeoutExhausted as e:
+        print(f"  [fact_validator] review unavailable, keeping the script unreviewed ({e})")
+        return {"fact_feedback": None, "script_attempts": state["script_attempts"]}
 
     result = ValidationResult.model_validate(data)
 
