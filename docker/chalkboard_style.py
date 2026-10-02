@@ -8,8 +8,8 @@ by the agent comes out in the house style:
   * Math: Latin Modern via a preamble with amsmath/mathtools/amssymb/bm/siunitx/
     cancel/mathrsfs/dsfont, so derivations, vectors, units, cancellations and
     script letters all typeset without the agent having to manage packages.
-  * Text: Inter when installed (clean, very legible at video sizes), falling back
-    to Pango's default sans. Code: JetBrains Mono NL (no ligatures), else DejaVu Sans Mono.
+  * Text: CMU Serif (Computer Modern, matching the math) when installed, else
+    Inter, else Pango's default sans. Code: JetBrains Mono NL (no ligatures), else DejaVu Sans Mono.
 
 Swap faces with CHALKBOARD_TEXT_FONT / CHALKBOARD_CODE_FONT.
 """
@@ -73,7 +73,9 @@ def _pick(env: str, *candidates: str) -> str | None:
     return next((c for c in candidates if _has_font(c)), None)
 
 
-TEXT_FONT = _pick("CHALKBOARD_TEXT_FONT", "Inter", "Source Sans 3", "DejaVu Sans")
+# Computer Modern for prose so Text, Tex and MathTex read as one typeface (the
+# math is Latin Modern, CM's descendant). Inter is the fallback sans.
+TEXT_FONT = _pick("CHALKBOARD_TEXT_FONT", "CMU Serif", "Inter", "DejaVu Sans")
 # Ligature fonts (plain "JetBrains Mono", Fira Code) break Manim's per-glyph Code
 # layout on "<=", "->", "==" ("rendered fewer glyphs"), so only ligature-free faces.
 CODE_FONT = _pick("CHALKBOARD_CODE_FONT", "JetBrains Mono NL", "DejaVu Sans Mono")

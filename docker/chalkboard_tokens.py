@@ -89,13 +89,13 @@ _THEMES: dict[Theme, _ThemeBlock] = {
         "role": {
             "focus_primary":   "#E8D44D",  # chalk yellow — the magnet
             "focus_secondary": "#6EC6E8",  # sky blue — the paired element
-            "context_muted":   "#7A756A",  # dimmed cream — past steps
+            "context_muted":   "#9A9384",  # dimmed cream — past steps (≥4.5:1 on bg)
             "accent_warm":     "#E07856",  # warm orange — error / heat
             "accent_cool":     "#7BD3F7",  # cool cyan — data signal (distinct from focus_secondary)
             "accent_meta":     "#B49FE3",  # lavender — meta annotations
             "body":            "#F5F0E8",  # cream — main text
             "stroke":          "#F5F0E8",  # cream — default outline
-            "stroke_muted":    "#7A756A",  # dim cream — de-emphasized outline
+            "stroke_muted":    "#8A8476",  # dim cream — de-emphasized outline
         },
     },
     "light": {
@@ -107,7 +107,7 @@ _THEMES: dict[Theme, _ThemeBlock] = {
         "role": {
             "focus_primary":   "#DC2626",  # red 600 — strong attention on light bg
             "focus_secondary": "#2563EB",  # blue 600 — comparison
-            "context_muted":   "#9CA3AF",  # gray 400 — past steps
+            "context_muted":   "#6B7280",  # gray 500 — past steps (gray 400 was 2.5:1 on white)
             "accent_warm":     "#EA580C",  # orange 600
             "accent_cool":     "#0891B2",  # cyan 600
             "accent_meta":     "#7C3AED",  # violet 600
@@ -125,7 +125,7 @@ _THEMES: dict[Theme, _ThemeBlock] = {
         "role": {
             "focus_primary":   "#FBBF24",  # amber 400 — bright on black
             "focus_secondary": "#34D399",  # emerald 400
-            "context_muted":   "#6B7280",  # gray 500
+            "context_muted":   "#9CA3AF",  # gray 400 (gray 500 was too dark on black)
             "accent_warm":     "#FB7185",  # rose 400
             "accent_cool":     "#38BDF8",  # sky 400
             "accent_meta":     "#C084FC",  # purple 400
@@ -147,19 +147,19 @@ _THEMES: dict[Theme, _ThemeBlock] = {
 # WHEN to use a size, not just what size it is. The scale is named so
 # the prompt can forbid raw numeric font sizes in Phase 5.
 _TYPE_SIZE: dict[str, int] = {
-    "display": 56,   # one-word topic punch — rare, only for opening titles
-    "title":   42,   # scene title / chapter heading
-    "heading": 32,   # section heading inside a multi-segment scene
-    "body":    26,   # standard narration-adjacent text
-    "caption": 20,   # secondary text under a focal element
-    "code":    22,   # Code() paragraph_config font_size
-    "micro":   16,   # axis labels, tick text, hover tags
+    "display": 72,   # one-word topic punch — rare, only for opening titles
+    "title":   52,   # scene title / chapter heading
+    "heading": 42,   # section heading inside a multi-segment scene
+    "body":    34,   # standard narration-adjacent text
+    "caption": 28,   # secondary text under a focal element
+    "code":    30,   # Code() paragraph_config font_size
+    "micro":   22,   # axis labels, tick text, hover tags
     # Display math (MathTex/Tex). Sits off the text hierarchy on purpose:
     # TeX glyphs at a given font_size read smaller than Pango text at the
     # same number, and a derivation is usually the focal element, so it
     # gets its own slot rather than borrowing "heading". Inline math next
     # to body text should use "body" so baselines match.
-    "math":    40,
+    "math":    52,
 }
 
 # Spacing scale — for `.next_to(..., buff=T.space(...))`, padding inside

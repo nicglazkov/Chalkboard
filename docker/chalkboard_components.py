@@ -104,7 +104,7 @@ CODE_FONT = getattr(_style, "CODE_FONT", None)
 
 # tex() prose (Latin Modern) is scaled up by this to match the optical size
 # of Text in the UI face at the same token size.
-TEX_PROSE_SCALE = 1.2
+TEX_PROSE_SCALE = 1.0
 
 
 def _tex_template_kwargs() -> dict:
@@ -384,7 +384,7 @@ class _ChalkComponent(VGroup):
     # its own as-built fill/stroke opacity (an attribute, so it survives
     # copy() and Transform's family re-alignment) and we restore from that.
 
-    _MUTE_FACTOR = 0.6  # muted = context_muted color at 60% opacity: recedes, still legible
+    _MUTE_FACTOR = 0.8  # muted = context_muted color at 80% opacity: recedes, still legible
 
     def _snapshot_opacity(self) -> None:
         for m in self.get_family():
