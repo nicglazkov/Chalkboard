@@ -24,7 +24,8 @@
   <a href="#web-ui">Web UI</a> ·
   <a href="#cli">CLI</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="#reference">Docs</a>
+  <a href="#reference">Docs</a> ·
+  <a href="https://chalkboard.studio">chalkboard.studio</a>
 </p>
 
 <p align="center">
@@ -569,6 +570,10 @@ run_server.py        server entry point
 See [CLAUDE.md](CLAUDE.md) for architecture, design decisions and contribution guidelines. A Claude Code skill for running Chalkboard lives in [`.claude/skills/chalkboard/`](.claude/skills/chalkboard/SKILL.md).
 
 </details>
+
+## Hosted version
+
+Rather not run it yourself? [chalkboard.studio](https://chalkboard.studio) is a hosted, invite-only beta of Chalkboard. Join the waitlist there and you will get an email when the next batch of invites opens.
 
 ## License and acknowledgements
 
