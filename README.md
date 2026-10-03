@@ -58,37 +58,52 @@ Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, a
 
 ## Why Chalkboard
 
-| | |
-| --- | --- |
-| **Real math typesetting** | Every equation goes through LaTeX with one shared preamble (amsmath, mathtools, siunitx, ...) and Computer Modern. Prose uses CMU Serif so text and math match. |
-| **A design system, not raw Manim** | Scenes are built from tokens, components, named animation moves and six scene templates, so videos look consistent from run to run. |
-| **Checked before it renders** | The script is fact-checked. Scene code passes syntax and AST guards plus a headless dry-run that flags off-screen elements, overlaps and timing overruns. After the render, Claude reviews sampled frames. |
-| **Narration in sync, word by word** | The script marks the words where visuals land; the TTS backend reports when each one is spoken, and the animation waits for its cue. |
-| **Narrators** | ElevenLabs `eleven_v4` voices Aria and Milo with request stitching, free local Kokoro, or OpenAI. |
-| **A UI that does not guess** | Live pipeline progress with Claude's output streaming in, a timeline and transcript per video, and a Status page built from real probes. If the UI cannot back a value, it says Unknown. |
-| **Bring your own material** | Files, folders, PDFs, Word documents, images, URLs and GitHub READMEs as source context. |
-| **Yours to run** | MIT licensed. Rendering, storage and the library stay on your machine (local Manim or Docker); the network is used for Claude, cloud narrators and any URLs you hand it. |
+<table>
+  <tr>
+    <td width="50%" valign="top"><b>Real math typesetting</b><br>Every equation goes through LaTeX with one shared preamble (amsmath, mathtools, siunitx, ...) and Computer Modern. Prose uses CMU Serif so text and math match.</td>
+    <td width="50%" valign="top"><b>A design system, not raw Manim</b><br>Scenes are built from tokens, components, named animation moves and six scene templates, so videos look consistent from run to run.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Checked before it renders</b><br>The script is fact-checked. Scene code passes syntax and AST guards plus a headless dry-run that flags off-screen elements, overlaps and timing overruns. After the render, Claude reviews sampled frames.</td>
+    <td valign="top"><b>Narration in sync, word by word</b><br>The script marks the words where visuals land. The TTS backend reports when each one is spoken, and the animation waits for its cue.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Narrators</b><br>ElevenLabs <code>eleven_v4</code> voices Aria and Milo with request stitching, free local Kokoro, or OpenAI.</td>
+    <td valign="top"><b>A UI that does not guess</b><br>Live progress with Claude's output streaming in, a timeline and transcript per video, and a Status page built from real probes. If it cannot back a value, it says Unknown.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Bring your own material</b><br>Files, folders, PDFs, Word documents, images, URLs and GitHub READMEs as source context.</td>
+    <td valign="top"><b>Yours to run</b><br>MIT licensed. Rendering, storage and the library stay on your machine; the network is used for Claude, cloud narrators and any URLs you hand it.</td>
+  </tr>
+</table>
 
 ## How it works
 
 ```mermaid
-flowchart TD
-    A([Topic + optional files, URLs, repos]) --> B{Effort high?}
-    B -- yes --> C[Research<br/>web search brief]
-    B -- no --> D
-    C --> D[Script<br/>narration with cue markers]
-    D --> E[Fact check]
-    E -- needs revision --> D
-    E -- approved --> F[Scene code<br/>Manim on the design system]
-    F --> G[Code validator<br/>syntax, AST guards, Claude review]
-    G -- fix --> F
-    G -- pass --> H[Layout dry-run<br/>bounds, zones, timing]
-    H -- fix --> F
-    H -- pass --> I[Narration<br/>TTS with word timestamps]
-    I --> J[Render<br/>Manim CE 0.21, local or Docker]
-    J --> K[Visual QA<br/>Claude reviews sampled frames]
-    K -. issues: new scene, re-render .-> J
-    K --> L([final.mp4, captions, chapters, quiz])
+flowchart LR
+    IN([Topic, files,<br/>URLs, repos]) --> WRITE
+    subgraph WRITE [Write]
+        direction TB
+        R[Research<br/>effort high only] -.-> S[Script<br/>with cue markers]
+        S --> F[Fact check]
+        F -- revise --> S
+    end
+    WRITE --> BUILD
+    subgraph BUILD [Build the scene]
+        direction TB
+        M[Scene code<br/>on the design system] --> V[Code validator<br/>syntax, AST, review]
+        V --> L[Layout dry-run<br/>bounds, timing]
+        V -- fix --> M
+        L -- fix --> M
+    end
+    BUILD --> MAKE
+    subgraph MAKE [Produce]
+        direction TB
+        T[Narration<br/>word timestamps] --> RN[Render<br/>Manim CE 0.21]
+        RN --> Q[Visual QA<br/>sampled frames]
+        Q -. re-render .-> RN
+    end
+    MAKE --> OUT([final.mp4, captions,<br/>chapters, quiz])
 ```
 
 The steps from research through narration are a LangGraph state machine (`pipeline/graph.py`). Each validator either approves or sends feedback to the agent that produced the work. After three failed attempts the run stops and asks you what to do; unattended runs abort instead, except that a scene with only layout warnings is rendered anyway. Rendering, the voiceover merge, visual QA (up to two regenerate-and-re-render rounds), captions, chapters and the optional quiz run after the graph. Architecture, routing rules and known Manim pitfalls are documented in [CLAUDE.md](CLAUDE.md).
