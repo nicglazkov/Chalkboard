@@ -81,6 +81,7 @@ Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, a
 ## How it works
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 flowchart LR
     IN([Topic, files,<br/>URLs, repos]) --> WRITE
     subgraph WRITE [Write]
