@@ -16,8 +16,7 @@
   <nav class="side" aria-label="Main" data-page="status"></nav>
   <main class="main" id="main">
     <div class="page page-status">
-      <div class="eyebrow"><span class="pip"></span>Status</div>
-      <h1 class="h1">Are we <em>working?</em></h1>
+      <h1 class="h1">Status</h1>
       <div class="overall unknown" id="overall" aria-live="polite">
         <span class="big-dot" aria-hidden="true"></span>
         <span class="msg"><span id="overall-msg">Checking</span><span class="msg-sub" id="overall-sub" hidden></span></span>
@@ -35,12 +34,12 @@
   const { esc, fmtAgo, fmtStamp, parseTs, getStatus, missingWhy, STATE_WORD } = window.CB;
   const $ = (id) => document.getElementById(id);
   const MSG = {
-    ok: 'Everything is ready to make videos.',
-    degraded: 'Videos can run, but something needs a look.',
-    down: 'Something is broken. Videos will likely fail.',
-    unknown: 'Some checks could not be verified right now.',
+    ok: 'All checks passed.',
+    degraded: 'Running with warnings.',
+    down: 'A required check failed. Jobs will likely fail.',
+    unknown: 'Some checks could not be verified.',
   };
-  const LABEL = { ok: 'OK', warn: 'Needs a look', down: 'Down', unknown: 'Unknown' };
+  const LABEL = { ok: 'OK', warn: 'Warning', down: 'Down', unknown: 'Unknown' };
   const RANK = { down: 0, warn: 1, unknown: 2, ok: 3 };
   let checkedAt = null, cachedNote = '';
   const openIds = new Set();

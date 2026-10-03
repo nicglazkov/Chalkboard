@@ -18,8 +18,7 @@
     <div class="page page-gen">
       <div class="split">
         <section>
-          <div class="eyebrow"><span class="pip"></span>Generate</div>
-          <h1 class="h1">What should we <em class="ul">sketch out</em>?</h1>
+          <h1 class="h1">New video</h1>
 
           <form id="gen" class="gen-form" novalidate>
            <div class="gen-main">
@@ -382,7 +381,7 @@
         rows.push(`<a href="/library/${encodeURIComponent(v.run_id)}"><span class="thumb">${thumbInner(v)}</span><span class="tx"><span class="t">${esc(v.title || v.topic)}</span><span class="m">${esc(meta)}</span></span></a>`);
       }
     }
-    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="note-s">Nothing yet. Your first video shows up here.</p>' : `<p class="note-s">${esc(missingWhy(lib, 'The library'))}</p>`);
+    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="note-s">No videos yet.</p>' : `<p class="note-s">${esc(missingWhy(lib, 'The library'))}</p>`);
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────
