@@ -8,14 +8,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=5">
-  <script src="/app.js?v=5"></script>
+  <link rel="stylesheet" href="/app.css?v=6">
+  <script src="/app.js?v=6"></script>
 </head>
 <body>
 <div class="shell">
   <nav class="side" aria-label="Main" data-page="library"></nav>
-  <main class="main" id="main" style="padding-top:32px">
-    <div class="page" id="page" style="gap:18px">
+  <main class="main" id="main">
+    <div class="page page-video" id="page">
       <div class="shimmer" style="height:40px;max-width:600px"></div>
       <div class="shimmer" style="aspect-ratio:16/9;max-width:820px"></div>
     </div>
@@ -334,11 +334,11 @@
         const lag = Number(c.lag_s) || 0;
         const bad = Math.abs(lag) > LIMIT;
         if (bad) { late.add(`${c.segment}:${c.cue - 1}`); issues++; }
-        const h = Math.max(2, Math.round((Math.abs(lag) / max) * 56));
-        return `<div class="b${bad ? ' late' : ''}" style="height:${h}px" title="segment ${c.segment + 1}, cue ${c.cue}: ${lag >= 0 ? '+' : ''}${lag.toFixed(2)} s"></div>`;
+        const h = Math.max(2, Math.round((Math.abs(lag) / max) * 100));
+        return `<div class="b${bad ? ' late' : ''}" style="height:${h}%" title="segment ${c.segment + 1}, cue ${c.cue}: ${lag >= 0 ? '+' : ''}${lag.toFixed(2)} s"></div>`;
       }).join('');
-      const limitPx = Math.round((LIMIT / max) * 56);
-      html += `<div class="qbars" role="img" aria-label="Cue sync offsets for ${sync.cues.length} cues, ${late.size} over ${LIMIT} seconds">${bars}<div class="limit" style="bottom:${limitPx}px"><span>${LIMIT} s</span></div></div>`;
+      const limitPx = Math.round((LIMIT / max) * 100);
+      html += `<div class="qbars" role="img" aria-label="Cue sync offsets for ${sync.cues.length} cues, ${late.size} over ${LIMIT} seconds">${bars}<div class="limit" style="bottom:${limitPx}%"><span>${LIMIT} s</span></div></div>`;
       const worst = sync.cues.reduce((a, c) => (Math.abs(c.lag_s) > Math.abs(a.lag_s) ? c : a), sync.cues[0]);
       const notes = [`Sync (scene clock) · median ${sync.median_lag_s != null ? fmtSec(sync.median_lag_s) : 'unknown'}`];
       if (Math.abs(worst.lag_s) > LIMIT) notes.push(`cue ${worst.segment + 1}.${worst.cue} lands ${fmtSec(Math.abs(worst.lag_s))} ${worst.lag_s > 0 ? 'late' : 'early'}`);

@@ -475,28 +475,65 @@
   }
 
   // ── Sidebar ────────────────────────────────────────────────────────────
+  // One markup for three shapes (full sidebar, icon rail, top bar + menu); CSS picks
+  // the shape. The script only opens and closes the narrow-screen menu.
   const STATE_WORD = { ok: 'ok', warn: 'warning', down: 'down', unknown: 'unknown', degraded: 'degraded' };
+  const ICON = {
+    generate: '<path d="M12 5v14M5 12h14"/>',
+    library: '<rect x="3.5" y="4.5" width="7" height="6" rx="1"/><rect x="13.5" y="4.5" width="7" height="6" rx="1"/><rect x="3.5" y="13.5" width="7" height="6" rx="1"/><rect x="13.5" y="13.5" width="7" height="6" rx="1"/>',
+    progress: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    status: '<path d="M3 12h4l2.5-6 5 12 2.5-6H21"/>',
+    bars: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  };
+  const icon = (k, cls) => `<svg class="ico${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON[k]}</svg>`;
   function renderShell() {
     const side = document.querySelector('nav.side');
     if (!side) return;
     const page = side.dataset.page;
     const cur = (k) => (page === k ? ' aria-current="page"' : '');
     side.innerHTML = `
-      <a class="brand" href="/library" aria-label="Chalkboard library"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Chalkboard</span></a>
-      <a class="btn-gen" href="/"${cur('generate')}>Generate video</a>
-      <div class="nav-links">
-        <a class="nav-link" href="/library"${cur('library')}>Library<span class="count" id="nav-lib"></span></a>
-        <a class="nav-link" href="/progress/"${cur('progress')}>In progress<span class="count" id="nav-run"></span></a>
-        <a class="nav-link" href="/status/"${cur('status')}>Status<span class="count" id="nav-status"></span></a>
+      <div class="side-top">
+        <a class="brand" href="/library" aria-label="Chalkboard library"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name">Chalkboard</span></a>
+        <a class="btn-gen" href="/" title="Generate video"${cur('generate')}>${icon('generate')}<span class="nl">Generate video</span></a>
+        <button type="button" class="menu-btn" aria-expanded="false" aria-controls="side-menu" aria-label="Menu">${icon('bars', 'ico-bars')}${icon('x', 'ico-x')}</button>
       </div>
-      <a class="box-card" href="/status/" id="box-card" aria-label="Render box status">
-        <span class="label">Render box</span>
-        <span class="box-line"><span class="dot unknown"></span><span class="faint">Checking</span></span>
-      </a>`;
+      <div class="side-menu" id="side-menu">
+        <div class="nav-links">
+          <a class="nav-link" href="/library" title="Library"${cur('library')}>${icon('library')}<span class="nl">Library</span><span class="count" id="nav-lib"></span></a>
+          <a class="nav-link" href="/progress/" title="In progress"${cur('progress')}>${icon('progress')}<span class="nl">In progress</span><span class="count" id="nav-run"></span></a>
+          <a class="nav-link" href="/status/" title="Status"${cur('status')}>${icon('status')}<span class="nl">Status</span><span class="count" id="nav-status"></span></a>
+        </div>
+        <a class="box-card" href="/status/" id="box-card" aria-label="Render box status">
+          <span class="label">Render box</span>
+          <span class="box-line"><span class="dot unknown"></span><span class="faint">Checking</span></span>
+        </a>
+      </div>`;
+    wireMenu(side);
     refreshCounts();
     refreshBox();
     setInterval(refreshCounts, 15000);
     setInterval(refreshBox, 60000);
+  }
+  function wireMenu(side) {
+    const btn = side.querySelector('.menu-btn');
+    const menu = side.querySelector('.side-menu');
+    const narrow = window.matchMedia('(max-width: 860px)');
+    const isOpen = () => side.classList.contains('open');
+    function setOpen(open, focusBack) {
+      side.classList.toggle('open', open);
+      btn.setAttribute('aria-expanded', String(open));
+      if (open) { const first = menu.querySelector('a'); if (first) first.focus(); }
+      else if (focusBack) btn.focus();
+    }
+    btn.addEventListener('click', () => setOpen(!isOpen(), false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isOpen()) { e.preventDefault(); setOpen(false, true); }
+    });
+    document.addEventListener('pointerdown', (e) => { if (isOpen() && !side.contains(e.target)) setOpen(false, false); });
+    side.addEventListener('focusout', (e) => { if (isOpen() && e.relatedTarget && !side.contains(e.relatedTarget)) setOpen(false, false); });
+    const onChange = () => { if (!narrow.matches && isOpen()) setOpen(false, false); };
+    if (narrow.addEventListener) narrow.addEventListener('change', onChange); else narrow.addListener(onChange);
   }
   let jobsCache = null;
   async function getJobs(force) {
