@@ -510,8 +510,8 @@
           <a class="nav-link" href="/progress/" title="In progress"${cur('progress')}>${icon('progress')}<span class="nl">In progress</span><span class="count" id="nav-run"></span></a>
           <a class="nav-link" href="/status/" title="Status"${cur('status')}>${icon('status')}<span class="nl">Status</span><span class="count" id="nav-status"></span></a>
         </div>
-        <a class="box-card" href="/status/" id="box-card" aria-label="Render box status">
-          <span class="label">Render box</span>
+        <a class="box-card" href="/status/" id="box-card" aria-label="Server status">
+          <span class="label">Server</span>
           <span class="box-line"><span class="dot unknown"></span><span class="faint">Checking</span></span>
         </a>
       </div>`;
@@ -582,7 +582,7 @@
     const res = await getStatus(true);
     const ns = document.getElementById('nav-status');
     if (!res.ok || !res.data) {
-      card.innerHTML = `<span class="label">Render box</span>
+      card.innerHTML = `<span class="label">Server</span>
         <span class="box-line"><span class="dot unknown"></span>Status unknown</span>
         <span class="box-sub">${esc(missingWhy(res, 'The status check'))}</span>`;
       if (ns) ns.textContent = '';
@@ -598,7 +598,7 @@
     const line = gpu ? (gpu.summary || gpu.name) : `Overall ${STATE_WORD[overall]}`;
     const subs = [jobs, voice].filter(Boolean).map((c) => `<span class="box-sub">${esc(c.name)} · ${esc(c.summary || STATE_WORD[c.state] || 'unknown')}</span>`).join('');
     const checked = parseTs(d.checked_at);
-    card.innerHTML = `<span class="label">Render box</span>
+    card.innerHTML = `<span class="label">Server</span>
       <span class="box-line"><span class="dot ${lineState}"></span><span>${esc(line)}</span></span>
       ${subs}
       <span class="box-sub faint">${checked ? 'checked ' + esc(fmtAgo(checked)) : 'check time unknown'}</span>`;

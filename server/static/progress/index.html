@@ -53,7 +53,7 @@
           <div id="others" hidden></div>
           <div id="result" hidden></div>
           <div class="bench">
-            <div class="bench-head"><span class="label">The workbench</span><span class="right" id="bench-count"></span></div>
+            <div class="bench-head"><span class="label">Pipeline</span><span class="right" id="bench-count"></span></div>
             <ol class="stations" id="stations"></ol>
           </div>
           <div class="card">
@@ -61,7 +61,7 @@
             <div class="tl" id="tl"></div>
           </div>
           <div class="peek" id="peek" aria-live="off">
-            <div class="peek-head"><span class="dot" id="peek-dot"></span><span class="label" id="peek-title">Live from the workbench</span><span class="stage" id="peek-stage"></span></div>
+            <div class="peek-head"><span class="dot" id="peek-dot"></span><span class="label" id="peek-title">Live output</span><span class="stage" id="peek-stage"></span></div>
             <div id="peek-body"></div>
           </div>
         </section>
@@ -71,10 +71,10 @@
             <div id="stats"></div>
           </div>
           <div class="card" id="side-card">
-            <div class="label">Something off?</div>
+            <div class="label">Job</div>
             <div id="cancel-wrap" hidden><button type="button" class="btn danger" id="cancel" style="width:100%">Cancel run</button></div>
             <p class="note-s" id="side-note">You can close this tab. The run keeps going on the server.</p>
-            <a class="side-link" href="/status/">Check the render box status</a>
+            <a class="side-link" href="/status/">Server status</a>
           </div>
         </aside>
       </div>`;
@@ -93,10 +93,11 @@
     const elapsed = t0 ? (elapsedEnd - t0) / 1000 : null;
     const eb = $('eyebrow');
     eb.className = 'eyebrow' + (job.status === 'completed' ? ' done' : job.status === 'failed' ? ' failed' : '');
-    const word = job.status === 'pending' ? 'Queued' : job.status === 'running' ? 'Generating' : job.status === 'completed' ? 'Finished' : 'Failed';
-    $('eyebrow-text').textContent = elapsed != null ? `${word} · ${fmtClock(elapsed)}` : word;
+    const word = job.status === 'pending' ? 'Queued' : job.status === 'running' ? 'Running' : job.status === 'completed' ? 'Finished' : 'Failed';
+    const jid = `Job ${String(job.id || '').slice(0, 8)}`;
+    $('eyebrow-text').textContent = elapsed != null ? `${jid} · ${fmtClock(elapsed)}` : jid;
     $('eyebrow-text').title = parseTs(job.created_at) ? 'Measured from when the job was created' : 'Measured from the first pipeline event';
-    const h = job.status === 'completed' ? 'Your <em>video</em> is ready.' : job.status === 'failed' ? 'This run <em>stopped</em>.' : 'Working on your <em>video</em>.';
+    const h = job.status === 'completed' ? 'Job finished' : job.status === 'failed' ? 'Job failed' : job.status === 'pending' ? 'Job queued' : 'Job running';
     if ($('headline').innerHTML !== h) $('headline').innerHTML = h;
     $('topic').textContent = `"${job.topic}"`;
     document.title = `${word}: ${job.topic} · Chalkboard`;
@@ -155,7 +156,7 @@
     const dot = $('peek-dot');
     if (!p) {
       dot.className = 'dot unknown';
-      $('peek-title').textContent = 'Live from the workbench';
+      $('peek-title').textContent = 'Live output';
       $('peek-stage').textContent = '';
       const why = isRunning() ? 'Claude\'s writing shows here as it streams. Nothing has streamed yet.' : 'No live text was recorded for this run.';
       $('peek-body').innerHTML = `<p class="peek-empty">${esc(why)}</p>`;
@@ -164,7 +165,7 @@
     }
     const live = isRunning() && !p.done && livePeekTs != null && p.ts === livePeekTs && Date.now() - p.ts < 15000;
     dot.className = live ? 'dot ok' : 'dot';
-    $('peek-title').textContent = live ? 'Live from the workbench' : 'Last text from the workbench';
+    $('peek-title').textContent = live ? 'Live output' : 'Last output';
     const when = p.ts ? new Date(p.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '';
     $('peek-stage').textContent = [STAGE_NAME[p.stage] || p.stage || '', live ? 'streaming' : (p.done ? 'finished' : 'captured') + (when ? ' ' + when : '')].filter(Boolean).join(' · ');
     const key = `${p.ts}|${live}`;
@@ -301,7 +302,6 @@
 
   function showJobs(list, heading, body) {
     page.innerHTML = `
-      <div class="eyebrow"><span class="pip"></span>In progress</div>
       <h1 class="h1">${heading}</h1>
       ${body ? `<p class="lede">${body}</p>` : ''}
       ${list}`;
@@ -320,14 +320,14 @@
     const list = all.ok && Array.isArray(all.data) ? all.data : [];
     const running = list.filter((j) => j.status === 'running' || j.status === 'pending');
     if (!jobId) {
-      if (!all.ok) { showJobs('', 'Could not load <em>jobs</em>.', esc(missingWhy(all, 'The job list'))); return; }
+      if (!all.ok) { showJobs('', 'Could not load jobs', esc(missingWhy(all, 'The job list'))); return; }
       if (running.length === 1) { jobId = running[running.length - 1].id; history.replaceState(null, '', `/progress/?job=${encodeURIComponent(jobId)}`); }
-      else if (running.length > 1) { showJobs(jobRows(running.slice().reverse()), `${running.length} videos in the <em>works</em>.`, 'Pick one to watch its workbench.'); return; }
+      else if (running.length > 1) { showJobs(jobRows(running.slice().reverse()), `${running.length} jobs running`, 'Select a job to view its progress.'); return; }
       else {
         const finished = list.filter((j) => j.status === 'completed' || j.status === 'failed').slice(-8).reverse();
         showJobs((finished.length ? `<div class="label" style="margin-top:.5rem">Finished since the server started</div>${jobRows(finished)}` : '') +
           '<div><a class="btn primary big" href="/">Generate video</a></div>',
-          'Nothing is <em>running</em>.', 'Start a video and its workbench shows up here.');
+          'No jobs running', 'Jobs are listed here while they run.');
         return;
       }
     }

@@ -18,8 +18,7 @@
     <div class="page page-lib">
       <div class="lib-top">
         <div>
-          <div class="eyebrow"><span class="pip"></span>Your library</div>
-          <h1 class="h1" style="margin-top:8px">Everything you've <em>sketched</em>.</h1>
+          <h1 class="h1">Library</h1>
         </div>
         <div class="lib-tools" role="search">
           <label for="q" class="sr-only">Search the library</label>
@@ -176,9 +175,9 @@
       list.innerHTML = `<div class="state"><p class="state-title">Could not load the library</p><p>${esc(missingWhy(lib, 'The library'))}</p><button class="btn" type="button" onclick="location.reload()">Try again</button></div>`;
     } else if (!rows) {
       const empty = {
-        running: ['Nothing is running', 'Start a video and it shows up here while it works.'],
+        running: ['Nothing is running', 'Running jobs are listed here.'],
         failed: ['No failed runs', 'Failed runs since the server last started show up here.'],
-      }[st.f] || (st.q ? ['No matches', `Nothing in the library matches "${st.q}".`] : ['No videos yet', 'Generate your first video and it lands here.']);
+      }[st.f] || (st.q ? ['No matches', `Nothing in the library matches "${st.q}".`] : ['No videos yet', 'Finished videos are listed here.']);
       list.innerHTML = `<div class="state"><p class="state-title">${esc(empty[0])}</p><p>${esc(empty[1])}</p>${st.q ? '' : '<a class="btn primary" href="/">Generate video</a>'}</div>`;
     } else {
       list.innerHTML = `<div class="rows">${rows}</div>`;
