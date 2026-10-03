@@ -1,0 +1,60 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Tests must never reach a real API: no secrets are configured, and these are
+      # set empty so nothing inherits a key from the runner environment.
+      ANTHROPIC_API_KEY: ""
+      OPENAI_API_KEY: ""
+      ELEVENLABS_API_KEY: ""
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-render.txt
+
+      # Manim render tests typeset with the shared preamble (docker/chalkboard_style.py)
+      # and build Text/MarkupText through cairo + pango.
+      - name: Install system packages (TeX, ffmpeg, cairo, pango, fonts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg pkg-config libcairo2-dev libpango1.0-dev \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-fonts-extra texlive-science \
+            lmodern cm-super dvisvgm \
+            fontconfig fonts-cmu fonts-inter fonts-dejavu-core
+          fc-cache -f
+
+      # CPU-only torch first so kokoro (requirements.txt) does not pull the CUDA build.
+      # Kokoro is mocked in the tests; no model weights are downloaded.
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt -r requirements-render.txt
+
+      - name: Run tests
+        run: python -m pytest -q -rs
