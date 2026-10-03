@@ -12,6 +12,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/nicglazkov/Chalkboard/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/nicglazkov/Chalkboard/actions/workflows/tests.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-D4C27A?style=flat-square"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <img alt="Manim CE 0.21" src="https://img.shields.io/badge/Manim%20CE-0.21-2C2C2C?style=flat-square">
