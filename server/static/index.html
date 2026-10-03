@@ -8,27 +8,28 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=6">
-  <script src="/app.js?v=6"></script>
+  <link rel="stylesheet" href="/app.css?v=7">
+  <script src="/app.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
   <nav class="side" aria-label="Main" data-page="generate"></nav>
   <main class="main" id="main">
-    <div class="page">
+    <div class="page page-gen">
       <div class="split">
         <section>
           <div class="eyebrow"><span class="pip"></span>Generate</div>
           <h1 class="h1">What should we <em class="ul">sketch out</em>?</h1>
 
-          <form id="gen" novalidate>
+          <form id="gen" class="gen-form" novalidate>
+           <div class="gen-main">
             <div class="field">
               <label for="topic" class="label">Topic</label>
               <textarea id="topic" class="topic" rows="4" placeholder="How a Fourier transform finds the notes in a chord" aria-describedby="topic-hint"></textarea>
               <div class="under">
                 <button type="button" class="pill-btn" id="attach-btn" aria-expanded="false" aria-controls="attach">+ Attach files or links</button>
                 <span id="tags" class="chips" aria-live="polite"></span>
-                <span class="hint" id="topic-hint"><span id="chars">0 chars</span> · <span id="kbd">Ctrl</span>+Enter to generate</span>
+                <span class="hint" id="topic-hint"><span id="chars">0 characters</span><span class="kbd-hint"> · <span id="kbd">Ctrl</span>+Enter to generate</span></span>
               </div>
               <div class="attach" id="attach" hidden>
                 <button type="button" class="drop" id="drop">Drop files here or click to choose. PDF, DOCX, images, text and code.</button>
@@ -47,58 +48,63 @@
               </div>
             </div>
 
-            <div class="toggles" style="margin-top:22px">
+            <div class="toggles">
               <button type="button" class="toggle" id="t-research" aria-pressed="false">
                 <span class="box" aria-hidden="true"></span>
-                <span><span class="t">Deep research</span><span class="s">Web research and stricter fact-checking before the script (high effort)</span></span>
+                <span><span class="t">Deep research</span><span class="s">Searches the web and fact-checks harder before writing. Runs at high effort.</span></span>
               </button>
               <button type="button" class="toggle" id="t-quiz" aria-pressed="false">
                 <span class="box" aria-hidden="true"></span>
                 <span><span class="t">Write a quiz</span><span class="s">Multiple-choice questions with explanations</span></span>
               </button>
             </div>
+           </div>
 
-            <details class="disc" id="style" style="margin-top:22px">
+           <div class="gen-opts">
+            <details class="disc" id="style">
               <summary><span class="t">Style</span><span class="sum" id="style-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
               <div class="disc-body">
                 <div class="label" id="voices-label">Narrator</div>
                 <div class="voices" id="voices" role="radiogroup" aria-labelledby="voices-label"></div>
-                <div id="voices-note" class="mono muted" hidden></div>
+                <p id="voices-note" class="note-s" hidden></p>
                 <div class="opt-row"><span class="label" id="l-aud">Audience</span><div class="chips" data-key="audience" role="group" aria-labelledby="l-aud"></div></div>
                 <div class="opt-row"><span class="label" id="l-tone">Tone</span><div class="chips" data-key="tone" role="group" aria-labelledby="l-tone"></div></div>
                 <div class="opt-row"><span class="label" id="l-theme">Theme</span><div class="chips" data-key="theme" role="group" aria-labelledby="l-theme"></div></div>
-                <div class="opt-row"><span class="label" id="l-tpl">Template</span><div class="chips" data-key="template" role="group" aria-labelledby="l-tpl"></div></div>
+                <div class="opt-row"><span class="label" id="l-tpl" title="A layout pattern for the animation. Auto lets Claude pick one.">Template</span><div class="chips" data-key="template" role="group" aria-labelledby="l-tpl"></div></div>
               </div>
             </details>
 
-            <details class="disc" id="output" style="margin-top:14px">
+            <details class="disc" id="output">
               <summary><span class="t">Output</span><span class="sum" id="output-sum"></span><span class="chev" aria-hidden="true">▾</span></summary>
               <div class="disc-body">
                 <div class="opt-row"><span class="label" id="l-res">Resolution</span><div class="chips" data-key="quality" role="group" aria-labelledby="l-res"></div></div>
-                <div class="opt-row"><span class="label" id="l-eff">Effort</span><div class="chips" data-key="effort" role="group" aria-labelledby="l-eff"></div></div>
-                <div class="opt-row"><span class="label" id="l-qa">Visual QA</span><div class="chips" data-key="qa_density" role="group" aria-labelledby="l-qa"></div></div>
-                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted">x narration speed</span></div></div>
+                <div class="opt-row"><span class="label" id="l-eff" title="How much thinking Claude puts into the script and animation code">Effort</span><div class="chips" data-key="effort" role="group" aria-labelledby="l-eff"></div></div>
+                <div class="opt-row"><span class="label" id="l-qa" title="After rendering, Claude looks at frames for visual problems and fixes them">Visual QA</span><div class="chips" data-key="qa_density" role="group" aria-labelledby="l-qa"></div></div>
+                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted" style="align-self:center">× narration speed (1 is normal)</span></div></div>
                 <div class="opt-row"><span class="label">Captions</span><label class="check-line"><input type="checkbox" id="burn"> Burn captions into the video</label></div>
               </div>
             </details>
 
-            <div id="form-error" style="margin-top:18px" hidden></div>
+           </div>
 
-            <div class="submit-row" style="margin-top:22px">
+           <div class="gen-submit">
+            <div id="form-error" hidden></div>
+            <div class="submit-row">
               <button type="submit" class="btn primary big" id="submit">Generate video</button>
               <span class="est-line" id="est-line"></span>
             </div>
+           </div>
           </form>
         </section>
 
         <aside>
           <div class="card" id="est-card" aria-live="polite">
             <div class="label">Estimated time</div>
-            <div class="shimmer" style="height:44px"></div>
+            <div class="shimmer" style="height:2.75rem"></div>
           </div>
           <div class="card recent">
-            <div class="card-head"><span class="label">Recent</span><a class="right" href="/library" style="text-decoration:none">See all</a></div>
-            <div id="recent"><div class="shimmer" style="height:120px"></div></div>
+            <div class="card-head"><span class="label">Recent</span><a class="right" href="/library">See all</a></div>
+            <div id="recent"><div class="shimmer" style="height:7.5rem"></div></div>
           </div>
         </aside>
       </div>
@@ -108,7 +114,7 @@
 
 <script>
 (function () {
-  const { esc, cap, fmtBytes, fmtSpan, fmtDuration, fmtAgo, parseTs, fmtUsd, getJSON, missingWhy, getVoices, getMeta, resLabel, resFull, unknownHtml, buildWorkbench, getJobs } = window.CB;
+  const { esc, cap, fmtBytes, fmtSpan, fmtDuration, fmtAgo, parseTs, fmtUsd, getJSON, missingWhy, getVoices, getMeta, resLabel, resFull, unknownHtml, buildWorkbench, getJobs, thumbInner } = window.CB;
   const $ = (id) => document.getElementById(id);
 
   const OPTIONS = {
@@ -197,13 +203,13 @@
       const availTip = v.available == null && v.availability_reason ? v.availability_reason : '';
       const bk = [v.backend, v.model, avail].filter(Boolean).join(' · ');
       return `<div class="voice${on ? ' on' : ''}${off ? ' off' : ''}">
-        <button type="button" class="pick" role="radio" aria-checked="${on}" data-id="${esc(v.id)}" aria-label="${esc(v.label)}${off ? ', not available' : ''}"${off ? ' disabled' : ''}></button>
+        <button type="button" class="pick" role="radio" aria-checked="${on}" data-id="${esc(v.id)}" aria-label="${esc(v.label)}${off ? ', not available' : ''}"${off ? ' disabled' : ''}${why || sampleFail[v.id] ? ` title="${esc(why || sampleFail[v.id])}"` : ''}></button>
         <span class="top"><span class="nm">${esc(v.label)}</span>
           <button type="button" class="hear" data-hear="${esc(v.id)}"${hearWhy ? ` disabled title="${esc(hearWhy)}"` : ''} aria-label="${playing === v.id ? 'Stop' : 'Hear'} ${esc(v.label)}">${hear}</button></span>
         ${v.tagline ? `<span class="tag">${esc(v.tagline)}</span>` : ''}
         ${bk ? `<span class="bk"${availTip ? ` title="${esc(availTip)}"` : ''}>${esc(bk)}</span>` : ''}
-        ${why ? `<span class="why">${esc(why)}</span>` : ''}
-        ${sampleFail[v.id] && !off ? `<span class="why">${esc(sampleFail[v.id])}</span>` : ''}
+        ${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ''}
+        ${sampleFail[v.id] && !off ? `<span class="why" title="${esc(sampleFail[v.id])}">${esc(sampleFail[v.id])}</span>` : ''}
       </div>`;
     }).join('');
   }
@@ -322,7 +328,7 @@
   // ── Topic ──────────────────────────────────────────────────────────────
   const topic = $('topic');
   if (/Mac|iPhone|iPad/.test(navigator.platform)) $('kbd').textContent = '⌘';
-  topic.addEventListener('input', () => { $('chars').textContent = `${topic.value.trim().length} chars`; });
+  topic.addEventListener('input', () => { const n = topic.value.trim().length; $('chars').textContent = `${n} character${n === 1 ? '' : 's'}`; });
   topic.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('gen').requestSubmit(); } });
 
   // ── Estimate (from finished runs with matching settings) ───────────────
@@ -338,45 +344,45 @@
     const line = $('est-line');
     if (!res.ok || !res.data) {
       const why = missingWhy(res, 'The estimate');
-      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk" title="${esc(why)}">Unknown</div><div class="mono muted">${esc(why)}</div>`;
-      line.innerHTML = unknownHtml(why, 'cost unknown');
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk">Unknown</div><p class="note-s">${esc(why)}</p>`;
+      line.innerHTML = unknownHtml(why, 'Typical cost unknown');
       return;
     }
     const d = res.data;
     const n = d.based_on_runs || 0;
     if (d.median_seconds == null) {
-      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk">No estimate yet: fewer than 3 similar runs</div>
-        <div class="kv"><span>Similar finished runs</span><span>${esc(String(n))}</span></div>`;
+      card.innerHTML = `<div class="label">Estimated time</div><div class="big-num unk">Not enough runs yet</div>
+        <p class="note-s">An estimate appears once 3 runs with similar settings have finished. ${n ? `${esc(String(n))} so far.` : 'None so far.'}</p>`;
     } else {
       const big = d.median_seconds >= 60 ? `~${Math.round(d.median_seconds / 60)} min` : `~${Math.round(d.median_seconds)} s`;
       const range = d.p25_seconds != null && d.p75_seconds != null ? `${fmtSpan(d.p25_seconds)} to ${fmtSpan(d.p75_seconds)}` : null;
       card.innerHTML = `<div class="label">Estimated time</div><div class="big-num">${esc(big)}</div>
         <div class="kv"><span>Middle half of runs</span><span>${range ? esc(range) : unknownHtml('Not enough runs for a range')}</span></div>
         <div class="kv"><span>Typical cost</span><span>${d.median_cost_usd != null ? esc(fmtUsd(d.median_cost_usd)) : unknownHtml('These runs did not record a cost')}</span></div>
-        <div class="kv"><span>Based on</span><span>${esc(String(n))} finished run${n === 1 ? '' : 's'}${d.basis ? ' · ' + esc(d.basis) : ''}</span></div>`;
+        <div class="kv"><span>Based on</span><span>${esc(String(n))} finished run${n === 1 ? '' : 's'}${d.basis === 'same_quality' ? ', same resolution' : d.basis === 'exact' ? ', same settings' : ''}</span></div>`;
     }
     line.innerHTML = d.median_cost_usd != null
-      ? `typical cost ${esc(fmtUsd(d.median_cost_usd))} · median of ${esc(String(n))} similar runs`
-      : unknownHtml(n < 3 ? 'Fewer than 3 similar runs have finished' : 'Similar runs did not record a cost', 'cost unknown');
+      ? `Typical cost ${esc(fmtUsd(d.median_cost_usd))}, the median of ${esc(String(n))} similar runs`
+      : unknownHtml(n < 3 ? 'Fewer than 3 similar runs have finished' : 'Similar runs did not record a cost', 'Typical cost unknown');
   }
 
   // ── Recent ─────────────────────────────────────────────────────────────
   async function loadRecent() {
-    const [lib, jobs, vs] = await Promise.all([getJSON('/api/library?limit=4&sort=newest'), getJobs(), getVoices()]);
+    const [lib, jobs, vs] = await Promise.all([getJSON('/api/library?limit=6&sort=newest'), getJobs(), getVoices()]);
     const rows = [];
     if (jobs.ok && Array.isArray(jobs.data)) {
       for (const j of jobs.data.filter((x) => x.status === 'running' || x.status === 'pending').slice(0, 2)) {
         const wb = buildWorkbench(j);
-        rows.push(`<a href="/progress/?job=${encodeURIComponent(j.id)}"><span class="t">${esc(j.topic)}</span><span class="m c-gold">● ${j.status === 'pending' ? 'queued' : 'running'}${wb.active ? ' · ' + esc(wb.active.name.toLowerCase()) : ''}</span></a>`);
+        rows.push(`<a href="/progress/?job=${encodeURIComponent(j.id)}"><span class="thumb dim"><div class="thumb-board"><span>${esc(j.topic)}</span></div><span class="bar"></span></span><span class="tx"><span class="t">${esc(j.topic)}</span><span class="m c-gold">${j.status === 'pending' ? 'Queued' : 'Running'}${wb.active ? ' · ' + esc(wb.active.name.toLowerCase()) : ''}</span></span></a>`);
       }
     }
     if (lib.ok && lib.data) {
-      for (const v of lib.data.videos.slice(0, 4 - Math.min(rows.length, 2))) {
-        const meta = ['done', fmtDuration(v.duration_sec), fmtAgo(parseTs(v.created_at))].filter(Boolean).join(' · ');
-        rows.push(`<a href="/library/${encodeURIComponent(v.run_id)}"><span class="t">${esc(v.title || v.topic)}</span><span class="m c-ok">${esc(meta)}</span></a>`);
+      for (const v of lib.data.videos.slice(0, 6 - Math.min(rows.length, 2))) {
+        const meta = [fmtDuration(v.duration_sec), fmtAgo(parseTs(v.created_at))].filter(Boolean).join(' · ');
+        rows.push(`<a href="/library/${encodeURIComponent(v.run_id)}"><span class="thumb">${thumbInner(v)}</span><span class="tx"><span class="t">${esc(v.title || v.topic)}</span><span class="m">${esc(meta)}</span></span></a>`);
       }
     }
-    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="mono muted" style="margin:0">Nothing yet. Your first video shows up here.</p>' : `<p class="mono muted" style="margin:0">${esc(missingWhy(lib, 'The library'))}</p>`);
+    $('recent').innerHTML = rows.length ? rows.join('') : (lib.ok ? '<p class="note-s">Nothing yet. Your first video shows up here.</p>' : `<p class="note-s">${esc(missingWhy(lib, 'The library'))}</p>`);
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────
@@ -441,6 +447,9 @@
     $('output').open = true;
     history.replaceState(null, '', '/');
   }
+
+  // On very wide windows the options sit in their own column, open, beside the topic.
+  if (getComputedStyle($('gen')).display === 'grid') { $('style').open = true; $('output').open = true; }
 
   (async function init() {
     const meta = await getMeta();

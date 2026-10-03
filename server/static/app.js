@@ -343,8 +343,8 @@
     }
     if (rs.state === 'done') parts.push('rendered');
     if (job.quality) parts.push(resFull(job.quality));
-    rs.detail = parts.join(' · ');
-    if (job.narrator) rs.badge = String(job.narrator);
+    rs.detail = cap(parts.join(' · '));
+    if (job.narrator) rs.badge = narratorName(job.narrator);
     if (st.qa.state === 'done') st.qa.detail = 'Frame check finished';
     else if (st.qa.state === 'active') st.qa.detail = qaRender && qaRender.status === 'running' && qaRender.segment != null && qaRender.segments
       ? `Re-rendering after a fix · scene ${qaRender.segment + 1} of ${qaRender.segments}` : (qaRender ? 'Re-rendering after a fix' : 'Checking rendered frames');
@@ -418,7 +418,7 @@
       }
       const label = `${i + 1}${s.label ? ' · ' + s.label : ''}`;
       const tip = `${label}${timed ? ` · ${fmtClock(s.start_s)} to ${fmtClock(s.start_s + s.duration_s)}` : ''}`;
-      return `<div class="${cls}" data-i="${i}" style="flex:${w}" title="${esc(tip)}">${esc(label)}</div>`;
+      return `<div class="${cls}" data-i="${i}" style="flex:${w}" title="${esc(tip)}"><span class="i">${i + 1}</span>${s.label ? `<span class="lb">${esc(s.label)}</span>` : ''}</div>`;
     }).join('');
     let wave;
     if (Array.isArray(tl.waveform) && tl.waveform.length) {
@@ -448,11 +448,17 @@
     }
     const cuesLane = timed && total ? cues : `<span class="tl-none">${opts.mode === 'progress' ? 'Cue times come from narration' : 'Not recorded'}</span>`;
     host.classList.toggle('seekable', !!opts.onSeek && timed && !!total);
+    const seekable = !!opts.onSeek && timed && !!total;
+    const lateN = opts.lateCues ? opts.lateCues.size : 0;
+    const foot = opts.mode === 'video' && timed && total
+      ? `Diamonds mark sync cues, the words an animation is timed to start on${lateN ? '; red ones started late' : ''}.${seekable ? ' Click anywhere to jump there.' : ''}`
+      : '';
     host.innerHTML = `
-      <div class="tl-track"><span class="tl-name">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
-      <div class="tl-track"><span class="tl-name">${opts.mode === 'video' ? 'Voice' : 'Narration'}</span><div class="tl-lane wave-lane">${wave}</div></div>
-      <div class="tl-track"><span class="tl-name">Cues</span><div class="tl-lane cues">${cuesLane}</div></div>
-      ${opts.onSeek && total ? '<div class="tl-headwrap"><div class="tl-head" style="left:0%"></div></div>' : ''}`;
+      <div class="tl-track"><span class="tl-name" title="${opts.mode === 'video' ? 'Each block is one part of the narration' : 'Each block is one scene; filled blocks have rendered'}">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
+      <div class="tl-track"><span class="tl-name" title="Loudness of the recorded narration over time">${opts.mode === 'video' ? 'Voice' : 'Narration'}</span><div class="tl-lane wave-lane">${wave}</div></div>
+      <div class="tl-track"><span class="tl-name" title="Sync cues: words in the narration that an animation is timed to start on">Cues</span><div class="tl-lane cues">${cuesLane}</div></div>
+      ${opts.onSeek && total ? '<div class="tl-headwrap"><div class="tl-head" style="left:0%"></div></div>' : ''}
+      ${foot ? `<div class="tl-foot">${esc(foot)}</div>` : ''}`;
     if (opts.onSeek && timed && total) {
       host.querySelectorAll('.tl-lane').forEach((lane) => lane.addEventListener('click', (e) => {
         const r = lane.getBoundingClientRect();
@@ -600,6 +606,7 @@
     if (ns) {
       const bad = checks.filter((c) => c.state === 'warn' || c.state === 'down').length;
       ns.textContent = bad ? String(bad) : '';
+      ns.classList.toggle('warn', bad > 0);
       ns.title = bad ? `${bad} check${bad > 1 ? 's' : ''} need attention` : '';
     }
   }

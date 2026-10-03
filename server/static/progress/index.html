@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=6">
-  <script src="/app.js?v=6"></script>
+  <link rel="stylesheet" href="/app.css?v=7">
+  <script src="/app.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
@@ -73,8 +73,8 @@
           <div class="card" id="side-card">
             <div class="label">Something off?</div>
             <div id="cancel-wrap" hidden><button type="button" class="btn danger" id="cancel" style="width:100%">Cancel run</button></div>
-            <div class="mono faint" id="side-note">You can close this tab. The run keeps going on the server.</div>
-            <a href="/status/" style="font:13px var(--serif)">Check the render box status</a>
+            <p class="note-s" id="side-note">You can close this tab. The run keeps going on the server.</p>
+            <a class="side-link" href="/status/">Check the render box status</a>
           </div>
         </aside>
       </div>`;
@@ -303,7 +303,7 @@
     page.innerHTML = `
       <div class="eyebrow"><span class="pip"></span>In progress</div>
       <h1 class="h1">${heading}</h1>
-      ${body ? `<p class="quote" style="font-style:normal">${body}</p>` : ''}
+      ${body ? `<p class="lede">${body}</p>` : ''}
       ${list}`;
   }
   function jobRows(jobs) {
@@ -325,7 +325,7 @@
       else if (running.length > 1) { showJobs(jobRows(running.slice().reverse()), `${running.length} videos in the <em>works</em>.`, 'Pick one to watch its workbench.'); return; }
       else {
         const finished = list.filter((j) => j.status === 'completed' || j.status === 'failed').slice(-8).reverse();
-        showJobs((finished.length ? `<div class="label">Finished since the server started</div>${jobRows(finished)}` : '') +
+        showJobs((finished.length ? `<div class="label" style="margin-top:.5rem">Finished since the server started</div>${jobRows(finished)}` : '') +
           '<div><a class="btn primary big" href="/">Generate video</a></div>',
           'Nothing is <em>running</em>.', 'Start a video and its workbench shows up here.');
         return;
