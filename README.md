@@ -1,590 +1,584 @@
-# Chalkboard
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/readme/logo-light.svg">
+    <img alt="Chalkboard" src="docs/readme/logo-light.svg" height="64">
+  </picture>
+</p>
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nicglazkov/Chalkboard)
-[![Docs](https://img.shields.io/badge/docs-guide-blue)](https://nicglazkov.github.io/Chalkboard/guide.html)
-[![CLI Reference](https://img.shields.io/badge/docs-CLI-blue)](https://nicglazkov.github.io/Chalkboard/cli.html)
-[![API Reference](https://img.shields.io/badge/docs-API-blue)](https://nicglazkov.github.io/Chalkboard/api.html)
+<p align="center">
+  <b>Turn a topic into a narrated, LaTeX-quality math and science explainer video.</b><br>
+  Self-hosted. Claude writes and checks the script, Manim draws it, a narrator reads it in sync.
+</p>
 
-Turn any topic into a narrated, animated explainer video, fully automated.
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-D4C27A?style=flat-square"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="Manim CE 0.21" src="https://img.shields.io/badge/Manim%20CE-0.21-2C2C2C?style=flat-square">
+  <img alt="Claude Opus 5.5" src="https://img.shields.io/badge/Claude-Opus%205.5-D97757?style=flat-square&logo=anthropic&logoColor=white">
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-yes-4C7A5A?style=flat-square">
+</p>
 
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#web-ui">Web UI</a> ·
+  <a href="#cli">CLI</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#reference">Docs</a>
+</p>
+
+<p align="center">
+  <img src="docs/readme/hero.gif" width="760" alt="Animated excerpt from a Chalkboard video: a square wave built up from sine waves, with the Fourier series typeset above the plot">
+  <br>
+  <sub>An excerpt from a generated video, <i>Fourier series: a square wave from sines</i> (trimmed, shown without audio).</sub>
+</p>
+
+Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, and optionally files, URLs or a GitHub repo to work from. It writes a script, fact-checks it, writes a Manim scene on a built-in design system, checks that scene statically and with a headless layout dry-run, records narration, renders, and has Claude review frames from the finished video. Every stage is checkpointed and retried on failure. You drive it from a web UI, a CLI, a REST API or a small Python SDK, all running on your own machine.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/frame-derivative.png" alt="Frame: the derivative of e to the x, a three-line limit derivation typeset in LaTeX"></td>
+    <td width="50%"><img src="docs/readme/frame-pascal.png" alt="Frame: Pascal's triangle next to the binomial theorem and binomial coefficients"></td>
+  </tr>
+  <tr>
+    <td><sub><i>Why the Derivative of e to the x Is Itself</i>, 720p30, narrator Aria</sub></td>
+    <td><sub><i>Pascal's Triangle and the Binomial Theorem</i>, 720p30, narrator Milo</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/readme/frame-clt.png" alt="Frame: central limit theorem, expectation and standard deviation of the sample mean next to two normal curves"></td>
+    <td width="50%"><img src="docs/readme/frame-eigenvectors.png" alt="Frame: eigenvectors of a diagonal matrix drawn on axes, with the eigenvalue equations"></td>
+  </tr>
+  <tr>
+    <td><sub><i>Why Averages of Anything Look Normal</i>, 1080p60</sub></td>
+    <td><sub><i>Eigenvectors: The Directions a Matrix Only Stretches</i>, 1080p60</sub></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Frames from four generated videos, resized but otherwise untouched. Every equation is real LaTeX (<code>MathTex</code>) set in Computer Modern.</sub></p>
+
+## Why Chalkboard
+
+| | |
+| --- | --- |
+| **Real math typesetting** | Every equation goes through LaTeX with one shared preamble (amsmath, mathtools, siunitx, ...) and Computer Modern. Prose uses CMU Serif so text and math match. |
+| **A design system, not raw Manim** | Scenes are built from tokens, components, named animation moves and six scene templates, so videos look consistent from run to run. |
+| **Checked before it renders** | The script is fact-checked. Scene code passes syntax and AST guards plus a headless dry-run that flags off-screen elements, overlaps and timing overruns. After the render, Claude reviews sampled frames. |
+| **Narration in sync, word by word** | The script marks the words where visuals land; the TTS backend reports when each one is spoken, and the animation waits for its cue. |
+| **Narrators** | ElevenLabs `eleven_v4` voices Aria and Milo with request stitching, free local Kokoro, or OpenAI. |
+| **A UI that does not guess** | Live pipeline progress with Claude's output streaming in, a timeline and transcript per video, and a Status page built from real probes. If the UI cannot back a value, it says Unknown. |
+| **Bring your own material** | Files, folders, PDFs, Word documents, images, URLs and GitHub READMEs as source context. |
+| **Yours to run** | MIT licensed. Rendering, storage and the library stay on your machine (local Manim or Docker); the network is used for Claude, cloud narrators and any URLs you hand it. |
+
+## How it works
+
+```mermaid
+flowchart TD
+    A([Topic + optional files, URLs, repos]) --> B{Effort high?}
+    B -- yes --> C[Research<br/>web search brief]
+    B -- no --> D
+    C --> D[Script<br/>narration with cue markers]
+    D --> E[Fact check]
+    E -- needs revision --> D
+    E -- approved --> F[Scene code<br/>Manim on the design system]
+    F --> G[Code validator<br/>syntax, AST guards, Claude review]
+    G -- fix --> F
+    G -- pass --> H[Layout dry-run<br/>bounds, zones, timing]
+    H -- fix --> F
+    H -- pass --> I[Narration<br/>TTS with word timestamps]
+    I --> J[Render<br/>Manim CE 0.21, local or Docker]
+    J --> K[Visual QA<br/>Claude reviews sampled frames]
+    K -. issues: new scene, re-render .-> J
+    K --> L([final.mp4, captions, chapters, quiz])
 ```
-topic → script → fact-check → animation → validate → video
-```
 
-Chalkboard is a multi-agent LangGraph pipeline powered by Claude. It writes an educational script, checks the facts, generates Manim animation code on top of a built-in design system, validates that code (static checks plus a headless layout dry-run), synthesizes a voiceover, and renders everything to video. Each stage retries automatically. Use it through the web UI or the CLI.
-
----
+The steps from research through narration are a LangGraph state machine (`pipeline/graph.py`). Each validator either approves or sends feedback to the agent that produced the work. After three failed attempts the run stops and asks you what to do; unattended runs abort instead, except that a scene with only layout warnings is rendered anyway. Rendering, the voiceover merge, visual QA (up to two regenerate-and-re-render rounds), captions, chapters and the optional quiz run after the graph. Architecture, routing rules and known Manim pitfalls are documented in [CLAUDE.md](CLAUDE.md).
 
 ## Quick start
 
-### 1. Clone and install
-
-**Prerequisites:** Python 3.10+ and [ffmpeg](https://ffmpeg.org). To render you also need **either** a local Manim + TeX install **or** [Docker](https://docker.com) (see [Rendering](#rendering)).
+You need Python 3.10+, ffmpeg, an [Anthropic API key](https://console.anthropic.com/), and either a local TeX install (for local rendering) or Docker.
 
 ```bash
 git clone https://github.com/nicglazkov/Chalkboard.git
 cd Chalkboard
-pip install -r requirements.txt               # pipeline, server, TTS
-pip install -r requirements-render.txt        # optional: render locally (manim 0.21.0)
-```
-
-### 2. Set up API keys
-
-```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-render.txt    # pipeline, server, TTS, and manim 0.21.0
 cp .env.example .env
 ```
 
-Open `.env` and fill in your keys:
+Edit `.env`: set `ANTHROPIC_API_KEY` and pick a voice. `NARRATOR=kokoro` is free and runs locally (needs `espeak-ng`); `aria` and `milo` need `ELEVENLABS_API_KEY`; `alloy` needs `OPENAI_API_KEY`.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-TTS_BACKEND=openai          # see TTS backends below
-OPENAI_API_KEY=sk-...       # if using TTS_BACKEND=openai
-```
-
-### 3. Run
-
-**Web UI:**
 ```bash
-python run_server.py
-# Open http://localhost:8000
+python run_server.py          # web UI at http://127.0.0.1:8000
 ```
 
-**Or from the terminal:**
+or straight from the terminal:
+
 ```bash
-python main.py --topic "explain how B-trees work" --effort medium
+python main.py --topic "why the derivative of e to the x is itself" --template derivation
 ```
 
-Either way, the pipeline runs, renders the animation (locally or in Docker, whichever is available), and merges the voiceover into `output/<run-id>/final.mp4`.
+The video lands in `output/<run_id>/final.mp4`, next to its captions, chapters, script and scene code. The default render is 720p30; add `--quality high` for 1080p60 or `--quality 4k` for 2160p60.
 
-> **Quality:** pass `--quality high` (1080p60) or `--quality 4k` (2160p60), or set `MANIM_QUALITY` in `.env`. The default is `medium` (720p30).
+<details>
+<summary><b>Rendering setup: local TeX or Docker</b></summary>
 
----
-
-## Rendering
+<br>
 
 Scenes are rendered by Manim CE **0.21.0**. `RENDER_BACKEND` picks where:
 
-| Value            | What happens                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------- |
-| `auto` (default) | `local` if `manim` is importable and `latex`, `dvisvgm` and `ffmpeg` are on `PATH`, else `docker`   |
-| `local`          | Runs Manim natively on this machine. Faster: no container start, no image build                     |
-| `docker`         | Runs Manim in the `chalkboard-render` image (no local TeX needed)                                   |
+| Value | What happens |
+| --- | --- |
+| `auto` (default) | `local` if `manim` is importable and `latex`, `dvisvgm` and `ffmpeg` are on `PATH`, else `docker` |
+| `local` | Runs Manim natively. Faster: no container start, no image build |
+| `docker` | Runs Manim in the `chalkboard-render` image (no local TeX needed) |
 
 Both backends run the same layout dry-run and the same scene runtime (`docker/*.py`). The voiceover merge always runs with host ffmpeg.
 
-### Local rendering
+**Local, Ubuntu / Debian:**
 
-```bash
-pip install -r requirements-render.txt   # installs manim==0.21.0
-```
-
-Plus system packages: a TeX distribution with `latex` and `dvisvgm`, ffmpeg, cairo/pango, and fonts.
-
-**Ubuntu / Debian:**
 ```bash
 sudo apt install texlive texlive-latex-extra texlive-fonts-extra texlive-science lmodern cm-super \
-  dvisvgm ffmpeg libcairo2-dev libpango1.0-dev pkg-config fonts-cmu
+  dvisvgm ffmpeg libcairo2-dev libpango1.0-dev pkg-config fonts-cmu espeak-ng
 ```
 
-**macOS** (untested): install [MacTeX](https://tug.org/mactex/), or BasicTeX plus the LaTeX packages the house preamble uses (the `tlmgr install` line in `docker/Dockerfile` lists them). Then `brew install ffmpeg cairo pango pkg-config` and install the CMU Serif (Computer Modern Unicode) font.
+**Local, macOS** (untested): install [MacTeX](https://tug.org/mactex/), or BasicTeX plus the packages on the `tlmgr install` line in `docker/Dockerfile`. Then `brew install ffmpeg cairo pango pkg-config espeak-ng` and install the CMU Serif font.
 
-Scene text uses CMU Serif when installed, so prose matches the LaTeX math (falling back to Inter, then DejaVu Sans); code uses JetBrains Mono NL or DejaVu Sans Mono. Override with `CHALKBOARD_TEXT_FONT` / `CHALKBOARD_CODE_FONT`.
+Scene text uses CMU Serif when installed (falling back to Inter, then DejaVu Sans); code uses JetBrains Mono NL or DejaVu Sans Mono. Override with `CHALKBOARD_TEXT_FONT` / `CHALKBOARD_CODE_FONT`.
 
-### Docker rendering
+**Docker:** with `RENDER_BACKEND=docker` (or `auto` without TeX), the first render builds `chalkboard-render` from `docker/Dockerfile` (`manimcommunity/manim:v0.21.0` plus fonts and TeX packages). That takes a few minutes once; later runs reuse the image. The image was moved to Manim 0.21.0 along with the design system but has not been re-tested end to end since; local rendering is the tested path.
 
-With `RENDER_BACKEND=docker` (or `auto` without a local TeX install), the first render builds the `chalkboard-render` image from `docker/Dockerfile` (`manimcommunity/manim:v0.21.0` plus fonts and TeX packages). This takes a few minutes once; later runs reuse the cached image.
+**Intel Macs:** PyTorch 2.4+ has no x86_64 macOS wheels, so Kokoro is unavailable there. Use an ElevenLabs or OpenAI narrator.
 
-> The Docker image was moved to Manim 0.21.0 along with the design system but has not been re-tested end to end since. Local rendering is the tested path.
+</details>
 
-### Run it on a GPU box or another machine
+<details>
+<summary><b>Running on a GPU box or another machine</b></summary>
 
-Chalkboard can run on a different machine from the one you browse from, for example a GPU box that runs Kokoro TTS and renders faster. Install there as above and start the server bound to all interfaces:
+<br>
+
+Chalkboard can run on a different machine from the one you browse from, for example a GPU box that runs Kokoro on CUDA and renders faster. Install there and bind to all interfaces:
 
 ```bash
 python run_server.py --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://<that-machine>:8000`. The server has **no authentication**, so only do this on a trusted network. Alternatively, keep the default `127.0.0.1` binding and use an SSH tunnel:
+Then open `http://<that-machine>:8000`. The server has **no authentication**, so only do this on a trusted network. Or keep the default `127.0.0.1` binding and tunnel:
 
 ```bash
-ssh -L 8000:localhost:8000 user@that-machine
-# then open http://localhost:8000
+ssh -L 8000:localhost:8000 user@that-machine     # then open http://localhost:8000
 ```
 
-The CLI works the same way over SSH; outputs land in `output/<run-id>/` on that machine.
+</details>
 
----
+## Web UI
 
-## Models
+`python run_server.py` serves the UI and the API on one port (default `127.0.0.1:8000`). There is no build step.
 
-Every Claude call goes through one helper (`pipeline/llm.py`). By default every agent uses **`claude-opus-5-5`** with adaptive thinking. You can change the model globally or per agent, and tune each agent's effort:
+<p align="center">
+  <img src="docs/readme/ui-video.png" alt="Chalkboard video page: player, chapter timeline with voice waveform and sync cue markers, quality panel, downloads and transcript">
+</p>
 
-| Variable                | Default           | Effect                                                    |
-| ----------------------- | ----------------- | --------------------------------------------------------- |
-| `CLAUDE_MODEL`          | `claude-opus-5-5` | Model for every agent                                     |
-| `CLAUDE_MODEL_<AGENT>`  | `CLAUDE_MODEL`    | Model for one agent, e.g. `CLAUDE_MODEL_CODE_VALIDATOR`   |
-| `CLAUDE_EFFORT_<AGENT>` | see below         | Effort for one agent, e.g. `low`, `medium`, `high`        |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/ui-library.png" alt="Library page with run statistics and a list of generated videos"></td>
+    <td width="50%"><img src="docs/readme/ui-new.png" alt="New video page with topic, research and quiz options, style and output settings"></td>
+  </tr>
+  <tr>
+    <td><sub>Library: every rendered run, searchable by topic and transcript</sub></td>
+    <td><sub>New video: topic, attachments, voice, style and output settings</sub></td>
+  </tr>
+</table>
 
-Agents and their default effort:
+- **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
+- **In progress.** Each pipeline stage as it happens, with Claude's script, fact check and scene code streaming in as they are written, token usage and cost per call, and render and TTS progress parsed from the real processes.
+- **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, and a quality panel with measured cue delays, the layout check and visual QA.
+- **Status.** Real probes, cached for 60 seconds: Claude API, the Claude status page, ElevenLabs, Kokoro, OpenAI TTS, the renderer toolchain, GPU, disk and the job queue. Anything that cannot be checked without spending money shows as Unknown.
 
-| `<AGENT>`        | Default effort | Role                                 |
-| ---------------- | -------------- | ------------------------------------ |
-| `RESEARCH`       | `medium`       | Web research brief (`--effort high`) |
-| `SCRIPT`         | `high`         | Narration script                     |
-| `FACT`           | `medium`       | Fact check                           |
-| `MANIM`          | `high`         | Scene code generation                |
-| `CODE_VALIDATOR` | `medium`       | Code review                          |
-| `VISUAL_QA`      | `high`         | Review of frames from the render     |
-| `QUIZ`           | `low`          | `--quiz` questions                   |
+The rule behind all of it: the UI never shows a value it cannot back with a real source. Missing data reads "Unknown" or "Not recorded", never a placeholder. The full contract is in [docs/ui-data-contract.md](docs/ui-data-contract.md).
 
-Example: keep the default for the script and scene code, use a cheaper model for the validators:
+## CLI
+
+```bash
+python main.py --topic "how B-trees keep themselves balanced" --effort high --narrator aria
+python main.py --topic "explain this codebase" --context ./src --context-ignore "*.lock"
+python main.py --topic "summarize this paper" --context paper.pdf --quiz
+python main.py --topic "how B-trees work" --preview     # fast 480p pass; resume with --run-id for the full render
+```
+
+Common options: `--effort low|medium|high`, `--audience beginner|intermediate|expert`, `--tone casual|formal|socratic`, `--theme chalkboard|light|colorful`, `--template algorithm|code|compare|derivation|howto|timeline`, `--quality low|medium|high|4k`, `--narrator aria|milo|kokoro|alloy`, `--speed 1.15`, `--quiz`, `--burn-captions`, and `--yes` for unattended runs. The full list is in the [reference](#cli-flags) below.
+
+Each run writes to `output/<run_id>/`:
+
+| File | What it is |
+| --- | --- |
+| `final.mp4` | The video, with chapter markers embedded (`preview.mp4` with `--preview`) |
+| `captions.srt`, `chapters.txt` | Subtitles split per sentence on the narration timings, and chapter metadata |
+| `script.txt`, `segments.json` | The narration and per-segment timing, including cue times |
+| `scene.py` | The generated Manim scene |
+| `layout_report.json`, `qa_frames/` | The last layout check (with the per-cue `cue_log`) and the frames visual QA reviewed |
+| `quiz.json` | 4 to 6 multiple-choice questions with explanations (`--quiz`) |
+| `manifest.json`, `run_stats.json`, `thumb.jpg` | Settings, timings, token usage and cost, thumbnail |
+
+## Narrators
+
+Pick one per run with `--narrator`, the `narrator` API field, or the voice picker in the UI. Set a default with `NARRATOR` in `.env`.
+
+| Narrator | Backend | Cost | Notes |
+| --- | --- | --- | --- |
+| `aria` | ElevenLabs `eleven_v4` | Paid, per character | Young, bright female voice with a little nerdy charm (ElevenLabs voice Skye). Needs `ELEVENLABS_API_KEY` |
+| `milo` | ElevenLabs `eleven_v4` | Paid, per character | Earnest male narrator (ElevenLabs voice Bradley). Needs `ELEVENLABS_API_KEY` |
+| `kokoro` | Kokoro-82M, local | Free | Voice `af_heart`. Runs on the GPU when CUDA is available. Needs PyTorch 2.4+ and `espeak-ng` |
+| `alloy` | OpenAI `gpt-4o-mini-tts` | Paid, per use | Segments synthesized in parallel. Needs `OPENAI_API_KEY` |
+
+With no narrator set, `TTS_BACKEND` (`kokoro`, `openai` or `elevenlabs`) picks the backend with its default voice.
+
+Aria and Milo came out of a blind listening test against OpenAI, Fish and Gemini voices, then an audition of `eleven_v4` against `eleven_v3`. On `eleven_v4`, segments are synthesized separately (their lengths drive the animation), but each request carries its neighbouring segments as context (**request stitching**), so intonation carries across the joins. A 1 to 3 minute video is roughly 1,000 to 3,000 characters of narration. Compare voices on your own machine with `python scripts/tts_bench.py --out bench/`.
+
+**Word-level sync.** The script marks the words where visuals land (`[[1]]`, `[[2]]`, ...; never spoken or shown). The TTS backend reports when each marked word is spoken: ElevenLabs from its per-character timestamps, Kokoro from its token timings, OpenAI by estimate from character position. The scene calls `self.cue(k)` before each cued animation, so an equation appears as its word is said. Late cues are reported by the layout check, and every cue's spoken and shown time is logged in `layout_report.json`.
+
+## Reference
+
+The sections below are collapsed to keep this page short. For architecture and contribution notes see [CLAUDE.md](CLAUDE.md); for the web UI's data rules see [docs/ui-data-contract.md](docs/ui-data-contract.md).
+
+### CLI flags
+
+<details>
+<summary>All <code>main.py</code> flags</summary>
+
+<br>
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--topic` | required | Topic to explain, e.g. `"how B-trees work"` |
+| `--effort` | `medium` | Fact-check depth and research (see [Effort levels](#effort-levels)) |
+| `--audience` | `intermediate` | `beginner`, `intermediate`, `expert` |
+| `--tone` | `casual` | `casual`, `formal`, `socratic` |
+| `--theme` | `chalkboard` | `chalkboard`, `light`, `colorful` |
+| `--template` | none | `algorithm`, `code`, `compare`, `derivation`, `howto`, `timeline` |
+| `--quality` | `MANIM_QUALITY` | `low` (480p15), `medium` (720p30), `high` (1080p60), `4k` (2160p60) |
+| `--narrator` | `NARRATOR` | `aria`, `milo`, `kokoro`, `alloy` |
+| `--speed` | `1.0` | Narration speed. OpenAI: native (0.25 to 4.0). Kokoro and ElevenLabs: ffmpeg `atempo` |
+| `--run-id` | auto | Resume a previous run from its checkpoint |
+| `--preview` | off | Render a fast 480p15 `preview.mp4` instead of the full render |
+| `--no-render` | off | Run the AI pipeline only, skipping render and merge |
+| `--verbose` | off | Stream Manim output while rendering (not with `--preview`) |
+| `--context` | | File or directory to use as source material. Repeatable |
+| `--context-ignore` | | Glob to exclude from context directories. Repeatable |
+| `--url` | | URL to fetch as source material (HTML stripped to text). Repeatable |
+| `--github` | | GitHub repo (`owner/repo` or URL); its README becomes context. Repeatable |
+| `--quiz` | off | Write `quiz.json` after the pipeline |
+| `--burn-captions` | off | Burn subtitles into the video (re-encodes; `captions.srt` is always written) |
+| `--qa-density` | `normal` | Visual QA sampling: `zero` (skip), `normal` (1 frame per 30 s, up to 10), `high` (1 per 15 s, up to 20) |
+| `--yes` | off | Never prompt: skip confirmations and abort instead of asking when retries run out |
+
+**Unattended runs.** With `--yes`, or when stdin is not a terminal, Chalkboard never stops to ask. If the scene still has layout warnings after its last retry it is rendered anyway (visual QA then reviews it); a scene that crashes, or a stage that keeps failing, aborts the run. The large-context confirmation is skipped only by `--yes`. Out-of-credit and invalid-request API errors fail fast instead of being retried.
+
+</details>
+
+### Effort levels
+
+<details>
+<summary>What <code>--effort</code> changes</summary>
+
+<br>
+
+| Level | Fact check | Web search | Segments |
+| --- | --- | --- | --- |
+| `low` | Light, obvious errors only | Never | 3 to 4 |
+| `medium` (default) | Spot-check key claims | No | 4 to 6 |
+| `high` | Thorough | Research agent runs before the script | 5 to 8 |
+
+</details>
+
+### Configuration
+
+<details>
+<summary>Environment variables (<code>.env</code>)</summary>
+
+<br>
+
+Everything can be set in `.env` or the environment; `.env.example` lists them with comments.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | required | Claude API key |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | Model for every agent |
+| `CLAUDE_MODEL_<AGENT>` | `CLAUDE_MODEL` | Per-agent model override |
+| `CLAUDE_EFFORT_<AGENT>` | per agent | Per-agent effort: `low`, `medium`, `high` |
+| `RENDER_BACKEND` | `auto` | `auto`, `local`, `docker` |
+| `MANIM_QUALITY` | `medium` | `low`, `medium`, `high`, `4k` |
+| `NARRATOR` | unset | Default narrator: `aria`, `milo`, `kokoro`, `alloy` |
+| `TTS_BACKEND` | `kokoro` | Used when no narrator is set: `kokoro`, `openai`, `elevenlabs` |
+| `ELEVENLABS_API_KEY` | | For `aria`, `milo` and `TTS_BACKEND=elevenlabs` |
+| `ELEVENLABS_MODEL_ID` | `eleven_v4` | ElevenLabs model |
+| `ELEVENLABS_VOICE_ID` | Skye (`1iNDh1muacMMMHXvS7Ym`) | Voice for `TTS_BACKEND=elevenlabs` |
+| `ELEVENLABS_STITCH` | `1` | `0` turns request stitching off |
+| `ELEVENLABS_CONCURRENCY` | `3` | Parallel requests for models without stitching (`eleven_v3`) |
+| `OPENAI_API_KEY` | | For `alloy` and `TTS_BACKEND=openai` |
+| `OPENAI_TTS_MODEL` | `gpt-4o-mini-tts` | OpenAI speech model |
+| `OPENAI_TTS_VOICE` | `alloy` | OpenAI voice |
+| `OPENAI_TTS_INSTRUCTIONS` | a teaching-voice prompt | Delivery instructions (`gpt-*` models only) |
+| `KOKORO_VOICE` | `af_heart` | Kokoro voice |
+| `DEFAULT_EFFORT` | `medium` | `low`, `medium`, `high` |
+| `DEFAULT_AUDIENCE` | `intermediate` | `beginner`, `intermediate`, `expert` |
+| `DEFAULT_TONE` | `casual` | `casual`, `formal`, `socratic` |
+| `DEFAULT_THEME` | `chalkboard` | `chalkboard`, `light`, `colorful` |
+| `OUTPUT_DIR` | `./output` | Where runs are written |
+| `CHECKPOINT_DB` | `pipeline_state.db` | LangGraph checkpoint database |
+| `SERVER_HOST` | `127.0.0.1` | Bind address (overridden by `--host`) |
+| `SERVER_PORT` | `8000` | Port (overridden by `--port`) |
+| `MAX_CONCURRENT_JOBS` | `3` | Server jobs that run at once; the rest wait |
+| `CHALKBOARD_TEXT_FONT` | CMU Serif, else Inter | Scene text font |
+| `CHALKBOARD_CODE_FONT` | JetBrains Mono NL, else DejaVu Sans Mono | Code font (must be ligature-free) |
+
+</details>
+
+### Models and effort per agent
+
+<details>
+<summary>Claude models, agents and their default effort</summary>
+
+<br>
+
+Every Claude call goes through `pipeline/llm.py`. By default every agent uses `claude-opus-5-5` with adaptive thinking. Change the model for all agents with `CLAUDE_MODEL`, or per agent with `CLAUDE_MODEL_<AGENT>`; tune effort with `CLAUDE_EFFORT_<AGENT>`.
+
+| `<AGENT>` | Default effort | Role |
+| --- | --- | --- |
+| `RESEARCH` | `medium` | Web research brief (`--effort high`) |
+| `SCRIPT` | `high` | Narration script |
+| `FACT` | `medium` | Fact check |
+| `MANIM` | `high` | Scene code generation |
+| `CODE_VALIDATOR` | `medium` | Code review |
+| `VISUAL_QA` | `high` | Review of frames from the render |
+| `QUIZ` | `low` | `--quiz` questions |
+
+For example, keep the default model for the script and scene code and use a cheaper one for the validators:
 
 ```
 CLAUDE_MODEL_FACT=claude-sonnet-5-5
 CLAUDE_MODEL_CODE_VALIDATOR=claude-sonnet-5-5
 ```
 
-Haiku models are called without thinking or effort settings (they do not support them).
+Haiku models are called without thinking or effort settings, which they do not support.
 
----
+</details>
 
-## CLI flags
+### Design system and templates
 
-| Flag               | Required | Default         | Description                                                                                                   |
-| ------------------ | -------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--topic`          | **Yes**  |                 | Topic to explain, e.g. `"how B-trees work"`                                                                   |
-| `--effort`         | No       | `medium`        | Validation thoroughness (see [Effort levels](#effort-levels))                                                 |
-| `--audience`       | No       | `intermediate`  | Target audience: `beginner`, `intermediate`, `expert`                                                         |
-| `--tone`           | No       | `casual`        | Narration tone: `casual`, `formal`, `socratic`                                                                |
-| `--theme`          | No       | `chalkboard`    | Visual color theme: `chalkboard`, `light`, `colorful`                                                         |
-| `--template`       | No       | none            | Scene template: `algorithm`, `code`, `compare`, `derivation`, `howto`, `timeline`                             |
-| `--quality`        | No       | `MANIM_QUALITY` | Render resolution: `low` (480p15), `medium` (720p30), `high` (1080p60), `4k` (2160p60)                        |
-| `--speed`          | No       | `1.0`           | Narration speed multiplier (e.g. `1.25`). OpenAI: native (0.25 to 4.0). Kokoro/ElevenLabs: ffmpeg atempo.     |
-| `--run-id`         | No       | auto            | Resume a previous run from its checkpoint                                                                     |
-| `--preview`        | No       | off             | Render a fast low-quality preview (480p15) to `preview.mp4` instead of the full render                        |
-| `--no-render`      | No       | off             | Run the AI pipeline only, skipping render and ffmpeg merge                                                    |
-| `--verbose`        | No       | off             | Stream raw Manim output to the terminal while rendering                                                       |
-| `--context`        | No       |                 | File or directory to use as source material. Repeatable.                                                      |
-| `--context-ignore` | No       |                 | Glob pattern to exclude from context directories. Repeatable.                                                 |
-| `--url`            | No       |                 | URL to fetch as source material (HTML stripped to text). Repeatable.                                          |
-| `--github`         | No       |                 | GitHub repo (`owner/repo` or URL); fetches its README as context. Repeatable.                                 |
-| `--quiz`           | No       | off             | Generate comprehension questions (`quiz.json`) after the pipeline.                                            |
-| `--burn-captions`  | No       | off             | Burn subtitles into the video (re-encodes; `captions.srt` is always written regardless)                       |
-| `--qa-density`     | No       | `normal`        | Visual QA frame sampling: `zero` (skip), `normal` (1/30s, up to 10 frames), `high` (1/15s, up to 20 frames)   |
-| `--yes`            | No       | off             | Never prompt: skip confirmations (e.g. large context) and abort instead of asking when retries run out        |
+<details>
+<summary>How scenes are built, and the six templates</summary>
 
-> `--verbose` and `--preview` cannot be combined.
+<br>
 
-**Unattended runs.** With `--yes`, or when stdin is not a terminal (cron, CI, a background job), Chalkboard does not stop to ask what to do when retries run out. If the scene still has layout warnings after its last retry, it renders that scene anyway (visual QA then gets a look at it); a scene that crashes, or a stage that keeps failing, aborts the run instead. Pass `--yes` for scripted runs that use large context, since that confirmation is skipped only by `--yes`. Out-of-credit and invalid-request API errors fail fast instead of being retried.
-
-Before rendering, Chalkboard runs a **layout check**: it dry-runs the Manim scene headlessly and validates every segment's bounding boxes (off-screen elements, overlaps, elements crossing between the left and right zones) and animation timing against the audio budget. Violations are fed back to the Manim agent, which retries until the scene passes or attempts run out.
-
-After a full render, Chalkboard runs a **visual quality check**: it samples frames from `final.mp4` and asks Claude to flag overlapping elements, off-screen text, or readability issues. If errors are found, it regenerates the scene and re-renders (up to 2 attempts). Use `--qa-density high` for longer animations, or `--qa-density zero` to skip QA.
-
----
-
-## Context injection
-
-Pass local files or URLs as source material so the pipeline builds animations from your content:
-
-```bash
-# Explain a codebase
-python main.py --topic "explain this codebase" --context ./src --context ./docs
-
-# Turn a paper into an animation
-python main.py --topic "summarize this paper" --context paper.pdf
-
-# Use a repo, excluding lock files and build output
-python main.py --topic "visualize this" --context ./repo --context-ignore "*.lock" --context-ignore "dist/"
-
-# Ground the script in a web article
-python main.py --topic "explain this concept" --url https://en.wikipedia.org/wiki/...
-
-# Combine files and URLs
-python main.py --topic "explain my project" --context ./README.md --url https://example.com/blog-post
-
-# GitHub repo README
-python main.py --topic "explain this project" --github nicglazkov/Chalkboard
-```
-
-Supported file types: text and code files (`.py`, `.js`, `.md`, `.yaml`, `.ps1`, `.bat`, ...), images (`.png`, `.jpg`, `.webp`, ...), PDFs, and Word docs (`.docx`). URLs are fetched with HTML stripped to plain text, truncated at 100k chars.
-
-The **web UI** also supports context injection via the file upload zone in Advanced options. Drag and drop files or whole folders. Per-file limits: text/code 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB, 24 MB total.
-
-Before the pipeline starts, Chalkboard reports how many tokens the context uses:
-
-```
-Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
-```
-
-If context exceeds 10k tokens you'll be asked to confirm; `--yes` skips the prompt. If it exceeds 90% of the model's context window, Chalkboard aborts with an error.
-
-**Resuming with context:** `--context`, `--url`, and `--github` are not stored in the checkpoint. Pass them again on resume:
-
-```bash
-python main.py --topic "..." --run-id <id> --context ./src
-```
-
----
-
-## Animation design system
-
-Generated scenes are composed from a small design system that ships with the renderer (`docker/`), not from raw Manim primitives. This is what keeps runs consistent:
+Generated scenes are composed from a design system that ships with the renderer (`docker/`), not from raw Manim primitives:
 
 - **Tokens** (`chalkboard_tokens.py`): every color, font size, spacing, stroke width and motion timing, named by meaning (`focus_primary`, `context_muted`, `motion_snap`, ...). Themes only swap colors.
 - **Components** (`chalkboard_components.py`): `ChalkBox`, `ChalkArrow`, `ChalkCode`, `Callout`, `StepCounter`, `ChalkAxis`, `ChalkAxes`, `ChalkPanel`, `ChalkBadge`, `EquationGroup`, `ChalkMatrix`, `NetworkNode`, plus `math_tex()` / `tex()`.
 - **Moves** (`chalkboard_moves.py`): named animation patterns such as `reveal_with_emphasis`, `compare_split`, `progressive_step`, `derivation_step`, `emphasize_term`.
 - **Templates** (`chalkboard_templates/`): whole-scene choreographies the agent fills with data.
-- **House style** (`chalkboard_style.py`): one LaTeX preamble for all math (amsmath, mathtools, siunitx, cancel, ... and macros such as `\R`, `\E`, `\dd`, `\Var`, `\argmax`), CMU Serif for text (Computer Modern, matching the math), a ligature-free monospace for code.
+- **House style** (`chalkboard_style.py`): one LaTeX preamble for all math (amsmath, mathtools, siunitx, cancel, ..., and macros such as `\R`, `\E`, `\dd`, `\Var`, `\argmax`), CMU Serif for text, a ligature-free monospace for code.
 
-Math is always typeset with LaTeX, and the narration says it in words ("x squared", "the derivative of f with respect to x") so the voice never reads symbols aloud.
+Math is always typeset with LaTeX, and the narration says it in words ("x squared", "the derivative of f with respect to x"), so the voice never reads symbols aloud. `docker/examples/design_system_demo.py` renders demo scenes that use all of it.
 
-`docker/examples/design_system_demo.py` renders a few demo scenes with all of this (see the command at the top of that file).
+| Template | Best for | Visual pattern |
+| --- | --- | --- |
+| `algorithm` | Sorting, searching, DP traces | Row of cells, focused cell per step, step counter, optional callouts |
+| `code` | Code walkthroughs | Highlighted source, lines highlighted per step, callouts |
+| `compare` | A vs B trade-offs | Two panels with a divider, matched points revealed in pairs |
+| `derivation` | Math derivations and proofs | Aligned equations, each line morphing out of the previous, notes |
+| `howto` | Setup guides, recipes, procedures | Numbered steps, active step highlighted, completed steps dimmed |
+| `timeline` | History, version timelines | Horizontal axis with dated events revealed in order |
 
-### Templates
+Without `--template` the agent composes the scene freely (and may still pick a template, such as a derivation for a math-heavy script). Templates combine with `--theme`, `--tone`, `--audience` and `--speed`.
 
-`--template` tells the scene generator to build the video from one of these scene templates:
+</details>
 
-| Template     | Best for                          | Visual pattern                                                       |
-| ------------ | --------------------------------- | -------------------------------------------------------------------- |
-| `algorithm`  | Sorting, searching, DP traces     | Row of cells, focused cell per step, step counter, optional callouts |
-| `code`       | Code walkthroughs                 | Highlighted source, lines highlighted per step, callouts             |
-| `compare`    | A vs B trade-offs                 | Two panels with a divider, matched points revealed in pairs          |
-| `derivation` | Math derivations and proofs       | Aligned equations, each line morphing out of the previous, notes     |
-| `howto`      | Setup guides, recipes, procedures | Numbered steps, active step highlighted, completed steps dimmed      |
-| `timeline`   | History, version timelines        | Horizontal axis with dated events revealed in order                  |
+### Context injection
 
-```bash
-python main.py --topic "explain merge sort" --template algorithm
-python main.py --topic "why the derivative of x squared is 2x" --template derivation
-python main.py --topic "SQL vs NoSQL trade-offs" --template compare
-```
+<details>
+<summary>Using files, URLs and repos as source material</summary>
 
-Without `--template` the agent composes the scene freely (it may still use a template, e.g. a derivation for a math-heavy script). Templates compose with `--theme`, `--tone`, `--audience`, and `--speed`.
-
----
-
-## Captions & chapter markers
-
-Every full render produces:
-
-- **`captions.srt`**: subtitle file (one entry per script segment)
-- **Chapter atoms embedded in `final.mp4`**: visible in QuickTime, VLC, and most players' chapter menus
-- **A YouTube chapter list printed to stdout**, ready to paste into a video description
-
-To also **burn subtitles into the video** (re-encodes, slower), pass `--burn-captions`.
-
----
-
-## Quiz generation
-
-Add `--quiz` to generate comprehension questions alongside any video:
+<br>
 
 ```bash
-python main.py --topic "explain binary search" --quiz
+python main.py --topic "explain this codebase" --context ./src --context ./docs
+python main.py --topic "summarize this paper" --context paper.pdf
+python main.py --topic "visualize this" --context ./repo --context-ignore "*.lock" --context-ignore "dist/"
+python main.py --topic "explain this concept" --url https://en.wikipedia.org/wiki/Fourier_series
+python main.py --topic "explain this project" --github nicglazkov/Chalkboard
 ```
 
-After the pipeline finishes, Chalkboard writes `output/<run-id>/quiz.json`: 4 to 6 multiple-choice questions with answer keys and explanations. Works with `--no-render` too, since it only needs the script.
+Supported: text and code files, images (`.png`, `.jpg`, `.webp`, ...), PDFs and Word documents (`.docx`). URLs are fetched with HTML stripped to text, truncated at 100k characters. In the web UI, attach files or whole folders (per-file limits: text and code 2 MB, images 5 MB, PDFs 20 MB, DOCX 10 MB; 24 MB total).
 
----
+Before the pipeline starts, Chalkboard reports the context size:
 
-## Narration speed
+```
+Context: 12 files, ~38k tokens  (model window: 200k, ~19% used by context)
+```
+
+Above 10k tokens it asks for confirmation (`--yes` skips it); above 90% of the model's context window it aborts.
+
+</details>
+
+### Resuming and previews
+
+<details>
+<summary>Checkpoints, resume, preview then full render</summary>
+
+<br>
+
+Every pipeline stage is checkpointed in `pipeline_state.db`. Resume a crashed or stopped run with its ID:
 
 ```bash
-python main.py --topic "..." --speed 1.25   # 25% faster
-python main.py --topic "..." --speed 0.85   # 15% slower
+python main.py --topic "..." --run-id <run_id>
 ```
 
-OpenAI TTS uses its native speed parameter (0.25 to 4.0). Kokoro and ElevenLabs are processed with ffmpeg `atempo` after generation. Either way, `segments.json` records the actual post-speed durations, so chapters and captions line up.
-
----
-
-## Narration (TTS)
-
-Pick a voice per run with `--narrator` (CLI), `narrator` (API) or the Narrator menu in the web UI, or set a default with `NARRATOR` in `.env`:
-
-| Narrator | Backend | Voice | Needs |
-| -------- | ------- | ----- | ----- |
-| `aria`   | ElevenLabs `eleven_v4` | Skye: young, bright, a little nerdy | `ELEVENLABS_API_KEY` |
-| `milo`   | ElevenLabs `eleven_v4` | Bradley: earnest male narrator | `ELEVENLABS_API_KEY` |
-| `kokoro` | Kokoro-82M (local) | `af_heart` | PyTorch 2.4+, `espeak-ng`; free |
-| `alloy`  | OpenAI `gpt-4o-mini-tts` | alloy | `OPENAI_API_KEY` |
-
-With no narrator set, `TTS_BACKEND` (`kokoro`, `openai`, `elevenlabs`) picks the backend with its default voice.
-
-Why these: Aria and Milo came out of a blind listening test (April 2026) against OpenAI, Fish and Gemini voices, then an October 2026 audition of `eleven_v4` against `eleven_v3`. Eleven v4 (September 2026) led the Artificial Analysis TTS arena when this was written and supports **request stitching**: segments are synthesized separately (their lengths drive the animation), and v4 is told about the neighbouring segments so intonation carries across the joins. `eleven_v3` rejects stitching, so it runs segments in parallel without context. Compare voices on your own machine with `python scripts/tts_bench.py --out bench/` (same script for every voice, with timing and a Whisper round-trip check).
-
-**Word-level sync.** The script marks the words where visuals land (`[[1]]`, `[[2]]`, ... inside each segment; the markers are never spoken or shown). The TTS backend reports when each marked word is spoken: ElevenLabs from its per-character timestamps, Kokoro from its token timings, OpenAI by estimate from character position. The scene calls `self.cue(k)` before each cued animation, so an equation or label appears as its word is said, not seconds before or after. Late cues are reported by the layout check, and every cue's spoken vs shown time is logged in `layout_report.json` (`cue_log`). Captions are split per sentence on the same timings.
-
-- **ElevenLabs**: `ELEVENLABS_MODEL_ID` (default `eleven_v4`), `ELEVENLABS_VOICE_ID` (used with `TTS_BACKEND=elevenlabs`), `ELEVENLABS_STITCH=0` to turn stitching off, `ELEVENLABS_CONCURRENCY` for parallel v3 requests (match your plan's limit). Cost is roughly 1-3k characters per 1-3 minute video.
-- **Kokoro** loads its model once per process and runs on the GPU when CUDA is available. Voice: `KOKORO_VOICE`. Install `espeak-ng` with `brew install espeak-ng` / `apt install espeak-ng`.
-- **OpenAI** synthesizes segments in parallel (up to 6 at once). Configure with `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE` and `OPENAI_TTS_INSTRUCTIONS` (sent only to `gpt-*` models).
-
-> **Intel Mac users:** PyTorch 2.4+ has no x86_64 macOS wheels, so Kokoro is unavailable. Use an ElevenLabs or OpenAI narrator.
-
----
-
-## Effort levels
-
-`--effort` controls how thorough the validation is and whether web search is used.
-
-| Level              | Fact-check                 | Web search                                   | Segments |
-| ------------------ | -------------------------- | -------------------------------------------- | -------- |
-| `low`              | Light, obvious errors only | Never                                        | 3 to 4   |
-| `medium` (default) | Spot-check key claims      | No                                           | 4 to 6   |
-| `high`             | Thorough                   | Via research_agent (pre-script web research) | 5 to 8   |
-
----
-
-## Resuming a run
-
-Every run is checkpointed after each pipeline stage. If it crashes or you stop it, resume with the same run ID:
+It continues from the last completed stage, or goes straight to rendering if the pipeline had finished (an existing `final.mp4` is reused unless `--quality` asks for a different resolution). Other options (`--template`, `--narrator`, `--theme`, ...) are not re-applied to a checkpointed run, and context (`--context`, `--url`, `--github`) has to be passed again.
 
 ```bash
-python main.py --topic "..." --run-id <previous-run-id>
+python main.py --topic "how B-trees work" --preview            # output/<run_id>/preview.mp4
+python main.py --topic "how B-trees work" --run-id <run_id>    # final.mp4, plus visual QA
 ```
 
-The pipeline continues from the last completed stage. If the pipeline had already finished, it skips straight to rendering (an existing `final.mp4` is reused, not re-rendered, unless `--quality` asks for a different resolution). Other options (`--template`, `--narrator`, `--theme`, ...) are not re-applied to a checkpointed run, and context (`--context`, `--url`, `--github`) has to be passed again.
+The render quality is stored in the run's `manifest.json`. Passing a different `--quality` with `--run-id` re-renders the finished run at that resolution.
 
-### Preview, then full render
+</details>
 
-```bash
-# Step 1: generate script + animation, render a 480p preview
-python main.py --topic "how B-trees work" --preview
-# → output/<run-id>/preview.mp4
+### Captions, chapters, quiz and speed
 
-# Step 2: full render from the checkpoint (the pipeline is not re-run)
-python main.py --topic "how B-trees work" --run-id <run-id>
-# → output/<run-id>/final.mp4 (plus visual QA)
-```
+<details>
+<summary>Extra outputs</summary>
 
-The render quality is stored in the run's `manifest.json` when the pipeline finishes. Passing a different `--quality` with `--run-id` updates the manifest and re-renders the finished run at that resolution (for example `--quality 4k` after a `low` first pass).
+<br>
 
----
+- **Captions and chapters.** Every full render writes `captions.srt`, embeds chapter markers in `final.mp4` (visible in QuickTime, VLC and most players), and prints a YouTube-style chapter list. `--burn-captions` also burns subtitles into the video.
+- **Quiz.** `--quiz` writes `quiz.json`: 4 to 6 multiple-choice questions with answers and explanations. It works with `--no-render` too, since it only needs the script.
+- **Speed.** `--speed 1.25` or `--speed 0.85`. OpenAI uses its native speed parameter; Kokoro and ElevenLabs audio goes through ffmpeg `atempo`. `segments.json` records the post-speed durations, so captions and chapters line up.
 
-## Configuration
+</details>
 
-All settings can be set in `.env` or as environment variables (see `.env.example`):
+### REST API
 
-| Variable                  | Default                               | Options / meaning                                          |
-| ------------------------- | ------------------------------------- | ---------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`       | required                              | Claude API key                                             |
-| `CLAUDE_MODEL`            | `claude-opus-5-5`                     | Model for every agent (see [Models](#models))              |
-| `CLAUDE_MODEL_<AGENT>`    | `CLAUDE_MODEL`                        | Per-agent model override                                   |
-| `CLAUDE_EFFORT_<AGENT>`   | per agent                             | Per-agent effort, e.g. `low`, `medium`, `high`             |
-| `RENDER_BACKEND`          | `auto`                                | `auto`, `local`, `docker` (see [Rendering](#rendering))    |
-| `MANIM_QUALITY`           | `medium`                              | `low`, `medium`, `high`, `4k`                              |
-| `TTS_BACKEND`             | `kokoro`                              | `kokoro`, `openai`, `elevenlabs`                           |
-| `OPENAI_TTS_MODEL`        | `gpt-4o-mini-tts`                     | OpenAI speech model                                        |
-| `OPENAI_TTS_VOICE`        | `alloy`                               | OpenAI voice                                               |
-| `OPENAI_TTS_INSTRUCTIONS` | a teaching-voice prompt               | Delivery instructions (`gpt-*` TTS models only)            |
-| `KOKORO_VOICE`            | `af_heart`                            | Kokoro voice                                               |
-| `NARRATOR`                | unset                                 | Default narrator: `aria`, `milo`, `kokoro`, `alloy`        |
-| `ELEVENLABS_VOICE_ID`     | Skye (`1iNDh1muacMMMHXvS7Ym`)         | ElevenLabs voice for `TTS_BACKEND=elevenlabs`              |
-| `DEFAULT_EFFORT`          | `medium`                              | `low`, `medium`, `high`                                    |
-| `DEFAULT_AUDIENCE`        | `intermediate`                        | `beginner`, `intermediate`, `expert`                       |
-| `DEFAULT_TONE`            | `casual`                              | `casual`, `formal`, `socratic`                             |
-| `DEFAULT_THEME`           | `chalkboard`                          | `chalkboard`, `light`, `colorful`                          |
-| `OUTPUT_DIR`              | `./output`                            | any path                                                   |
-| `CHECKPOINT_DB`           | `pipeline_state.db`                   | any path                                                   |
-| `SERVER_HOST`             | `127.0.0.1`                           | Server bind address (overridden by `--host`)               |
-| `SERVER_PORT`             | `8000`                                | Server port (overridden by `--port`)                       |
-| `MAX_CONCURRENT_JOBS`     | `3`                                   | Server jobs that run at once; the rest wait their turn     |
-| `CHALKBOARD_TEXT_FONT`    | CMU Serif, else Inter                | Font family for scene text                                 |
-| `CHALKBOARD_CODE_FONT`    | JetBrains Mono NL, else DejaVu Sans Mono | Font family for code (use a ligature-free face)         |
+<details>
+<summary>Endpoints and examples</summary>
 
----
+<br>
 
-## API server
-
-Chalkboard includes a FastAPI server that exposes the pipeline over HTTP with SSE streaming for live progress.
-
-### Start
+The FastAPI server exposes the pipeline over HTTP, with Server-Sent Events for live progress. It runs up to `MAX_CONCURRENT_JOBS` jobs at once (default 3); the rest queue.
 
 ```bash
 python run_server.py                    # http://127.0.0.1:8000
-python run_server.py --reload           # dev mode (auto-reload)
 python run_server.py --port 9000
 python run_server.py --host 0.0.0.0     # serve your LAN (no auth: trusted networks only)
+python run_server.py --reload           # dev auto-reload (kills in-flight jobs on reload)
 ```
 
-The server runs up to `MAX_CONCURRENT_JOBS` jobs at once (default 3); further jobs wait in line.
-
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST /api/jobs` | Create job | Start the pipeline for a topic (JSON body) |
-| `POST /api/jobs/upload` | Create job with files | Multipart form (same fields plus file uploads) |
-| `GET /api/jobs` | List jobs | All jobs in this server session |
-| `GET /api/jobs/{id}` | Get job | Poll status and output file list |
-| `GET /api/jobs/{id}/events` | SSE stream | Live pipeline progress events |
-| `GET /api/jobs/{id}/files/{filename}` | Download | Serve `final.mp4`, `captions.srt`, etc. |
-| `GET /api/claude-status` | Claude status | Parsed Claude status feed (cached 5 minutes), shown in the UI nav |
-| `GET /api/meta` | Server info | Defaults (quality, narrator, effort, ...), narrators with availability, render backend, model, running jobs |
-
-### Example
+| Method and path | Description |
+| --- | --- |
+| `POST /api/jobs` | Start a job (JSON body) |
+| `POST /api/jobs/upload` | Start a job with file uploads (multipart, same fields) |
+| `GET /api/jobs` | Jobs in this server session |
+| `GET /api/jobs/{id}` | Status, settings, totals (tokens, cost) and output files |
+| `GET /api/jobs/{id}/events` | SSE stream: pipeline events, streamed Claude output, usage, render and TTS progress |
+| `GET /api/jobs/{id}/timeline` | Segments, cue times and voice waveform for a job |
+| `GET /api/jobs/{id}/files/{filename}` | Download `final.mp4`, `captions.srt`, ... |
+| `GET /api/library` | Rendered videos (`q`, `sort`, `limit`, `offset`) |
+| `GET /api/library/{run_id}` | One video's metadata and files |
+| `GET /api/library/{run_id}/timeline` | Segments, cues and waveform |
+| `GET /api/library/{run_id}/quality` | Cue delays, layout check, visual QA |
+| `GET /api/library/{run_id}/stats` | The run's `run_stats.json` |
+| `DELETE /api/library/{run_id}` | Remove from the index (`?files=true` also deletes `output/<run_id>/`) |
+| `GET /api/status` | Health probes (Claude, TTS backends, renderer, GPU, disk, jobs) |
+| `GET /api/voices` | Narrators and their availability |
+| `GET /api/voices/{narrator}/sample` | A real, cached voice sample (generated on first request) |
+| `GET /api/stats`, `GET /api/estimate` | Library statistics and run-time estimates from past runs |
+| `GET /api/meta` | Server defaults, narrators, render backend, model, running jobs |
+| `GET /api/claude-status` | Claude status page summary |
 
 ```bash
-# Start a job (minimal)
-curl -s -X POST http://localhost:8000/api/jobs \
+# Start a job
+curl -s -X POST http://127.0.0.1:8000/api/jobs \
   -H "Content-Type: application/json" \
-  -d '{"topic": "explain recursion", "effort": "low"}' | python3 -m json.tool
+  -d '{"topic": "explain recursion", "effort": "medium", "template": "algorithm",
+       "quality": "high", "narrator": "aria", "quiz": true}'
 
-# Start a job with all options
-curl -s -X POST http://localhost:8000/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "topic": "explain recursion",
-    "effort": "high",
-    "audience": "beginner",
-    "tone": "casual",
-    "theme": "chalkboard",
-    "template": "algorithm",
-    "quality": "high",
-    "narrator": "aria",
-    "speed": 1.25,
-    "burn_captions": true,
-    "quiz": true,
-    "qa_density": "normal",
-    "urls": ["https://en.wikipedia.org/wiki/Recursion"],
-    "github": ["nicglazkov/Chalkboard"]
-  }' | python3 -m json.tool
+# With file uploads
+curl -s -X POST http://127.0.0.1:8000/api/jobs/upload \
+  -F "topic=explain this codebase" -F "files=@./README.md" -F "files=@./main.py"
 
-# Start a job with local file uploads (multipart)
-curl -s -X POST http://localhost:8000/api/jobs/upload \
-  -F "topic=explain this codebase" \
-  -F "effort=medium" \
-  -F "files=@./README.md" \
-  -F "files=@./main.py" | python3 -m json.tool
-
-# Stream progress (SSE)
-curl -s http://localhost:8000/api/jobs/<id>/events
-
-# Download the video
-curl -o final.mp4 http://localhost:8000/api/jobs/<id>/files/final.mp4
+# Follow progress, then download
+curl -s http://127.0.0.1:8000/api/jobs/<id>/events
+curl -o final.mp4 http://127.0.0.1:8000/api/jobs/<id>/files/final.mp4
 ```
 
-`quality` is `low`, `medium`, `high` or `4k`; omit it (or send `null`) to use the server's `MANIM_QUALITY`. `narrator` is `aria`, `milo`, `kokoro` or `alloy`; omit it to use `NARRATOR` (or `TTS_BACKEND`). `GET /api/meta` lists the narrators and which ones this server has keys for. The multipart route validates these fields the same way (422 on an unknown value).
+Request fields: `topic`, `effort`, `audience`, `tone`, `theme`, `template`, `quality` (omit for `MANIM_QUALITY`), `narrator` (omit for `NARRATOR` / `TTS_BACKEND`), `speed` (0.25 to 4.0), `burn_captions`, `quiz`, `qa_density`, `urls`, `github`. Unknown values return 422. Event and resource shapes are documented in [docs/ui-data-contract.md](docs/ui-data-contract.md).
 
-### Job response shape
+</details>
 
-```json
-{
-  "id": "uuid",
-  "status": "pending | running | completed | failed",
-  "topic": "explain recursion",
-  "events": [{"node": "script_agent", "updates": {...}}],
-  "error": null,
-  "output_files": ["final.mp4", "captions.srt", "script.txt"]
-}
-```
+### Python SDK
 
-### Web UI
+<details>
+<summary>Typed client for the server</summary>
 
-The server includes a built-in UI with no build step. Start the server and open `http://localhost:8000`:
+<br>
 
-- A generate form with **Topic**, **Effort** and **Audience** up front, plus **Advanced options**: Tone, Theme, Template, Quality, Speed, Visual QA density, Burn captions, Generate quiz, URL and GitHub inputs, and a **file upload zone** (drag and drop files or folders)
-- Live stage-by-stage progress while the pipeline runs, and a jobs menu for jobs in flight
-- A video player with download links when the job completes
-- A shared nav with Generate / Library tabs, a Claude API status indicator and a light/dark theme toggle
-
-The pages live in `server/static/` (`index.html`, `library.html`, `video.html`) and share `app.css` and `app.js`.
-
-### Video Library
-
-A library browser is available at `http://localhost:8000/library`:
-
-- Responsive grid with thumbnails, title, duration, quality and date
-- **Search** across topic and script text; **sort** by newest, oldest, longest, or shortest; pagination
-- **Detail page** at `/library/{run_id}` with the player, downloads, generation settings, an interactive transcript (click a line to seek) and subtitles from `captions.srt`
-- **Generate again with these settings** pre-fills the generate form
-- Theme-keyed fallback thumbnails for runs without a rendered thumbnail
-
-All generated videos are indexed into a SQLite database (`library.db`); existing runs in `output/` are backfilled at startup. Storage sits behind a `LibraryStore` interface, so it can be swapped for another backend.
-
-#### Library API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET /api/library` | List videos | Supports `q`, `sort`, `limit`, `offset` query params |
-| `GET /api/library/{run_id}` | Get video | Full metadata + dynamic `output_files` list |
-| `DELETE /api/library/{run_id}` | Delete video | Removes from the index; `?files=true` also deletes `output/<run_id>/`. Without it the run is re-indexed on the next library listing, because its files are still in `output/` |
-
----
-
-## Python SDK
-
-If you'd rather call Chalkboard from a script than the CLI, there's a typed sync Python client at [`sdk/python/`](sdk/python). It targets the **hosted** version at <https://chalkboard.studio/api/v1>:
-
-```python
-from chalkboard import ChalkboardClient
-
-client = ChalkboardClient(api_key="chk_live_...")  # create one at /account
-job    = client.create_job(topic="How hash tables work")
-final  = client.wait_for_completion(job.id, timeout=600)
-client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
-```
-
-The same client also works against a **self-hosted** Chalkboard (`python run_server.py`): pass `base_url="http://127.0.0.1:8000/api"` (no `/v1`) and leave out `api_key`, since this repo's server has no auth. Hosted-only methods (cancel, retry, rerender, webhooks, API keys) are not available there; see [`sdk/python/README.md`](sdk/python/README.md).
-
-Install:
+[`sdk/python/`](sdk/python) is a typed, synchronous client. Point it at your server's `/api` prefix; no API key is needed, since the server has no auth.
 
 ```bash
 pip install https://github.com/nicglazkov/Chalkboard/releases/download/sdk-py/v0.1.1/chalkboard_sdk-0.1.1-py3-none-any.whl
 ```
 
-Full SDK reference + examples: [`sdk/python/README.md`](sdk/python/README.md). Hosted API docs: <https://chalkboard.studio/docs/api>.
+```python
+from chalkboard import ChalkboardClient
 
----
+client = ChalkboardClient(base_url="http://127.0.0.1:8000/api")
+job = client.create_job(topic="How hash tables work", narrator="aria")
+final = client.wait_for_completion(job.id, timeout=1800)
+client.download_file(final.id, "final.mp4", out_path="hash-tables.mp4")
+```
 
-## Development
+Supported against this server: `create_job`, `get_job`, `list_jobs`, `stream_events`, `wait_for_completion`, `download_file`, `meta`, `list_videos`, `get_video`, `delete_video`. See [`sdk/python/README.md`](sdk/python/README.md).
 
-### Run tests
+</details>
+
+### Development
+
+<details>
+<summary>Tests and project layout</summary>
+
+<br>
 
 ```bash
-pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
+pip install -r requirements-dev.txt    # requirements.txt + pytest, pytest-asyncio
 pytest
 ```
 
 The component, move and template tests import Manim and are skipped without it; install `requirements-render.txt` (plus TeX) to run them.
 
-### Project structure
-
 ```
 pipeline/
-  agents/            # research_agent, script_agent, fact_validator, manim_agent, code_validator, layout_checker, orchestrator
-  tts/               # kokoro, openai, elevenlabs backends
-  llm.py             # every Claude call: call_json, per-agent model/effort, thinking-safe parsing
-  render.py          # render backends (local / docker): render + layout-check commands
-  ast_guards.py      # deterministic checks on generated scene code
-  design_tokens.py   # pipeline-side shim over docker/chalkboard_tokens.py
-  context.py         # collect_files, load_context_blocks, fetch_url_blocks, measure_context
-  graph.py           # LangGraph state machine
-  state.py           # PipelineState TypedDict + ValidationResult
-  render_trigger.py  # calls TTS, writes output files
-  retry.py           # timeout constants, api_call_with_retry, TimeoutExhausted
-  visual_qa.py       # post-render frame review
-docker/
-  chalkboard_base.py        # layout/timing checks every scene inherits
-  chalkboard_style.py       # LaTeX preamble + fonts
-  chalkboard_tokens.py      # design tokens (single source)
-  chalkboard_components.py  # components
-  chalkboard_moves.py       # moves
-  chalkboard_templates/     # scene templates
-  examples/                 # design_system_demo.py
-  Dockerfile                # manimcommunity/manim:v0.21.0 + fonts + TeX packages
-  render.sh                 # render entrypoint inside the image
-server/              # FastAPI app, job store, routes, library, static frontend
-sdk/python/          # typed Python client for the hosted (or self-hosted) API
-tests/               # one test file per module
-config.py            # env var loading, per-agent model/effort
-main.py              # CLI entry point
-run_server.py        # API server entry point
-requirements.txt         # pipeline + server
-requirements-render.txt  # adds manim 0.21.0 for local rendering
-requirements-dev.txt     # adds pytest + pytest-asyncio
+  agents/            research, script, fact check, scene code, code validator, layout checker, escalation
+  tts/               kokoro, openai, elevenlabs backends; voices.py names the narrators
+  graph.py           LangGraph state machine and routing
+  llm.py             every Claude call: structured output, per-agent model and effort
+  render.py          local and Docker render backends
+  ast_guards.py      deterministic checks on generated scene code
+  visual_qa.py       post-render frame review
+  telemetry.py       live events (streamed output, usage, render and TTS progress)
+docker/              scene runtime and design system (tokens, components, moves, templates, style), Dockerfile
+server/              FastAPI app, jobs, library, status probes, voices, static web UI
+sdk/python/          typed Python client
+tests/               one test file per module
+main.py              CLI entry point
+run_server.py        server entry point
 ```
 
-See [CLAUDE.md](CLAUDE.md) for architecture, design decisions, and contribution guidelines.
+See [CLAUDE.md](CLAUDE.md) for architecture, design decisions and contribution guidelines. A Claude Code skill for running Chalkboard lives in [`.claude/skills/chalkboard/`](.claude/skills/chalkboard/SKILL.md).
+
+</details>
+
+## License and acknowledgements
+
+Chalkboard is released under the [MIT License](LICENSE).
+
+It builds on [Manim Community](https://www.manim.community/) for animation and rendering, [LangGraph](https://github.com/langchain-ai/langgraph) for the pipeline, [Anthropic's Claude](https://www.anthropic.com/claude) for every writing and review step, [ElevenLabs](https://elevenlabs.io/) and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) for narration, and LaTeX with Computer Modern for the math.
