@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=6">
-  <script src="/app.js?v=6"></script>
+  <link rel="stylesheet" href="/app.css?v=7">
+  <script src="/app.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
@@ -60,7 +60,7 @@
 
   function skeleton() {
     page.innerHTML = `
-      <nav class="crumb" aria-label="Breadcrumb"><a href="/library">Library</a> · <span id="crumb-here"></span></nav>
+      <nav class="crumb" aria-label="Breadcrumb"><a href="/library"><span aria-hidden="true">‹ </span>Library</a></nav>
       <div class="vid-head">
         <div style="min-width:0;flex:1 1 420px">
           <h1 class="h1" id="title"></h1>
@@ -90,9 +90,9 @@
         </section>
         <aside>
           <div class="card" id="quality"><div class="card-head"><span class="label">Quality</span><span class="right" id="q-sum"></span></div><div id="q-body"><div class="shimmer" style="height:90px"></div></div></div>
-          <div class="card" style="gap:4px"><div class="label" style="margin-bottom:6px">Downloads</div><div id="downloads"></div></div>
-          <div class="card" style="gap:4px"><div class="label" style="margin-bottom:6px">Settings used</div><div id="settings"></div>
-            <button type="button" class="btn quiet danger" id="delete" style="align-self:flex-start;margin-top:6px">Delete this video</button></div>
+          <div class="card"><div class="label">Downloads</div><div id="downloads"></div></div>
+          <div class="card"><div class="label">Settings used</div><div id="settings"></div></div>
+          <div class="danger-zone"><button type="button" class="btn quiet danger" id="delete">Delete this video</button></div>
         </aside>
       </div>`;
   }
@@ -117,13 +117,25 @@
       });
     });
     select(tabs[0]);
+    fitTabs();
+    window.addEventListener('resize', fitTabs);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTabs);
+  }
+  // One line of underlined tabs when they fit; a wrapping segmented control when not,
+  // so no tab is ever hidden off the edge.
+  function fitTabs() {
+    const bar = $('tabs');
+    if (!bar) return;
+    bar.classList.remove('seg');
+    if (bar.scrollWidth > bar.clientWidth + 1) bar.classList.add('seg');
   }
   function tabCount(id, n) {
     const t = $(id);
     const base = t.dataset.base || (t.dataset.base = t.textContent);
-    t.textContent = n != null && n > 0 ? `${base} · ${n}` : base;
+    t.innerHTML = esc(base) + (n != null && n > 0 ? `<span class="n"><span class="sr-only">, </span>${esc(String(n))}</span>` : '');
+    fitTabs();
   }
-  const emptyNote = (msg) => `<p class="mono muted" style="margin:10px 0">${esc(msg)}</p>`;
+  const emptyNote = (msg) => `<p class="note-s" style="margin:.75rem 0">${esc(msg)}</p>`;
 
   // ── Player + timeline sync ─────────────────────────────────────────────
   let video = null;
@@ -303,7 +315,7 @@
     (m.files || m.uploads || []).forEach((x) => push(typeof x === 'string' ? { title: x } : x, 'file'));
     if (!items.length) { $('p-src').innerHTML = emptyNote('No sources were recorded for this video.'); tabCount('tab-src', null); return; }
     tabCount('tab-src', items.length);
-    $('p-src').innerHTML = `<ul class="sources">${items.map((s) => `<li><span class="mono faint">${esc(s.kind)}</span> ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}</li>`).join('')}</ul>`;
+    $('p-src').innerHTML = `<ul class="sources">${items.map((s) => `<li><span class="src-kind">${esc(s.kind)}</span> ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}</li>`).join('')}</ul>`;
   }
 
   function renderCode(code) {
@@ -319,7 +331,7 @@
     if (!res.ok || !res.data) {
       const why = missingWhy(res, 'The quality report');
       sum.innerHTML = unknownHtml(why);
-      body.innerHTML = `<div class="kv"><span>Cue sync</span><span>${unknownHtml(why)}</span></div><div class="kv"><span>Layout</span><span>${unknownHtml(why)}</span></div><div class="kv"><span>Frame QA</span><span>${unknownHtml(why)}</span></div>`;
+      body.innerHTML = `<div class="kv"><span>Cues on time</span><span>${unknownHtml(why)}</span></div><div class="kv"><span>Layout check</span><span>${unknownHtml(why)}</span></div><div class="kv"><span>Visual QA</span><span>${unknownHtml(why)}</span></div>`;
       return new Set();
     }
     const d = res.data;
@@ -335,39 +347,40 @@
         const bad = Math.abs(lag) > LIMIT;
         if (bad) { late.add(`${c.segment}:${c.cue - 1}`); issues++; }
         const h = Math.max(2, Math.round((Math.abs(lag) / max) * 100));
-        return `<div class="b${bad ? ' late' : ''}" style="height:${h}%" title="segment ${c.segment + 1}, cue ${c.cue}: ${lag >= 0 ? '+' : ''}${lag.toFixed(2)} s"></div>`;
+        return `<div class="b${bad ? ' late' : ''}" style="height:${h}%" title="Scene ${c.segment + 1}, cue ${c.cue}: ${lag >= 0 ? '+' : ''}${lag.toFixed(2)} s"></div>`;
       }).join('');
       const limitPx = Math.round((LIMIT / max) * 100);
-      html += `<div class="qbars" role="img" aria-label="Cue sync offsets for ${sync.cues.length} cues, ${late.size} over ${LIMIT} seconds">${bars}<div class="limit" style="bottom:${limitPx}%"><span>${LIMIT} s</span></div></div>`;
+      const why = sync.evidence || 'Renderer time when each cued animation started minus when the word is spoken. Not measured from video frames.';
+      html += `<div class="q-cap"><span>Delay per cue</span><span>${LIMIT} s limit</span></div>
+        <div class="qbars" role="img" aria-label="Animation delay for ${sync.cues.length} cues, ${late.size} over ${LIMIT} seconds">${bars}<div class="limit" style="bottom:${limitPx}%"></div></div>`;
       const worst = sync.cues.reduce((a, c) => (Math.abs(c.lag_s) > Math.abs(a.lag_s) ? c : a), sync.cues[0]);
-      const notes = [`Sync (scene clock) · median ${sync.median_lag_s != null ? fmtSec(sync.median_lag_s) : 'unknown'}`];
-      if (Math.abs(worst.lag_s) > LIMIT) notes.push(`cue ${worst.segment + 1}.${worst.cue} lands ${fmtSec(Math.abs(worst.lag_s))} ${worst.lag_s > 0 ? 'late' : 'early'}`);
-      else notes.push(`worst ${fmtSec(sync.worst_lag_s != null ? sync.worst_lag_s : worstAbs)}`);
-      html += `<div class="qnote" title="${esc(sync.evidence || 'Renderer time when each cued animation started minus when the word is spoken. Not measured from video frames.')}">${esc(notes.join(' · '))}</div>
-        <div class="stat-note">Scene timing vs the spoken word, not measured from video frames.</div>`;
-      html += `<div class="kv"><span>Cue sync</span><span class="${late.size ? 'c-danger' : 'c-ok'}">${sync.cues.length - late.size} of ${sync.cues.length} within ${LIMIT} s</span></div>`;
+      html += `<div class="kv"><span title="${esc(why)}">Cues on time</span><span class="${late.size ? 'c-danger' : 'c-ok'}">${sync.cues.length - late.size} of ${sync.cues.length}</span></div>`;
+      html += `<div class="kv"><span>Typical delay</span><span>${sync.median_lag_s != null ? esc(fmtSec(sync.median_lag_s)) : unknownHtml('The report has no median')}</span></div>`;
+      if (Math.abs(worst.lag_s) > LIMIT) html += `<div class="kv"><span>Worst cue</span><span class="c-danger">scene ${worst.segment + 1}, cue ${worst.cue}: ${esc(fmtSec(Math.abs(worst.lag_s)))} ${worst.lag_s > 0 ? 'late' : 'early'}</span></div>`;
+      else html += `<div class="kv"><span>Longest delay</span><span>${esc(fmtSec(sync.worst_lag_s != null ? sync.worst_lag_s : worstAbs))}</span></div>`;
     } else {
-      html += `<div class="kv"><span>Cue sync</span><span class="muted">Not recorded</span></div>`;
+      html += `<div class="kv"><span title="Sync cues are words in the narration that an animation is timed to start on">Cues on time</span><span class="muted">Not recorded</span></div>`;
     }
     const lay = d.layout;
     if (lay) {
       const n = Array.isArray(lay.violations) ? lay.violations.length : 0;
       if (!lay.passed) issues += Math.max(1, n);
-      html += `<div class="kv"><span>Layout</span><span class="${lay.passed ? 'c-ok' : 'c-warn'}">${lay.passed ? 'passed' : `${n} problem${n === 1 ? '' : 's'}`}</span></div>`;
-    } else html += `<div class="kv"><span>Layout</span><span class="muted">Not recorded</span></div>`;
+      html += `<div class="kv"><span title="A dry run of the scene code before rendering checks where things land on screen">Layout check</span><span class="${lay.passed ? 'c-ok' : 'c-warn'}">${lay.passed ? 'passed' : `${n} problem${n === 1 ? '' : 's'}`}</span></div>`;
+    } else html += `<div class="kv"><span>Layout check</span><span class="muted">Not recorded</span></div>`;
     const qa = d.visual_qa;
     if (qa) {
       const n = Array.isArray(qa.issues) ? qa.issues.length : 0;
       if (!qa.passed) issues += Math.max(1, n);
-      html += `<div class="kv"><span>Frame QA</span><span class="${qa.passed ? 'c-ok' : 'c-warn'}" title="${qa.checked_at ? 'Checked ' + esc(fmtStamp(qa.checked_at)) : ''}">${qa.passed ? 'passed' : `${n} issue${n === 1 ? '' : 's'}`}</span></div>`;
-    } else html += `<div class="kv"><span>Frame QA</span><span class="muted">Not recorded</span></div>`;
-    const list = [...((lay && lay.violations) || []).map((x) => ['Layout', x]), ...((qa && qa.issues) || []).map((x) => ['Frame QA', x])];
+      html += `<div class="kv"><span title="Claude looked at frames of the rendered video for visual problems">Visual QA</span><span class="${qa.passed ? 'c-ok' : 'c-warn'}" title="${qa.checked_at ? 'Checked ' + esc(fmtStamp(qa.checked_at)) : ''}">${qa.passed ? 'passed' : `${n} issue${n === 1 ? '' : 's'}`}</span></div>`;
+    } else html += `<div class="kv"><span>Visual QA</span><span class="muted">Not recorded</span></div>`;
+    const list = [...((lay && lay.violations) || []).map((x) => ['Layout', x]), ...((qa && qa.issues) || []).map((x) => ['Visual QA', x])];
     if (list.length) {
-      html += `<details class="mono muted"><summary>Show what was flagged</summary><ul style="margin:8px 0 0;padding-left:18px">${list.map(([k, x]) => `<li>${esc(k)}: ${esc(typeof x === 'string' ? x : (x.message || x.description || x.issue || JSON.stringify(x)))}</li>`).join('')}</ul></details>`;
+      html += `<details class="q-flags"><summary>Show what was flagged</summary><ul>${list.map(([k, x]) => `<li>${esc(k)}: ${esc(typeof x === 'string' ? x : (x.message || x.description || x.issue || JSON.stringify(x)))}</li>`).join('')}</ul></details>`;
     }
+    if (sync && Array.isArray(sync.cues) && sync.cues.length) html += '<p class="note-s q-explain">A sync cue is a word in the narration that an animation is timed to start on. Delays come from the renderer\'s clock, not from the video frames.</p>';
     body.innerHTML = html;
     const anything = sync || lay || qa;
-    sum.innerHTML = !anything ? '<span class="muted">Not recorded</span>' : issues ? `<span class="c-warn">${issues} to look at</span>` : '<span class="c-ok">nothing flagged</span>';
+    sum.innerHTML = !anything ? '<span class="muted">Not recorded</span>' : issues ? `<span class="c-warn">${issues} to look at</span>` : '<span class="c-ok">Nothing flagged</span>';
     return late;
   }
 
@@ -375,7 +388,7 @@
   const DL = [['final.mp4', 'Video (MP4)'], ['captions.srt', 'Captions (SRT)'], ['quiz.json', 'Quiz (JSON)'], ['script.txt', 'Script (TXT)'], ['scene.py', 'Scene code (PY)']];
   async function renderDownloads(files, hasCode) {
     const have = DL.filter(([f]) => files.includes(f) || (f === 'scene.py' && hasCode));
-    if (!have.length) { $('downloads').innerHTML = '<p class="mono muted" style="margin:0">No files to download.</p>'; return; }
+    if (!have.length) { $('downloads').innerHTML = '<p class="note-s">No files to download.</p>'; return; }
     $('downloads').innerHTML = have.map(([f, label]) => `<a class="dl" href="${fileUrl(runId, f)}" download="${esc(f)}">${esc(label)}<span data-size="${esc(f)}"></span></a>`).join('');
     await Promise.all(have.map(async ([f]) => {
       const n = await fileSize(f);
@@ -391,7 +404,7 @@
       ['Audience', cap(v.audience) || null],
       ['Tone', cap(v.tone) || null],
       ['Theme', cap(v.theme) || null],
-      ['Template', v.template ? cap(v.template) : 'auto'],
+      ['Template', v.template ? cap(v.template) : 'Auto'],
       ['Speed', v.speed != null ? `${v.speed}x` : null],
     ];
     // run_seconds / cost_usd are null for runs without a run record (or resumed runs).
@@ -418,7 +431,6 @@
     skeleton();
     setupTabs();
     if (hasMath(title)) setMathText($('title'), title); else $('title').innerHTML = titleHtml(title);
-    $('crumb-here').textContent = fmtStamp(v.created_at) || 'Video';
 
     renderPlayer(v, files);
     const [tlRes, qRes, segs, chTxt, quiz, manifest, code, stats, voices] = await Promise.all([
@@ -443,8 +455,8 @@
     if (tlApi) { onTime((t) => tlApi.setTime(t)); tlApi.setTime(0); }
 
     const meta = [
-      fmtDuration(v.duration_sec), resFull(v.quality), v.narrator ? narratorName(v.narrator, voices.list) : '', v.effort,
-      tlApi ? `${tlApi.segments} scenes` : '', tlApi && tlApi.cues ? `${tlApi.cues} cues` : '', fmtStamp(v.created_at),
+      fmtDuration(v.duration_sec), resFull(v.quality), v.narrator ? narratorName(v.narrator, voices.list) : '', v.effort ? `${v.effort} effort` : '',
+      tlApi ? `${tlApi.segments} scenes` : '', tlApi && tlApi.cues ? `${tlApi.cues} sync cues` : '', fmtStamp(v.created_at),
     ].filter(Boolean);
     $('meta').textContent = meta.join(' · ');
 

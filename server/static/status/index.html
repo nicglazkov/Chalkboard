@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=6">
-  <script src="/app.js?v=6"></script>
+  <link rel="stylesheet" href="/app.css?v=7">
+  <script src="/app.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
@@ -20,12 +20,12 @@
       <h1 class="h1">Are we <em>working?</em></h1>
       <div class="overall unknown" id="overall" aria-live="polite">
         <span class="big-dot" aria-hidden="true"></span>
-        <span class="msg" id="overall-msg">Checking</span>
+        <span class="msg"><span id="overall-msg">Checking</span><span class="msg-sub" id="overall-sub" hidden></span></span>
         <span class="when" id="overall-when"></span>
         <button type="button" class="btn" id="refresh">Check again</button>
       </div>
       <div class="checks" id="checks"><div class="shimmer" style="height:280px;border-radius:0"></div></div>
-      <div class="foot" id="foot">Each check probes the real service when you load this page (cached up to 60 s). Expand a row to see what was probed.</div>
+      <p class="note-s" id="foot">Each check probes the real service when this page loads, with results cached for up to 60 s. Open a row to see exactly what was checked.</p>
     </div>
   </main>
 </div>
@@ -40,7 +40,8 @@
     down: 'Something is broken. Videos will likely fail.',
     unknown: 'Some checks could not be verified right now.',
   };
-  const LABEL = { ok: 'ok', warn: 'needs a look', down: 'down', unknown: 'unknown' };
+  const LABEL = { ok: 'OK', warn: 'Needs a look', down: 'Down', unknown: 'Unknown' };
+  const RANK = { down: 0, warn: 1, unknown: 2, ok: 3 };
   let checkedAt = null, cachedNote = '';
   const openIds = new Set();
 
@@ -58,6 +59,7 @@
     if (!res.ok || !res.data) {
       box.className = 'overall unknown';
       $('overall-msg').textContent = 'Status unknown.';
+      $('overall-sub').hidden = true;
       $('overall-when').textContent = '';
       $('checks').innerHTML = `<div class="state" style="border:0"><p class="state-title">No status to show</p><p>${esc(missingWhy(res, 'The status check'))}</p></div>`;
       return;
@@ -67,9 +69,14 @@
     box.className = `overall ${overall}`;
     $('overall-msg').textContent = MSG[overall];
     checkedAt = parseTs(d.checked_at);
-    cachedNote = d.cached ? ` (cached result${d.cache_ttl_s ? `, refreshed every ${d.cache_ttl_s}s` : ''})` : '';
+    cachedNote = d.cached && d.cache_ttl_s ? ` · refreshes every ${d.cache_ttl_s} s` : '';
     paintWhen();
-    const checks = Array.isArray(d.checks) ? d.checks : [];
+    // Problems first, so the reason for a warning is the first thing on the page.
+    const checks = (Array.isArray(d.checks) ? d.checks : []).map((c, i) => ({ c, i }))
+      .sort((a, b) => ((RANK[a.c.state] ?? 2) - (RANK[b.c.state] ?? 2)) || a.i - b.i).map((x) => x.c);
+    const bad = checks.filter((c) => c.state === 'down' || c.state === 'warn');
+    $('overall-sub').hidden = !bad.length;
+    $('overall-sub').textContent = bad.map((c) => `${c.name || c.id}: ${c.summary || LABEL[c.state]}`).join('. ');
     if (!checks.length) { $('checks').innerHTML = '<div class="state" style="border:0"><p class="state-title">No checks returned</p><p>The server answered but listed no checks.</p></div>'; return; }
     $('checks').innerHTML = checks.map((c) => {
       const state = LABEL[c.state] ? c.state : 'unknown';
@@ -85,13 +92,13 @@
         <div class="ev">
           ${det.length ? `<div class="label">Details</div>${det.map(([k, v]) => `<div class="kv"><span>${esc(k.replace(/_/g, ' '))}</span><span>${esc(v == null ? 'unknown' : typeof v === 'object' ? JSON.stringify(v) : String(v))}</span></div>`).join('')}` : ''}
           <div class="label">What was probed</div>
-          ${ev ? `<pre>${esc(ev)}</pre>` : '<span class="mono muted">No evidence was returned for this check.</span>'}
-          <span class="mono faint">${at ? `checked ${esc(fmtStamp(c.checked_at))} (${esc(fmtAgo(at))})` : 'check time not reported'}</span>
+          ${ev ? `<pre>${esc(ev)}</pre>` : '<p class="note-s">No evidence was returned for this check.</p>'}
+          <span class="mono faint">${at ? `Checked ${esc(fmtStamp(c.checked_at))} (${esc(fmtAgo(at))})` : 'Check time not reported'}</span>
         </div></details>`;
     }).join('');
     document.querySelectorAll('.check').forEach((el) => el.addEventListener('toggle', () => { if (el.open) openIds.add(el.dataset.id); else openIds.delete(el.dataset.id); }));
   }
-  function paintWhen() { $('overall-when').textContent = checkedAt ? `checked ${fmtAgo(checkedAt)}${cachedNote}` : 'check time not reported'; }
+  function paintWhen() { $('overall-when').textContent = checkedAt ? `Checked ${fmtAgo(checkedAt)}${cachedNote}` : 'Check time not reported'; }
   $('refresh').addEventListener('click', () => load(true));
   load(true);
   setInterval(paintWhen, 5000);

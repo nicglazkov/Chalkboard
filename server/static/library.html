@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=6">
-  <script src="/app.js?v=6"></script>
+  <link rel="stylesheet" href="/app.css?v=7">
+  <script src="/app.js?v=7"></script>
 </head>
 <body>
 <div class="shell">
@@ -80,12 +80,12 @@
   // ── KPIs from /api/stats ───────────────────────────────────────────────
   async function loadStats() {
     const r = await getJSON('/api/stats');
-    const tile = (k, v, sub, why) => `<div class="kpi"><div class="label">${esc(k)}</div>${v != null
+    const tile = (k, v, sub, why, tip) => `<div class="kpi"${tip ? ` title="${esc(tip)}"` : ''}><div class="label">${esc(k)}</div>${v != null
       ? `<div class="v">${esc(v)}</div>` : `<div class="v unk" tabindex="0" title="${esc(why)}" aria-label="Unknown. ${esc(why)}">Unknown</div>`}<div class="sub">${esc(sub)}</div></div>`;
     if (!r.ok || !r.data) {
       const why = missingWhy(r, 'Library stats');
-      $('kpis').innerHTML = tile('This week', null, 'videos made', why) + tile('Narration sync', null, 'median cue offset', why) +
-        tile('Visual QA', null, 'passed first time', why) + tile('Typical run', null, 'median run time', why);
+      $('kpis').innerHTML = tile('This week', null, 'videos made', why) + tile('Narration sync', null, 'typical animation delay', why) +
+        tile('Visual QA', null, 'pass rate', why) + tile('Typical run', null, 'median run time', why);
       return;
     }
     const d = r.data;
@@ -94,11 +94,14 @@
       tile('This week', d.videos_this_week != null ? String(d.videos_this_week) : null,
         d.videos_total != null ? `${d.videos_total} in total` : 'videos made', 'The server did not return a weekly count') +
       tile('Narration sync', d.median_sync_lag_s != null ? `${Number(d.median_sync_lag_s).toFixed(2)} s` : null,
-        `scene clock vs speech · ${d.sync_runs || 0} run${d.sync_runs === 1 ? '' : 's'} measured`, d.sync_runs ? 'The server did not return a median' : 'No run has a recorded cue log yet, so sync has never been measured') +
+        `typical animation delay · ${d.sync_runs || 0} run${d.sync_runs === 1 ? '' : 's'}`, d.sync_runs ? 'The server did not return a median' : 'No run has a recorded cue log yet, so sync has never been measured',
+        'How long animations start after the word they are timed to, by the renderer\'s clock. Lower is better.') +
       tile('Visual QA', rate != null ? `${Math.round(rate)}%` : null,
-        `passed · ${d.qa_runs || 0} run${d.qa_runs === 1 ? '' : 's'} checked`, d.qa_runs ? 'The server did not return a pass rate' : 'No run has a saved visual QA report yet') +
+        `passed · ${d.qa_runs || 0} run${d.qa_runs === 1 ? '' : 's'} checked`, d.qa_runs ? 'The server did not return a pass rate' : 'No run has a saved visual QA report yet',
+        'Share of checked runs where Claude found no visual problems in the rendered frames.') +
       tile('Typical run', d.median_run_seconds != null ? fmtSpan(d.median_run_seconds) : null,
-        `median of ${d.timed_runs || 0} timed run${d.timed_runs === 1 ? '' : 's'}`, d.timed_runs ? 'The server did not return a median' : 'No run has recorded its start and finish times yet');
+        `median of ${d.timed_runs || 0} timed run${d.timed_runs === 1 ? '' : 's'}`, d.timed_runs ? 'The server did not return a median' : 'No run has recorded its start and finish times yet',
+        'From starting a video to the finished file.');
     const t = parseTs(d.computed_at);
     $('kpis').title = t ? `Computed ${fmtStamp(d.computed_at)}` : '';
     statsNote = t ? `Stats computed ${fmtAgo(t)}` : '';
@@ -109,12 +112,12 @@
   let statsNote = '', totalNote = '';
   function paintFoot() { $('foot').textContent = ['Chalkboard · MIT License', totalNote, statsNote].filter(Boolean).join(' · '); }
   function videoRow(v) {
-    const meta = [v.effort, resLabel(v.quality)].filter(Boolean).join(' · ');
+    const meta = [v.effort ? `${v.effort} effort` : '', resLabel(v.quality)].filter(Boolean).join(' · ');
     return `<a class="vrow" href="/library/${encodeURIComponent(v.run_id)}">
       <span class="thumb">${thumbInner(v)}</span>
       <span class="tw"><span class="title">${esc(v.title || v.topic)}</span><span class="meta">${esc(meta)}</span></span>
-      <span class="st c-ok">Done</span>
-      <span class="vo">${esc(narratorName(v.narrator, voiceList) || 'Not recorded')}</span>
+      <span class="st done">Done</span>
+      ${v.narrator ? `<span class="vo">${esc(narratorName(v.narrator, voiceList))}</span>` : '<span class="vo nr" title="The narrator was not recorded for this run">Not recorded</span>'}
       <span class="ln">${esc(fmtDuration(v.duration_sec) || '')}</span>
       <span class="wh">${esc(fmtAgo(parseTs(v.created_at)))}</span></a>`;
   }
@@ -122,7 +125,7 @@
     const wb = buildWorkbench(j);
     const running = j.status === 'running' || j.status === 'pending';
     const t0 = parseTs(j.created_at) || wb.startTs;
-    const meta = [j.effort, resLabel(j.quality), t0 ? `started ${fmtAgo(t0)}` : ''].filter(Boolean).join(' · ');
+    const meta = [j.effort ? `${j.effort} effort` : '', resLabel(j.quality), t0 ? `started ${fmtAgo(t0)}` : ''].filter(Boolean).join(' · ');
     let status, cls;
     if (j.status === 'pending') { status = '● Queued'; cls = 'c-gold'; }
     else if (running) {
