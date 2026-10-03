@@ -70,7 +70,7 @@ client = ChalkboardClient(base_url="http://127.0.0.1:8000/api")
 
 info = client.meta()                 # GET /api/meta
 print(info["defaults"])              # quality, narrator, tts_backend, effort, ...
-print([n["id"] for n in info["narrators"] if n["available"]])
+print([n["id"] for n in info["narrators"] if n["configured"]])
 
 job = client.create_job(topic="How hash tables work", quality=None, narrator="aria")
 final = client.wait_for_completion(job.id, timeout=1800)
@@ -81,9 +81,10 @@ client.delete_video(videos[0].run_id, files=True)  # also removes output/<run_id
 ```
 
 `meta()` returns a plain dict: `defaults`, `narrators` (each with `id`,
-`label`, `tagline`, `backend`, `model`, `available`), `render_backend`,
-`model` and `running_jobs`. Narrators whose backend API key is missing on
-the server come back with `available: false`.
+`label`, `tagline`, `backend`, `model`, `configured`), `render_backend`,
+`model` and `running_jobs`. `configured` only means the backend's API key is
+set on the server; whether a voice actually works right now comes from
+`GET /api/voices` (`available` is true or false only on evidence, else null).
 
 What the self-hosted server supports: `create_job`, `get_job`,
 `list_jobs`, `stream_events`, `wait_for_completion`, `download_file`,

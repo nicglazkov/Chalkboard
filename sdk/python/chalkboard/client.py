@@ -181,7 +181,7 @@ class ChalkboardClient:
 
         On a self-hosted server this returns `defaults` (quality, narrator,
         tts_backend, effort, audience, tone, theme), `narrators` (id, label,
-        tagline, backend, model, available), `render_backend`, `model` and
+        tagline, backend, model, configured), `render_backend`, `model` and
         `running_jobs`. Returned as a plain dict; the hosted API may not
         expose this endpoint (raises ChalkboardNotFoundError then)."""
         resp = self._request("GET", "/meta")
