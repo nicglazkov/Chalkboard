@@ -217,10 +217,10 @@ The rule behind all of it: the UI never shows a value it cannot back with a real
 python main.py --topic "how B-trees keep themselves balanced" --effort high --narrator aria
 python main.py --topic "explain this codebase" --context ./src --context-ignore "*.lock"
 python main.py --topic "summarize this paper" --context paper.pdf --quiz
-python main.py --topic "how B-trees work" --preview     # fast 480p pass; resume with --run-id for the full render
+python main.py --topic "how B-trees work" --preview     # quick 480p pass first
 ```
 
-Common options: `--effort low|medium|high`, `--audience beginner|intermediate|expert`, `--tone casual|formal|socratic`, `--theme chalkboard|light|colorful`, `--template algorithm|code|compare|derivation|howto|timeline`, `--quality low|medium|high|4k`, `--narrator aria|milo|kokoro|alloy`, `--speed 1.15`, `--quiz`, `--burn-captions`, and `--yes` for unattended runs. The full list is in the [reference](#cli-flags) below.
+Common options: `--effort low|medium|high`, `--audience beginner|intermediate|expert`, `--tone casual|formal|socratic`, `--theme chalkboard|light|colorful`, `--template algorithm|code|compare|derivation|howto|timeline`, `--quality low|medium|high|4k`, `--narrator aria|milo|kokoro|alloy`, `--speed 1.15`, `--quiz`, `--burn-captions`, and `--yes` for unattended runs. The full list is in the [reference](#reference) below.
 
 Each run writes to `output/<run_id>/`:
 
@@ -255,17 +255,15 @@ Aria and Milo came out of a blind listening test against OpenAI, Fish and Gemini
 
 The sections below are collapsed to keep this page short. For architecture and contribution notes see [CLAUDE.md](CLAUDE.md); for the web UI's data rules see [docs/ui-data-contract.md](docs/ui-data-contract.md).
 
-### CLI flags
-
 <details>
-<summary>All <code>main.py</code> flags</summary>
+<summary><b>CLI flags</b> &nbsp;<sub>All <code>main.py</code> flags</sub></summary>
 
 <br>
 
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--topic` | required | Topic to explain, e.g. `"how B-trees work"` |
-| `--effort` | `medium` | Fact-check depth and research (see [Effort levels](#effort-levels)) |
+| `--effort` | `medium` | Fact-check depth and research (see Effort levels below) |
 | `--audience` | `intermediate` | `beginner`, `intermediate`, `expert` |
 | `--tone` | `casual` | `casual`, `formal`, `socratic` |
 | `--theme` | `chalkboard` | `chalkboard`, `light`, `colorful` |
@@ -290,10 +288,8 @@ The sections below are collapsed to keep this page short. For architecture and c
 
 </details>
 
-### Effort levels
-
 <details>
-<summary>What <code>--effort</code> changes</summary>
+<summary><b>Effort levels</b> &nbsp;<sub>What <code>--effort</code> changes</sub></summary>
 
 <br>
 
@@ -305,10 +301,8 @@ The sections below are collapsed to keep this page short. For architecture and c
 
 </details>
 
-### Configuration
-
 <details>
-<summary>Environment variables (<code>.env</code>)</summary>
+<summary><b>Configuration</b> &nbsp;<sub>Environment variables (<code>.env</code>)</sub></summary>
 
 <br>
 
@@ -348,10 +342,8 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 
 </details>
 
-### Models and effort per agent
-
 <details>
-<summary>Claude models, agents and their default effort</summary>
+<summary><b>Models and effort per agent</b> &nbsp;<sub>Claude models, agents and their default effort</sub></summary>
 
 <br>
 
@@ -378,10 +370,8 @@ Haiku models are called without thinking or effort settings, which they do not s
 
 </details>
 
-### Design system and templates
-
 <details>
-<summary>How scenes are built, and the six templates</summary>
+<summary><b>Design system and templates</b> &nbsp;<sub>How scenes are built, and the six templates</sub></summary>
 
 <br>
 
@@ -408,10 +398,8 @@ Without `--template` the agent composes the scene freely (and may still pick a t
 
 </details>
 
-### Context injection
-
 <details>
-<summary>Using files, URLs and repos as source material</summary>
+<summary><b>Context injection</b> &nbsp;<sub>Using files, URLs and repos as source material</sub></summary>
 
 <br>
 
@@ -435,10 +423,8 @@ Above 10k tokens it asks for confirmation (`--yes` skips it); above 90% of the m
 
 </details>
 
-### Resuming and previews
-
 <details>
-<summary>Checkpoints, resume, preview then full render</summary>
+<summary><b>Resuming and previews</b> &nbsp;<sub>Checkpoints, resume, preview then full render</sub></summary>
 
 <br>
 
@@ -459,10 +445,8 @@ The render quality is stored in the run's `manifest.json`. Passing a different `
 
 </details>
 
-### Captions, chapters, quiz and speed
-
 <details>
-<summary>Extra outputs</summary>
+<summary><b>Captions, chapters, quiz and speed</b> &nbsp;<sub>Extra outputs</sub></summary>
 
 <br>
 
@@ -472,10 +456,8 @@ The render quality is stored in the run's `manifest.json`. Passing a different `
 
 </details>
 
-### REST API
-
 <details>
-<summary>Endpoints and examples</summary>
+<summary><b>REST API</b> &nbsp;<sub>Endpoints and examples</sub></summary>
 
 <br>
 
@@ -530,10 +512,8 @@ Request fields: `topic`, `effort`, `audience`, `tone`, `theme`, `template`, `qua
 
 </details>
 
-### Python SDK
-
 <details>
-<summary>Typed client for the server</summary>
+<summary><b>Python SDK</b> &nbsp;<sub>Typed client for the server</sub></summary>
 
 <br>
 
@@ -556,10 +536,8 @@ Supported against this server: `create_job`, `get_job`, `list_jobs`, `stream_eve
 
 </details>
 
-### Development
-
 <details>
-<summary>Tests and project layout</summary>
+<summary><b>Development</b> &nbsp;<sub>Tests and project layout</sub></summary>
 
 <br>
 
