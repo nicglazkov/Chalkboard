@@ -1,12 +1,18 @@
 from __future__ import annotations
 import asyncio
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from pipeline import run_stats
 from server import run_data
-from server.library import LibraryStore, VideoMeta
+from server.library import NOTES_MAX_CHARS, LibraryStore, VideoMeta
+
+
+class VideoUpdate(BaseModel):
+    notes: str | None = None
 
 
 def make_library_router(store: LibraryStore, output_dir: Path | str | None = None) -> APIRouter:
@@ -96,6 +102,22 @@ def make_library_router(store: LibraryStore, output_dir: Path | str | None = Non
         item = await asyncio.to_thread(_list_item, meta)
         item["run_stats"] = run_stats.read(run_dir)
         return item
+
+    @router.patch("/library/{run_id}")
+    async def update_video(run_id: str, body: VideoUpdate):
+        """Edit the user-owned fields of a library row (today: notes only)."""
+        if "notes" not in body.model_fields_set:
+            raise HTTPException(status_code=422, detail="Nothing to update: send {\"notes\": string or null}")
+        if body.notes is not None and len(body.notes.strip()) > NOTES_MAX_CHARS:
+            raise HTTPException(status_code=422, detail=f"Notes are limited to {NOTES_MAX_CHARS:,} characters")
+        meta = await store.set_notes(run_id, body.notes)
+        if meta is None:
+            raise HTTPException(status_code=404, detail="Video not found")
+        return {
+            "run_id": meta.run_id,
+            "notes": meta.notes,
+            "saved_at": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
 
     @router.delete("/library/{run_id}", status_code=204)
     async def delete_video(run_id: str, files: bool = False):

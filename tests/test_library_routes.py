@@ -140,3 +140,54 @@ def test_delete_rejects_dot_segments(tmp_path):
         assert resp.status_code == 404
     assert sentinel.exists()
     assert out.exists()
+
+
+# ── Notes (PATCH /api/library/{run_id}) ───────────────────────────────────────
+
+def test_patch_notes_saves_and_shows_in_list_and_detail(lib_client):
+    tc, store, _ = lib_client
+    _add(store, run_id="r1")
+    resp = tc.patch("/api/library/r1", json={"notes": "  Redo scene 3, cue late  "})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["run_id"] == "r1"
+    assert body["notes"] == "Redo scene 3, cue late"
+    assert body["saved_at"].endswith("Z")
+    assert tc.get("/api/library/r1").json()["notes"] == "Redo scene 3, cue late"
+    assert tc.get("/api/library").json()["videos"][0]["notes"] == "Redo scene 3, cue late"
+
+
+def test_patch_notes_empty_or_null_clears(lib_client):
+    tc, store, _ = lib_client
+    _add(store, run_id="r1")
+    tc.patch("/api/library/r1", json={"notes": "something"})
+    assert tc.patch("/api/library/r1", json={"notes": "   "}).json()["notes"] is None
+    tc.patch("/api/library/r1", json={"notes": "something"})
+    assert tc.patch("/api/library/r1", json={"notes": None}).json()["notes"] is None
+    assert tc.get("/api/library/r1").json()["notes"] is None
+
+
+def test_patch_notes_validation(lib_client):
+    tc, store, _ = lib_client
+    _add(store, run_id="r1")
+    assert tc.patch("/api/library/r1", json={"notes": "x" * 10_001}).status_code == 422
+    assert tc.patch("/api/library/r1", json={"notes": "x" * 10_000}).status_code == 200
+    assert tc.patch("/api/library/r1", json={"notes": 5}).status_code == 422
+    assert tc.patch("/api/library/r1", json={}).status_code == 422
+    # A rejected request leaves the stored notes alone.
+    assert tc.get("/api/library/r1").json()["notes"] == "x" * 10_000
+
+
+def test_patch_notes_unknown_run_404(lib_client):
+    tc, _, _ = lib_client
+    assert tc.patch("/api/library/nope", json={"notes": "hi"}).status_code == 404
+
+
+def test_list_search_matches_notes(lib_client):
+    tc, store, _ = lib_client
+    _add(store, run_id="r1", topic="recursion")
+    _add(store, run_id="r2", topic="sorting")
+    tc.patch("/api/library/r2", json={"notes": "Show this one to Dimitri"})
+    resp = tc.get("/api/library?q=dimitri")
+    assert resp.json()["total"] == 1
+    assert resp.json()["videos"][0]["run_id"] == "r2"

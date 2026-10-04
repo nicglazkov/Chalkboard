@@ -119,13 +119,21 @@ on evidence (ElevenLabs: `GET /v1/voices/{id}`; OpenAI: last real synthesis) els
 
 **Library list items** (`GET /api/library` `videos[]`, also `GET /api/library/{id}`): the stored
 row (`run_id, topic, title, created_at, duration_sec, quality, thumb_path, script, effort,
-audience, tone, theme, template, speed, status, narrator`) plus `has_run_stats`, `has_final`,
+audience, tone, theme, template, speed, status, narrator, notes`) plus `has_run_stats`, `has_final`,
 `thumb_url`|null, `video_url`|null, `run_seconds`|null, `cost_usd`|null, `run_result`|null.
 CHANGED: `duration_sec`, `quality`, `effort`, `audience`, `tone`, `theme`, `speed` are `null` when
 the run's files do not record them (were defaulted to 0 / "medium" / ...). `duration_sec` = measured
 narration length. `created_at` = job completion (server) or `final.mp4` mtime (indexed from disk).
 `status` is always "completed" (only runs with `final.mp4` are indexed). `GET /api/library/{id}`
 also includes `run_stats`.
+`notes` = the user's free-text notes (`null` = none; never written by the pipeline, and
+re-indexing a run keeps them). `GET /api/library?q=` also matches `notes`.
+
+**Notes** (`PATCH /api/library/{run_id}`, body `{"notes": str|null}`): trimmed; empty or
+whitespace-only is stored as `null`; more than 10,000 characters (after trimming), a non-string,
+or a body without `notes` => 422; unknown run => 404. Returns
+`{"run_id", "notes": str|null, "saved_at"}` where `saved_at` is the server's UTC time after the
+write committed. The video page shows "Saved" only from this response, else "Not saved: <reason>".
 
 **CHANGED `/api/meta`**: narrators have `configured` (API key set; Kokoro always) instead of
 `available`; use `/api/voices` for availability. **`/api/claude-status`** now reads the status

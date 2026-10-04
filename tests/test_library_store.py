@@ -145,3 +145,82 @@ def test_delete_video(store):
 
 def test_delete_missing_video_is_noop(store):
     asyncio.run(store.delete_video("does-not-exist"))  # should not raise
+
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+
+import sqlite3
+
+_OLD_SCHEMA = """
+CREATE TABLE videos (
+    run_id       TEXT PRIMARY KEY,
+    topic        TEXT NOT NULL,
+    duration_sec REAL DEFAULT 0,
+    quality      TEXT DEFAULT 'medium',
+    created_at   TEXT NOT NULL,
+    thumb_path   TEXT,
+    script       TEXT DEFAULT '',
+    effort       TEXT DEFAULT 'medium',
+    audience     TEXT DEFAULT 'intermediate',
+    tone         TEXT DEFAULT 'casual',
+    theme        TEXT DEFAULT 'chalkboard',
+    template     TEXT,
+    speed        REAL DEFAULT 1.0,
+    status       TEXT DEFAULT 'completed'
+)
+"""
+
+
+def test_init_migrates_old_schema_in_place(tmp_path):
+    """A library.db from before title/narrator/notes keeps every row and gains the columns."""
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute(_OLD_SCHEMA)
+    con.executemany(
+        "INSERT INTO videos (run_id, topic, created_at, script) VALUES (?,?,?,?)",
+        [("a", "alpha", "2026-01-01T00:00:00Z", "s1"), ("b", "beta", "2026-01-02T00:00:00Z", "s2")],
+    )
+    con.commit()
+    con.close()
+
+    s = SQLiteLibraryStore(str(path))
+    asyncio.run(s.init())
+    asyncio.run(s.init())  # idempotent
+    cols = {r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(videos)")}
+    assert {"title", "narrator", "notes"} <= cols
+    videos, total = asyncio.run(s.list_videos())
+    assert total == 2
+    assert {v.run_id for v in videos} == {"a", "b"}
+    assert all(v.notes is None for v in videos)
+    assert asyncio.run(s.set_notes("a", "kept")).notes == "kept"
+
+
+def test_set_notes_trims_and_empty_is_none(store):
+    asyncio.run(store.add_video(_make_meta()))
+    assert asyncio.run(store.set_notes("run-001", "  check the  sync  \n")).notes == "check the  sync"
+    assert asyncio.run(store.set_notes("run-001", "   ")).notes is None
+    assert asyncio.run(store.set_notes("run-001", "x")).notes == "x"
+    assert asyncio.run(store.set_notes("run-001", None)).notes is None
+
+
+def test_set_notes_unknown_run_returns_none(store):
+    assert asyncio.run(store.set_notes("nope", "hi")) is None
+
+
+def test_reindexing_keeps_notes(store):
+    """add_video (backfill / finished job) must not wipe the user's notes."""
+    asyncio.run(store.add_video(_make_meta(topic="original")))
+    asyncio.run(store.set_notes("run-001", "my note"))
+    asyncio.run(store.add_video(_make_meta(topic="updated")))
+    result = asyncio.run(store.get_video("run-001"))
+    assert result.topic == "updated"
+    assert result.notes == "my note"
+
+
+def test_list_videos_search_by_notes(store):
+    asyncio.run(store.add_video(_make_meta(run_id="a", topic="Alpha")))
+    asyncio.run(store.add_video(_make_meta(run_id="b", topic="Beta")))
+    asyncio.run(store.set_notes("b", "Follow up on Fourier transforms"))
+    videos, total = asyncio.run(store.list_videos(query="fourier"))
+    assert total == 1
+    assert videos[0].run_id == "b"
