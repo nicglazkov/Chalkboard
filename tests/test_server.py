@@ -227,6 +227,10 @@ def test_meta_reports_defaults_and_narrators():
     assert {"aria", "milo", "kokoro"} <= ids
     # `configured` (key set), not a claim the voice works: /api/voices probes that.
     assert next(n for n in data["narrators"] if n["id"] == "kokoro")["configured"] is True
+    # The UI validates uploads with the server's own rules.
+    up = data["upload"]
+    assert ".py" in up["text_extensions"] and "Makefile" in up["text_filenames"]
+    assert ".png" in up["image_extensions"] and up["limits"]["pdf"] > up["limits"]["text"]
 
 
 @pytest.mark.parametrize("field,value", [

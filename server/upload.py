@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 from fastapi import UploadFile
-from pipeline.context import TEXT_EXTENSIONS, IMAGE_MEDIA_TYPES
+from pipeline.context import TEXT_EXTENSIONS, TEXT_FILENAMES, IMAGE_MEDIA_TYPES
 
 # Per-file size limits (bytes) by category
 LIMITS: dict[str, int] = {
@@ -33,8 +33,13 @@ class TotalSizeError(UploadValidationError):
 def file_category(filename: str) -> str:
     """
     Return the category string used for limit lookup.
-    Returns 'unsupported' for unrecognised extensions.
+    Returns 'unsupported' for unrecognised extensions. Extensionless text
+    files the context loader reads by name (Makefile, Dockerfile, LICENSE...)
+    count as text.
     """
+    name = Path(filename).name
+    if name in TEXT_FILENAMES:
+        return "text"
     ext = Path(filename).suffix.lower()
     if ext in IMAGE_MEDIA_TYPES:
         return "image"
