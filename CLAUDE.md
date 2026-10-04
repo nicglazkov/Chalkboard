@@ -497,11 +497,11 @@ If a node raises, its output is not saved; the next resume re-runs that node fro
 
 ## Video Library
 
-`server/library.py`: `VideoMeta` (16 persisted fields: `run_id`, `topic`, `title`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`, `narrator`; `init()` adds the `title` / `narrator` columns to older databases; `output_files` is computed from disk; fields the run files do not record are `None`, never a default), the `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
+`server/library.py`: `VideoMeta` (17 persisted fields: `run_id`, `topic`, `title`, `created_at`, `duration_sec`, `quality`, `thumb_path`, `script`, `effort`, `audience`, `tone`, `theme`, `template`, `speed`, `status`, `narrator`, `notes`; `init()` reads `PRAGMA table_info` and adds any of the `title` / `narrator` / `notes` columns an older database lacks, in place, keeping every row (new columns go in `_ADDED_COLUMNS`); `output_files` is computed from disk; fields the run files do not record are `None`, never a default). `notes` is the only user-owned field: `add_video` upserts every other column (`ON CONFLICT DO UPDATE`), so backfill and finished jobs never wipe notes; `set_notes` trims, stores empty as `NULL`, and returns `None` for an unknown run. Search (`list_videos(query=...)`) matches topic, title, script and notes. The `LibraryStore` ABC (`init`, `add_video`, `get_video`, `list_videos`, `delete_video`, `set_notes`) and `SQLiteLibraryStore` (`aiosqlite`, WAL, `library.db`). A Postgres store can implement the same interface and be passed to `create_app(library_store=...)`.
 
 `_backfill(store, output_dir)` (`server/app.py`) indexes every `output/` directory with `manifest.json` and `final.mp4` at startup and, throttled to once per 10 s, on `GET /api/library` so CLI runs show up without a restart (idempotent; `final.mp4` mtime as `created_at`; at startup `refresh=True` also re-reads indexed runs and corrects rows that older code filled with defaults). Consequence: `DELETE /api/library/{id}` without `?files=true` is undone by the next listing, because the files are still there; the web UI always deletes with `files=true`. Old manifests missing fields give `None` (shown as unknown). List items add `has_run_stats`, `has_final`, `thumb_url`, `video_url`, `run_seconds`, `cost_usd`, `run_result` (`library_routes._list_item`).
 
-Routes: `make_library_router(store)` (`GET/DELETE /api/library...`) and `make_pages_router()` (`/library`, `/library/{run_id}`).
+Routes: `make_library_router(store)` (`GET/PATCH/DELETE /api/library...`) and `make_pages_router()` (`/library`, `/library/{run_id}`).
 
 ---
 
@@ -533,6 +533,7 @@ python run_server.py --reload         # dev (kills in-flight jobs on reload)
 | `GET` | `/api/library/{id}/timeline` | Same, for a finished run |
 | `GET` | `/api/library/{id}/quality` | Sync (render cue_log), layout report, visual QA |
 | `GET` | `/api/library/{id}/stats` | The run's run_stats.json (or null) |
+| `PATCH` | `/api/library/{id}` | Set notes: `{"notes": str\|null}` (trimmed, empty = null, max 10,000 chars; 404 unknown run); returns `{run_id, notes, saved_at}` |
 | `GET` | `/api/stats` | Library-wide measured stats |
 | `GET` | `/api/status` | Live health checks with evidence (cached 60 s) |
 | `GET` | `/api/voices` | Narrators + evidence-based availability |

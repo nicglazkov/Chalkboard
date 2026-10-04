@@ -22,7 +22,19 @@ class VideoMeta(BaseModel):
     speed: float | None = None
     status: str = "completed"
     narrator: str | None = None           # pipeline/tts/voices.py name, or backend for legacy runs
+    notes: str | None = None              # the user's free-text notes; None = no notes
     output_files: list[str] = Field(default_factory=list)
+
+
+NOTES_MAX_CHARS = 10_000
+
+
+def clean_notes(notes: str | None) -> str | None:
+    """Trim notes; empty or whitespace-only means no notes (None)."""
+    if notes is None:
+        return None
+    notes = notes.strip()
+    return notes or None
 
 
 class LibraryStore(ABC):
@@ -44,6 +56,10 @@ class LibraryStore(ABC):
     @abstractmethod
     async def delete_video(self, run_id: str) -> None: ...
 
+    @abstractmethod
+    async def set_notes(self, run_id: str, notes: str | None) -> VideoMeta | None:
+        """Store notes (trimmed; empty = None). Returns the updated row, None if unknown."""
+
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS videos (
@@ -62,15 +78,28 @@ CREATE TABLE IF NOT EXISTS videos (
     template     TEXT,
     speed        REAL DEFAULT 1.0,
     status       TEXT DEFAULT 'completed',
-    narrator     TEXT
+    narrator     TEXT,
+    notes        TEXT
 )
 """
+
+# Columns added after the first release. init() adds any that an existing
+# library.db lacks (ALTER TABLE ADD COLUMN keeps every row).
+_ADDED_COLUMNS = (
+    ("title", "TEXT DEFAULT ''"),
+    ("narrator", "TEXT"),
+    ("notes", "TEXT"),
+)
 
 _ROW_KEYS = (
     "run_id", "topic", "title", "duration_sec", "quality", "created_at",
     "thumb_path", "script", "effort", "audience", "tone",
-    "theme", "template", "speed", "status", "narrator",
+    "theme", "template", "speed", "status", "narrator", "notes",
 )
+
+# add_video writes every column except notes: re-indexing a run from its files
+# (backfill, a finished job) must never wipe what the user wrote.
+_INDEX_KEYS = tuple(k for k in _ROW_KEYS if k != "notes")
 
 _SORT_MAP = {
     "newest":   "created_at DESC",
@@ -93,31 +122,35 @@ class SQLiteLibraryStore(LibraryStore):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(_CREATE_TABLE)
-            # Migrate: add title column to existing DBs that predate it
-            for ddl in ("ALTER TABLE videos ADD COLUMN title TEXT DEFAULT ''",
-                        "ALTER TABLE videos ADD COLUMN narrator TEXT"):
-                try:
-                    await db.execute(ddl)
-                except Exception:
-                    pass  # column already exists
+            # Migrate older DBs in place: add only the columns they lack.
+            async with db.execute("PRAGMA table_info(videos)") as cur:
+                have = {row[1] for row in await cur.fetchall()}
+            for name, decl in _ADDED_COLUMNS:
+                if name not in have:
+                    await db.execute(f"ALTER TABLE videos ADD COLUMN {name} {decl}")
             await db.commit()
 
     async def add_video(self, meta: VideoMeta) -> None:
+        cols = ", ".join(_INDEX_KEYS)
+        marks = ",".join("?" * len(_INDEX_KEYS))
+        updates = ", ".join(f"{k} = excluded.{k}" for k in _INDEX_KEYS if k != "run_id")
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                """INSERT OR REPLACE INTO videos
-                   (run_id, topic, title, duration_sec, quality, created_at,
-                    thumb_path, script, effort, audience, tone,
-                    theme, template, speed, status, narrator)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    meta.run_id, meta.topic, meta.title, meta.duration_sec, meta.quality,
-                    meta.created_at, meta.thumb_path, meta.script,
-                    meta.effort, meta.audience, meta.tone, meta.theme,
-                    meta.template, meta.speed, meta.status, meta.narrator,
-                ),
+                f"INSERT INTO videos ({cols}) VALUES ({marks}) "
+                f"ON CONFLICT(run_id) DO UPDATE SET {updates}",
+                tuple(getattr(meta, k) for k in _INDEX_KEYS),
             )
             await db.commit()
+
+    async def set_notes(self, run_id: str, notes: str | None) -> VideoMeta | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                "UPDATE videos SET notes = ? WHERE run_id = ?", (clean_notes(notes), run_id)
+            )
+            await db.commit()
+            if cur.rowcount == 0:
+                return None
+        return await self.get_video(run_id)
 
     async def get_video(self, run_id: str) -> VideoMeta | None:
         async with aiosqlite.connect(self.db_path) as db:
@@ -138,8 +171,9 @@ class SQLiteLibraryStore(LibraryStore):
         order = _SORT_MAP.get(sort, "created_at DESC")
 
         if query:
-            where = "WHERE topic LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR script LIKE ? COLLATE NOCASE"
-            params = (f"%{query}%", f"%{query}%", f"%{query}%")
+            fields = ("topic", "title", "script", "notes")
+            where = "WHERE " + " OR ".join(f"{f} LIKE ? COLLATE NOCASE" for f in fields)
+            params = (f"%{query}%",) * len(fields)
         else:
             where = ""
             params = ()

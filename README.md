@@ -209,7 +209,7 @@ ssh -L 8000:localhost:8000 user@that-machine     # then open http://localhost:80
 
 - **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
 - **In progress.** Each pipeline stage as it happens, with Claude's script, fact check and scene code streaming in as they are written, token usage and cost per call, and render and TTS progress parsed from the real processes.
-- **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, and a quality panel with measured cue delays, the layout check and visual QA.
+- **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, your own notes (saved inline, searchable from the library), and a quality panel with measured cue delays, the layout check and visual QA.
 - **Status.** Real probes, cached for 60 seconds: Claude API, the Claude status page, ElevenLabs, Kokoro, OpenAI TTS, the renderer toolchain, GPU, disk and the job queue. Anything that cannot be checked without spending money shows as Unknown.
 
 The rule behind all of it: the UI never shows a value it cannot back with a real source. Missing data reads "Unknown" or "Not recorded", never a placeholder. The full contract is in [docs/ui-data-contract.md](docs/ui-data-contract.md).
@@ -482,8 +482,9 @@ python run_server.py --reload           # dev auto-reload (kills in-flight jobs 
 | `GET /api/jobs/{id}/events` | SSE stream: pipeline events, streamed Claude output, usage, render and TTS progress |
 | `GET /api/jobs/{id}/timeline` | Segments, cue times and voice waveform for a job |
 | `GET /api/jobs/{id}/files/{filename}` | Download `final.mp4`, `captions.srt`, ... |
-| `GET /api/library` | Rendered videos (`q`, `sort`, `limit`, `offset`) |
-| `GET /api/library/{run_id}` | One video's metadata and files |
+| `GET /api/library` | Rendered videos (`q` searches topic, title, transcript and notes; `sort`, `limit`, `offset`) |
+| `GET /api/library/{run_id}` | One video's metadata, notes and files |
+| `PATCH /api/library/{run_id}` | Set the video's notes: `{"notes": "..."}` (`null` or empty clears them; max 10,000 characters) |
 | `GET /api/library/{run_id}/timeline` | Segments, cues and waveform |
 | `GET /api/library/{run_id}/quality` | Cue delays, layout check, visual QA |
 | `GET /api/library/{run_id}/stats` | The run's `run_stats.json` |

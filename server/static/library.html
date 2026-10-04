@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=7">
+  <link rel="stylesheet" href="/app.css?v=8">
   <script src="/app.js?v=7"></script>
 </head>
 <body>
@@ -22,7 +22,7 @@
         </div>
         <div class="lib-tools" role="search">
           <label for="q" class="sr-only">Search the library</label>
-          <input id="q" class="input" type="search" placeholder="Search by topic or transcript" autocomplete="off">
+          <input id="q" class="input" type="search" placeholder="Search by topic, transcript or notes" autocomplete="off">
           <label for="sort" class="sr-only">Sort</label>
           <select id="sort" class="input">
             <option value="newest">Newest</option>
@@ -112,9 +112,11 @@
   function paintFoot() { $('foot').textContent = ['Chalkboard · MIT License', totalNote, statsNote].filter(Boolean).join(' · '); }
   function videoRow(v) {
     const meta = [v.effort ? `${v.effort} effort` : '', resLabel(v.quality)].filter(Boolean).join(' · ');
+    const n = v.notes ? String(v.notes).replace(/\s+/g, ' ') : '';
+    const noteTag = n ? `<span class="note-tag" title="${esc(n.length > 80 ? n.slice(0, 80).trimEnd() + '…' : n)}">note</span>` : '';
     return `<a class="vrow" href="/library/${encodeURIComponent(v.run_id)}">
       <span class="thumb">${thumbInner(v)}</span>
-      <span class="tw"><span class="title">${esc(v.title || v.topic)}</span><span class="meta">${esc(meta)}</span></span>
+      <span class="tw"><span class="title">${esc(v.title || v.topic)}</span><span class="meta">${esc(meta)}${noteTag}</span></span>
       <span class="st done">Done</span>
       ${v.narrator ? `<span class="vo">${esc(narratorName(v.narrator, voiceList))}</span>` : '<span class="vo nr" title="The narrator was not recorded for this run">Not recorded</span>'}
       <span class="ln">${esc(fmtDuration(v.duration_sec) || '')}</span>

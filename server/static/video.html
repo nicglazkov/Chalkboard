@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,500;1,400&display=swap">
-  <link rel="stylesheet" href="/app.css?v=7">
+  <link rel="stylesheet" href="/app.css?v=8">
   <script src="/app.js?v=7"></script>
 </head>
 <body>
@@ -90,6 +90,7 @@
         </section>
         <aside>
           <div class="card" id="quality"><div class="card-head"><span class="label">Quality</span><span class="right" id="q-sum"></span></div><div id="q-body"><div class="shimmer" style="height:90px"></div></div></div>
+          <div class="card notes-card"><div class="card-head"><label class="label" for="notes">Notes</label><span class="right notes-state" id="notes-state" role="status" aria-live="polite"></span></div><textarea class="notes-input" id="notes" rows="3" maxlength="10000" placeholder="Add a note about this video" aria-describedby="notes-hint"></textarea><p class="notes-hint" id="notes-hint">Saves when you leave the box<span class="kbd-hint"> or press ${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'}+Enter</span></p></div>
           <div class="card"><div class="label">Downloads</div><div id="downloads"></div></div>
           <div class="card"><div class="label">Settings used</div><div id="settings"></div></div>
           <div class="danger-zone"><button type="button" class="btn quiet danger" id="delete">Delete this video</button></div>
@@ -384,6 +385,58 @@
     return late;
   }
 
+  // ── Notes: saved on blur and Cmd/Ctrl+Enter. "Saved" only after the server confirms.
+  function setupNotes(v) {
+    const box = $('notes');
+    const state = $('notes-state');
+    let saved = v.notes || '';
+    let busy = false, again = false;
+    box.value = saved;
+    const show = (text, cls) => { state.textContent = text; state.className = `right notes-state${cls ? ' ' + cls : ''}`; };
+    const fit = () => { box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight + 2, 480)}px`; };
+    const dirty = () => box.value.trim() !== saved;
+    const reason = (r) => {
+      if (r.status === 0) return 'the server did not respond';
+      const d = r.data && r.data.detail;
+      if (Array.isArray(d) && d.length && d[0].msg) return d[0].msg;
+      if (r.status === 404) return 'this video is no longer in the library';
+      return r.error || `HTTP ${r.status}`;
+    };
+    async function save() {
+      if (!dirty()) return;
+      if (busy) { again = true; return; }
+      busy = true;
+      const sent = box.value;
+      show('Saving', 'muted');
+      const r = await getJSON(`/api/library/${encodeURIComponent(runId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: sent.trim() ? sent : null }),
+      });
+      busy = false;
+      if (r.ok && r.data) {
+        saved = r.data.notes || '';
+        // Show what the server stored (trimmed) unless the user kept typing meanwhile.
+        if (box.value === sent) { box.value = saved; fit(); }
+        const t = parseTs(r.data.saved_at);
+        show(`Saved · ${t ? new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'just now'}`, 'c-ok');
+        state.title = r.data.saved_at ? `Saved ${fmtStamp(r.data.saved_at)}` : '';
+      } else {
+        show(`Not saved: ${reason(r)}`, 'c-danger');
+        state.title = '';
+      }
+      if (again) { again = false; if (dirty()) save(); }
+    }
+    box.addEventListener('input', () => { fit(); if (dirty()) show('Unsaved', 'muted'); else if (state.textContent === 'Unsaved') show(''); });
+    box.addEventListener('blur', save);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+    });
+    window.addEventListener('beforeunload', (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ''; } });
+    fit();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  }
+
   // ── Downloads + settings ───────────────────────────────────────────────
   const DL = [['final.mp4', 'Video (MP4)'], ['captions.srt', 'Captions (SRT)'], ['quiz.json', 'Quiz (JSON)'], ['script.txt', 'Script (TXT)'], ['scene.py', 'Scene code (PY)']];
   async function renderDownloads(files, hasCode) {
@@ -433,6 +486,7 @@
     if (hasMath(title)) setMathText($('title'), title); else $('title').innerHTML = titleHtml(title);
 
     renderPlayer(v, files);
+    setupNotes(v);
     const [tlRes, qRes, segs, chTxt, quiz, manifest, code, stats, voices] = await Promise.all([
       getJSON(`/api/library/${encodeURIComponent(runId)}/timeline`),
       getJSON(`/api/library/${encodeURIComponent(runId)}/quality`),
