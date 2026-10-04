@@ -123,6 +123,18 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         _spawn(run_job(job, output_dir, library_store=library_store))
         return _job_to_response(job)
 
+    def _upload_rules() -> dict:
+        from pipeline.context import IMAGE_MEDIA_TYPES, TEXT_EXTENSIONS, TEXT_FILENAMES
+        from server.upload import LIMITS, TOTAL_LIMIT
+        return {
+            "text_extensions": sorted(e for e in TEXT_EXTENSIONS if e.count(".") == 1 and len(e) > 1),
+            "text_filenames": sorted(TEXT_FILENAMES),
+            "image_extensions": sorted(IMAGE_MEDIA_TYPES),
+            "other_extensions": [".pdf", ".docx"],
+            "limits": dict(LIMITS),
+            "total_limit": TOTAL_LIMIT,
+        }
+
     @router.get("/meta")
     async def meta():
         import os
@@ -153,6 +165,8 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             "render_backend": await asyncio.to_thread(_render_backend.backend),
             "model": _cfg.CLAUDE_MODEL,
             "running_jobs": sum(1 for j in store.list() if j.status in ("pending", "running")),
+            # What the upload endpoint accepts, so the UI validates with the same list.
+            "upload": _upload_rules(),
         }
 
     @router.get("/jobs", response_model=list[JobResponse])

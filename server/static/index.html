@@ -31,7 +31,7 @@
                 <span class="hint" id="topic-hint"><span id="chars">0 characters</span><span class="kbd-hint"> · <span id="kbd">Ctrl</span>+Enter to generate</span></span>
               </div>
               <div class="attach" id="attach" hidden>
-                <button type="button" class="drop" id="drop">Drop files here or click to choose. PDF, DOCX, images, text and code.</button>
+                <button type="button" class="drop" id="drop">Drop files here or click to choose. PDF, DOCX, images, text and code. Folders work too.</button>
                 <input type="file" id="file-input" multiple hidden>
                 <div class="row">
                   <label class="sr-only" for="url-in">Web page URL</label>
@@ -128,7 +128,7 @@
   const S = {
     audience: 'intermediate', tone: 'casual', theme: 'chalkboard', template: '', quality: 'high',
     effort: 'medium', qa_density: 'normal', research: false, quiz: false, narrator: null,
-    speed: 1.0, burn: false, files: [], urls: [], github: [],
+    speed: 1.0, burn: false, files: [], urls: [], github: [], skipped: 0,
   };
   let voices = [];
 
@@ -251,10 +251,21 @@
   // ── Attachments ────────────────────────────────────────────────────────
   const FILE_LIMITS = { text: 2 * 1024 * 1024, image: 5 * 1024 * 1024, pdf: 20 * 1024 * 1024, docx: 10 * 1024 * 1024 };
   const TOTAL_LIMIT = 24 * 1024 * 1024;
-  const TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1', '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini', '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
-  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+  // Fallback lists; replaced by the server's own rules from /api/meta (upload).
+  let TEXT_NAMES = new Set(['Makefile', 'makefile', 'GNUmakefile', 'Dockerfile', 'dockerfile', 'LICENSE', 'LICENCE', 'README', 'CHANGELOG', 'Gemfile', 'Rakefile', 'Procfile', '.gitignore', '.dockerignore', '.editorconfig']);
+  let TEXT_EXTS = new Set(['.txt', '.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp', '.rb', '.swift', '.kt', '.sh', '.bash', '.zsh', '.bat', '.ps1', '.yaml', '.yml', '.json', '.toml', '.csv', '.html', '.css', '.scss', '.xml', '.ini', '.env', '.sql', '.graphql', '.proto', '.tf', '.hcl', '.vue', '.php', '.scala', '.dart', '.elm']);
+  let IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+  function applyUploadRules(u) {
+    if (!u || !Array.isArray(u.text_extensions)) return;
+    TEXT_EXTS = new Set(u.text_extensions);
+    TEXT_NAMES = new Set(u.text_filenames || []);
+    if (Array.isArray(u.image_extensions)) IMAGE_EXTS = new Set(u.image_extensions);
+    if (u.limits) Object.assign(FILE_LIMITS, u.limits);
+  }
   function fileCategory(f) {
-    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (TEXT_NAMES.has(f.name)) return 'text';
+    const dot = f.name.lastIndexOf('.');
+    const ext = dot > 0 ? f.name.slice(dot).toLowerCase() : '';
     if (IMAGE_EXTS.has(ext)) return 'image';
     if (ext === '.pdf') return 'pdf';
     if (ext === '.docx') return 'docx';
@@ -277,7 +288,8 @@
     ];
     $('tags').innerHTML = tags.join('');
     const t = totalSize();
-    $('attach-note').innerHTML = esc('Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.') + (S.files.length ? ` <span class="${t > TOTAL_LIMIT ? 'c-danger' : ''}">${esc(fmtBytes(t))} attached.</span>` : '');
+    $('attach-note').innerHTML = esc('Per file: text 2 MB, images 5 MB, PDF 20 MB, DOCX 10 MB. 24 MB in total.') + (S.files.length ? ` <span class="${t > TOTAL_LIMIT ? 'c-danger' : ''}">${esc(fmtBytes(t))} attached.</span>` : '') +
+      (S.skipped ? ` ${esc(`Skipped ${S.skipped} unsupported file${S.skipped === 1 ? '' : 's'} from the dropped folder.`)}` : '');
     $('submit').disabled = filesInvalid();
   }
   $('tags').addEventListener('click', (e) => {
@@ -300,10 +312,39 @@
     $('attach-btn').setAttribute('aria-expanded', String(open));
   });
   $('drop').addEventListener('click', () => $('file-input').click());
-  $('file-input').addEventListener('change', () => { addFiles(Array.from($('file-input').files)); $('file-input').value = ''; });
+  $('file-input').addEventListener('change', () => { S.skipped = 0; addFiles(Array.from($('file-input').files)); $('file-input').value = ''; });
   $('drop').addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('over'); });
   $('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'));
-  $('drop').addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('over'); addFiles(Array.from(e.dataTransfer.files || [])); });
+  // Dropped folders are walked recursively; their unsupported files are skipped
+  // (counted, not listed), while individually dropped files are always listed.
+  const SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', 'build', '.next']);
+  const readEntries = (dir) => new Promise((res) => {
+    const reader = dir.createReader(), out = [];
+    const next = () => reader.readEntries((batch) => { if (!batch.length) return res(out); out.push(...batch); next(); }, () => res(out));
+    next();
+  });
+  const entryFile = (entry) => new Promise((res) => entry.file(res, () => res(null)));
+  async function walk(entry, out, depth = 0) {
+    if (entry.isFile) { const f = await entryFile(entry); if (f) out.push(f); return; }
+    if (!entry.isDirectory || depth > 12 || SKIP_DIRS.has(entry.name)) return;
+    for (const child of await readEntries(entry)) await walk(child, out, depth + 1);
+  }
+  $('drop').addEventListener('drop', async (e) => {
+    e.preventDefault(); $('drop').classList.remove('over');
+    const dt = e.dataTransfer;
+    S.skipped = 0;
+    // Take the entries before any await: the DataTransfer is emptied after the handler yields.
+    const entries = Array.from(dt.items || []).map((it) => (it.kind === 'file' && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null));
+    if (!entries.length || entries.some((x) => !x)) { addFiles(Array.from(dt.files || [])); return; }
+    const loose = [], fromDirs = [];
+    for (const en of entries) {
+      if (en.isDirectory) await walk(en, fromDirs);
+      else { const f = await entryFile(en); if (f) loose.push(f); }
+    }
+    const usable = fromDirs.filter((f) => fileCategory(f) !== 'unsupported');
+    S.skipped = fromDirs.length - usable.length;
+    addFiles([...loose, ...usable]);
+  });
   function addFrom(inputId, list, check) {
     const el = $(inputId);
     const v = el.value.trim();
@@ -327,7 +368,19 @@
   // ── Topic ──────────────────────────────────────────────────────────────
   const topic = $('topic');
   if (/Mac|iPhone|iPad/.test(navigator.platform)) $('kbd').textContent = '⌘';
-  topic.addEventListener('input', () => { const n = topic.value.trim().length; $('chars').textContent = `${n} character${n === 1 ? '' : 's'}`; });
+  // Grows with its text up to about 60% of the window, then scrolls. A manual
+  // resize (the corner handle) turns auto-sizing off.
+  let topicManual = false, topicAutoH = 0;
+  function fitTopic() {
+    if (topicManual) return;
+    topic.style.height = 'auto';
+    const max = Math.max(topic.offsetHeight, Math.round(window.innerHeight * 0.6));
+    topicAutoH = Math.min(topic.scrollHeight + 2, max);
+    topic.style.height = topicAutoH + 'px';
+  }
+  topic.addEventListener('pointerup', () => { if (topicAutoH && Math.abs(topic.offsetHeight - topicAutoH) > 4) topicManual = true; });
+  topic.addEventListener('input', () => { const n = topic.value.trim().length; $('chars').textContent = `${n} character${n === 1 ? '' : 's'}`; fitTopic(); });
+  window.addEventListener('resize', fitTopic);
   topic.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('gen').requestSubmit(); } });
 
   // ── Estimate (from finished runs with matching settings) ───────────────
@@ -452,12 +505,14 @@
 
   (async function init() {
     const meta = await getMeta();
+    applyUploadRules(meta && meta.upload);
     const d = (meta && meta.defaults) || {};
     if (!prefilled) {
       for (const k of ['audience', 'tone', 'theme', 'quality']) if (d[k]) S[k] = d[k];
       if (d.effort === 'high') S.research = true; else if (d.effort) S.effort = d.effort;
       if (d.narrator) S.narrator = d.narrator;
     } else applyPrefill();
+    fitTopic();
     voiceSource = await getVoices();
     voices = voiceSource.list || [];
     if (S.narrator && !voices.some((v) => v.id === S.narrator && v.available !== false)) S.narrator = null;

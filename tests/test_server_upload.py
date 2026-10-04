@@ -123,3 +123,10 @@ async def test_validate_and_save_at_exact_limit_passes(tmp_path):
     data = b"x" * LIMITS["pdf"]
     saved = await validate_and_save([_mock_upload("ok.pdf", data)], tmp_path)
     assert len(saved) == 1
+
+
+def test_file_category_extensionless_text_files_by_name():
+    # The context loader reads these by name, so uploads must accept them too.
+    for name in ("Makefile", "Dockerfile", "LICENSE", "GNUmakefile", ".gitignore"):
+        assert file_category(name) == "text", name
+    assert file_category("Makefile.bak") == "unsupported"
