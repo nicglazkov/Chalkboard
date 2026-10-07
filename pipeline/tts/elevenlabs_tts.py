@@ -34,6 +34,9 @@ SAMPLE_RATE = 24000
 MAX_CONCURRENT = int(os.getenv("ELEVENLABS_CONCURRENCY", "3"))
 STITCH = os.getenv("ELEVENLABS_STITCH", "1") != "0"
 _NO_STITCH_MODELS = ("eleven_v3",)
+# Native delivery speed (voice_settings.speed): documented range 0.7-1.2.
+# Outside it the audio is time-stretched with ffmpeg atempo instead.
+NATIVE_SPEED_RANGE = (0.7, 1.2)
 
 
 def _supports_stitching(model_id: str) -> bool:
@@ -67,9 +70,13 @@ async def generate_audio(
     texts = [clean for clean, _ in parsed]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     client = httpx.Client(timeout=TIMEOUT_TTS_SEGMENT, headers={"xi-api-key": key})
+    voice_settings = _native_speed_settings(client, voice_id, speed)
+    stretch = speed if (speed != 1.0 and voice_settings is None) else 1.0
 
     def _call(i: int, previous_ids: list[str]) -> tuple[bytes, dict | None, str | None]:
         body: dict = {"text": texts[i], "model_id": model_id}
+        if voice_settings is not None:
+            body["voice_settings"] = voice_settings
         if _supports_stitching(model_id):
             if i > 0:
                 body["previous_text"] = texts[i - 1]
@@ -131,9 +138,26 @@ async def generate_audio(
         else:
             cue_times.append(proportional_cue_times(clean, offsets, dur))
 
-    if speed != 1.0:
-        _apply_speed_to_wav(output_path, speed)
-        durations = [d / speed for d in durations]
-        cue_times = [[None if t is None else round(t / speed, 3) for t in c] for c in cue_times]
+    if stretch != 1.0:
+        _apply_speed_to_wav(output_path, stretch)
+        durations = [d / stretch for d in durations]
+        cue_times = [[None if t is None else round(t / stretch, 3) for t in c] for c in cue_times]
 
     return output_path, durations, cue_times
+
+
+def _native_speed_settings(client: httpx.Client, voice_id: str, speed: float) -> dict | None:
+    """voice_settings that keep the voice's stored settings and change only
+    `speed`, or None when native speed does not apply (speed 1.0, out of the
+    documented range, or the stored settings could not be read: voice_settings
+    in a request replaces the stored ones, so they are never sent partially)."""
+    if speed == 1.0 or not NATIVE_SPEED_RANGE[0] <= speed <= NATIVE_SPEED_RANGE[1]:
+        return None
+    try:
+        r = client.get(f"https://api.elevenlabs.io/v1/voices/{voice_id}/settings")
+        stored = r.json() if r.status_code == 200 else None
+    except Exception:
+        stored = None
+    if not isinstance(stored, dict):
+        return None
+    return {**stored, "speed": round(float(speed), 3)}

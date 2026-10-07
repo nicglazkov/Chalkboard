@@ -1,5 +1,6 @@
 # pipeline/agents/manim_agent.py
-from pipeline.cues import parse_cues, proportional_cue_times, segment_cue_text
+from pipeline import pacing
+from pipeline.cues import parse_cues, segment_cue_text
 from pipeline.design_tokens import render_prompt_block
 from pipeline.llm import call_json, get_client, has_pdf
 from pipeline.retry import api_call_with_retry, TIMEOUT_MANIM_AGENT
@@ -24,15 +25,29 @@ STRICT REQUIREMENTS:
 - Each narration segment gets an animation block. Segment 0 starts with
   self.begin_segment(0, duration=_d[0]); every later segment starts with
   self.next_segment(N, duration=_d[N], clear=seg_items) (N is the 0-based index).
-- NARRATION SYNC IS AUTOMATIC: next_segment() holds the current frame until the
-  current segment's narration is almost over, fades out `clear`, then starts
-  segment N exactly when its narration starts. You do NOT need a remainder wait at
-  the end of a segment, and you must NOT build your own clock (no renderer.time,
-  no elapsed-time helpers). To leave a pause between beats inside a segment, use
-  the time that is actually left:
-    _w = self.segment_time_left() * 0.25
-    if _w > 0.05:
-        self.wait(_w)
+- NARRATION SYNC IS AUTOMATIC: next_segment() holds the current frame through the
+  end of the current segment's audio, starts segment N exactly when its audio
+  starts, then fades out `clear` (during the short silence before the narrator
+  speaks again). You do NOT need a remainder wait at the end of a segment, and you
+  must NOT build your own clock (no renderer.time, no elapsed-time helpers).
+- PACING (let it breathe): every segment's audio ends with a silent HOLD of about
+  two seconds after the last word, so the viewer can take in the finished picture.
+  The narration also has real pauses: after sentences, after a question, at a
+  [[beat]] marker (silent; no call needed). Rules:
+    * The hold is stillness, not more content: the segment's last animation must
+      finish by its last word (the request lists "last word ~Xs"); never start a
+      new reveal, highlight or camera move in the hold. An animation running more
+      than half a second into the hold is reported as `hold_busy`.
+    * One main reveal per cue. Do not stack several new elements into one
+      sentence; if a sentence introduces two things it has two cues.
+    * After a key reveal (a result, a definition, the answer to a question) let
+      it settle: a short still moment before the next change, using the time
+      that is actually left in the speech:
+        _w = self.speech_time_left() * 0.25
+        if _w > 0.05:
+            self.wait(_w)
+    * Prefer "settle"/"emphasis" motion over "snap" unless the gap to the next
+      cue is short; calm motion reads as confident.
   Budget the animations of a segment to fit inside _d[N]; running long makes the
   visuals lag the voice and the layout check rejects it.
 - WORD-LEVEL SYNC (cue markers): the narration segments in the request contain
@@ -641,24 +656,30 @@ SCHEMA = {
 }
 
 
-def _format_segments(segments: list[dict]) -> str:
+def _format_segments(segments: list[dict], pace=None, speed: float = 1.0) -> str:
+    pace = pace or pacing.resolve_pace()
     n = len(segments)
     header = (f"Total segments: {n} (use _d[0] through _d[{max(0, n-1)}]). "
-              f"[[k]] = cue marker: call self.cue(k) right before the animation for it.")
+              f"[[k]] = cue marker: call self.cue(k) right before the animation for it. "
+              f"[[beat]] = a silent pause in the voice (no call needed; keep the frame still). "
+              f"Times include the run's pacing ({pace.name}): a short silent lead-in, natural pauses, "
+              f"and a {pace.hold:.1f}s silent hold after each segment's last word.")
     lines = [header]
     for i, seg in enumerate(segments):  # 0-based
-        duration = seg.get("estimated_duration_sec", seg.get("actual_duration_sec", 0.0))
+        est = pacing.estimate_segment(seg, pace, speed)
+        duration = est["actual_duration_sec"]
         raw = segment_cue_text(seg)
-        clean, offsets = parse_cues(raw)
-        cues = seg.get("cues")
-        if not isinstance(cues, list) or len(cues) < len(offsets):
-            cues = proportional_cue_times(clean, offsets, duration)
+        _, offsets = parse_cues(raw)
+        cues = est.get("cues") or []
         cue_info = ""
         if offsets:
             parts = [f"[[{k}]]~{cues[k - 1]:.1f}s" for k in sorted(offsets)
                      if k - 1 < len(cues) and cues[k - 1] is not None]
             cue_info = f" — cues {', '.join(parts)}"
-        lines.append(f"  Segment {i} — est. {duration:.1f}s — use _d[{i}] at runtime{cue_info}: {raw}")
+        speech_end = est.get("speech_end_sec")
+        hold_info = (f" — last word ~{speech_end:.1f}s, then hold still"
+                     if isinstance(speech_end, (int, float)) else "")
+        lines.append(f"  Segment {i} — est. {duration:.1f}s — use _d[{i}] at runtime{cue_info}{hold_info}: {raw}")
     return "\n".join(lines)
 
 
@@ -669,7 +690,8 @@ async def manim_agent(state: PipelineState, client=None, context_blocks=None) ->
     user_msg = (
         f"Create a Manim animation for this educational script.\n\n"
         f"Topic: {state['topic']}\n\n"
-        f"Narration segments with timings:\n{_format_segments(state['script_segments'])}\n\n"
+        f"Narration segments with timings:\n"
+        f"{_format_segments(state['script_segments'], pacing.resolve_pace(state.get('pace')), state.get('speed', 1.0))}\n\n"
         f"Full script for context:\n{state['script']}\n\n"
         f"{THEME_SPECS[state.get('theme', 'chalkboard')]}"
     )

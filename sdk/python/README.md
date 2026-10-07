@@ -55,6 +55,15 @@ keyword-only; `narrator` is only sent when you set it.
 job = client.create_job(topic="Fourier series", quality="high", narrator="milo")
 ```
 
+`pace` (`"relaxed"`, `"normal"`, `"brisk"`) sets how the narrator presents:
+how long each finished scene holds before the next one (2 s on relaxed) and
+how long the pauses after sentences and questions are. It is only sent when
+set; the server default is `PACE`, else `relaxed`.
+
+```python
+job = client.create_job(topic="Fourier series", pace="normal")
+```
+
 ## Self-hosted server
 
 The same client works against this repo's FastAPI server

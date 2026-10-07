@@ -57,8 +57,10 @@ def test_manim_agent_includes_durations_in_prompt(base_state):
     call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
     content = messages[0]["content"]
-    assert "1.5" in content
-    assert "2.3" in content
+    from pipeline.pacing import estimate_segment, resolve_pace
+    for seg in base_state["script_segments"]:
+        est = estimate_segment(seg, resolve_pace())["actual_duration_sec"]
+        assert f"est. {est:.1f}s" in content
 
 
 def test_manim_agent_includes_feedback_on_revision(base_state):

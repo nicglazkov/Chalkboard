@@ -28,13 +28,18 @@ summed from usage events (cost `null` if any call had an unknown price), and the
 
 ## Per-run record (`output/<run_id>/run_stats.json`, written by CLI and server runs)
 `{"chalkboard_version", "git_commit"|null, "started_at", "finished_at", "stage_seconds": {node: secs}, "input_tokens", "output_tokens",
-"web_searches", "cost_usd"|null, "tts_chars"|null, "narrator", "quality", "effort", "result": "done"|"failed"}`.
+"web_searches", "cost_usd"|null, "tts_chars"|null, "narrator", "quality", "effort", "pace"|null, "result": "done"|"failed"}`.
 Older runs have no file; anything derived from it is then `null`.
 
 ## Timeline (`GET /api/jobs/{id}/timeline`, `GET /api/library/{run_id}/timeline`)
-`{"duration_s": float|null, "segments": [{"index", "start_s", "duration_s", "label", "cues": [secs from segment start]}],
+`{"duration_s": float|null, "segments": [{"index", "start_s", "duration_s", "label", "cues": [secs from segment start],
+"speech_end_s": float|null, "pauses": [{"at_s", "sec", "kind"}]}],
 "waveform": [floats 0..1, ~400 buckets] | null, "rendered_segments": int|null}`
 Built from `segments.json` (measured TTS durations and cue times) and `voiceover.wav` (real peaks).
+`speech_end_s` is when the segment's last word ends (seconds from the segment start; from there to
+`duration_s` is the silent scene hold), `pauses` the silences inserted inside the narration
+(`at_s` from the segment start, `sec` inserted length, `kind` sentence | question | payoff | beat).
+Both come from the measured audio; runs made before pacing have `null` / `[]`.
 Before TTS has run, durations are absent (`null`), not estimated.
 
 ## Quality (`GET /api/library/{run_id}/quality`)

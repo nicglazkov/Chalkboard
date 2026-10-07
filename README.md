@@ -67,7 +67,7 @@ Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, a
   </tr>
   <tr>
     <td valign="top"><b>Checked before it renders</b><br>The script is fact-checked. Scene code passes syntax and AST guards plus a headless dry-run that flags off-screen elements, overlaps and timing overruns. After the render, Claude reviews sampled frames.</td>
-    <td valign="top"><b>Narration in sync, word by word</b><br>The script marks the words where visuals land. The TTS backend reports when each one is spoken, and the animation waits for its cue.</td>
+    <td valign="top"><b>Narration in sync, word by word</b><br>The script marks the words where visuals land. The TTS backend reports when each one is spoken, and the animation waits for its cue. Paced like a presenter: every finished scene holds for 2 seconds, with real pauses after sentences and questions.</td>
   </tr>
   <tr>
     <td valign="top"><b>Narrators</b><br>ElevenLabs <code>eleven_v4</code> voices Aria and Milo with request stitching, free local Kokoro, or OpenAI.</td>
@@ -207,7 +207,7 @@ ssh -L 8000:localhost:8000 user@that-machine     # then open http://localhost:80
   </tr>
 </table>
 
-- **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
+- **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, pace, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
 - **In progress.** Each pipeline stage as it happens, with Claude's script, fact check and scene code streaming in as they are written, token usage and cost per call, and render and TTS progress parsed from the real processes.
 - **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, your own notes (saved inline, searchable from the library), and a quality panel with measured cue delays, the layout check and visual QA.
 - **Version.** The sidebar footer shows the running version and commit; it links to `/version`, which returns the full version record as JSON.
@@ -224,7 +224,7 @@ python main.py --topic "summarize this paper" --context paper.pdf --quiz
 python main.py --topic "how B-trees work" --preview     # quick 480p pass first
 ```
 
-Common options: `--effort low|medium|high`, `--audience beginner|intermediate|expert`, `--tone casual|formal|socratic`, `--theme chalkboard|light|colorful`, `--template algorithm|code|compare|derivation|howto|timeline`, `--quality low|medium|high|4k`, `--narrator aria|milo|kokoro|alloy`, `--speed 1.15`, `--quiz`, `--burn-captions`, and `--yes` for unattended runs. The full list is in the [reference](#reference) below.
+Common options: `--effort low|medium|high`, `--audience beginner|intermediate|expert`, `--tone casual|formal|socratic`, `--theme chalkboard|light|colorful`, `--template algorithm|code|compare|derivation|howto|timeline`, `--quality low|medium|high|4k`, `--narrator aria|milo|kokoro|alloy`, `--pace relaxed|normal|brisk`, `--speed 1.15`, `--quiz`, `--burn-captions`, and `--yes` for unattended runs. The full list is in the [reference](#reference) below.
 
 Each run writes to `output/<run_id>/`:
 
@@ -254,6 +254,24 @@ With no narrator set, `TTS_BACKEND` (`kokoro`, `openai` or `elevenlabs`) picks t
 Aria and Milo came out of a blind listening test against OpenAI, Fish and Gemini voices, then an audition of `eleven_v4` against `eleven_v3`. On `eleven_v4`, segments are synthesized separately (their lengths drive the animation), but each request carries its neighbouring segments as context (**request stitching**), so intonation carries across the joins. A 1 to 3 minute video is roughly 1,000 to 3,000 characters of narration. Compare voices on your own machine with `python scripts/tts_bench.py --out bench/`.
 
 **Word-level sync.** The script marks the words where visuals land (`[[1]]`, `[[2]]`, ...; never spoken or shown). The TTS backend reports when each marked word is spoken: ElevenLabs from its per-character timestamps, Kokoro from its token timings, OpenAI by estimate from character position. The scene calls `self.cue(k)` before each cued animation, so an equation appears as its word is said. Late cues are reported by the layout check, and every cue's spoken and shown time is logged in `layout_report.json`.
+
+**Pacing.** Videos are paced like a person presenting, not a script read back to back. Pick a preset per run with `--pace`, the `pace` API field or the Pace chips in the UI; set a default with `PACE` in `.env`.
+
+| | `relaxed` (default) | `normal` | `brisk` |
+| --- | --- | --- | --- |
+| Hold after each scene's last word (and at the end) | 2.0 s | 1.2 s | 0.6 s |
+| Silence before a scene's first word | 0.5 s | 0.35 s | 0.15 s |
+| Pause at a sentence end | 0.65 s | 0.45 s | 0.3 s |
+| Pause after a question | 1.1 s | 0.75 s | 0.45 s |
+| Pause at a colon before a result | 0.9 s | 0.6 s | 0.4 s |
+| Pause at a `[[beat]]` marker or paragraph break | 1.1 s | 0.75 s | 0.45 s |
+| Delivery speed | 0.94x | 1.0x | 1.06x |
+
+- **Scene hold.** After the narrator finishes a scene, the finished picture stays on screen, still and silent, for the hold before the next scene's transition starts. The clean-slate fade runs after the hold, in the short silence before the next scene's first word.
+- **Pauses** are total silence at that point: the voice's own short gap counts, and only the missing part is inserted, so beats are consistent across voices and never doubled. The script agent writes `[[beat]]` (or `[[pause]]`) sparingly where a teacher would deliberately stop: after a rhetorical question, before a payoff, after a key result. Beat markers are never spoken or shown.
+- **How.** Silence is inserted into the voiceover after synthesis, at the word boundaries the voice reports (ElevenLabs per-character timestamps, Kokoro token timings; OpenAI has none, so its estimated positions snap to the nearest natural gap in the audio), at the quietest point so no word is cut. Every later cue time and segment length moves with it, so `segments.json`, the scene clock, captions, chapters and the timeline include the pauses and word-level sync stays exact. ElevenLabs `eleven_v4` has no reliable pause control of its own (no SSML `<break>` on v3/v4, [best practices](https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices)), so all voices use the same mechanism.
+- **Speed** uses each voice's native control: ElevenLabs `voice_settings.speed` (0.7 to 1.2, sent with the voice's stored settings), Kokoro's `speed`, OpenAI's `speed`. `--speed` multiplies the pace's delivery speed (`relaxed` with `--speed 1.1` speaks at 1.03x).
+- **Overrides.** `SCENE_HOLD_S` sets the hold and `PACE_SPEECH_SPEED` the delivery speed of whichever preset is used. The manifest records the preset, its values and the speed actually sent (`pace`, `pacing`); `segments.json` records per segment `speech_end_sec`, `hold_sec` and every inserted pause.
 
 ## Reference
 
@@ -285,7 +303,8 @@ To see what a running server is: `curl http://127.0.0.1:8000/version` (version, 
 | `--template` | none | `algorithm`, `code`, `compare`, `derivation`, `howto`, `timeline` |
 | `--quality` | `MANIM_QUALITY` | `low` (480p15), `medium` (720p30), `high` (1080p60), `4k` (2160p60) |
 | `--narrator` | `NARRATOR` | `aria`, `milo`, `kokoro`, `alloy` |
-| `--speed` | `1.0` | Narration speed. OpenAI: native (0.25 to 4.0). Kokoro and ElevenLabs: ffmpeg `atempo` |
+| `--pace` | `PACE` (`relaxed`) | Presentation pacing: `relaxed`, `normal`, `brisk` (see Pacing under Narrators) |
+| `--speed` | `1.0` | Speed multiplier on top of the pace's delivery speed. Native per voice (ElevenLabs 0.7 to 1.2 overall, else ffmpeg `atempo`; Kokoro; OpenAI 0.25 to 4.0) |
 | `--run-id` | auto | Resume a previous run from its checkpoint |
 | `--preview` | off | Render a fast 480p15 `preview.mp4` instead of the full render |
 | `--no-render` | off | Run the AI pipeline only, skipping render and merge |
@@ -332,6 +351,9 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 | `RENDER_BACKEND` | `auto` | `auto`, `local`, `docker` |
 | `MANIM_QUALITY` | `medium` | `low`, `medium`, `high`, `4k` |
 | `NARRATOR` | unset | Default narrator: `aria`, `milo`, `kokoro`, `alloy` |
+| `PACE` | `relaxed` | Default pacing preset: `relaxed`, `normal`, `brisk` |
+| `SCENE_HOLD_S` | preset | Seconds of still silence after each scene's last word (overrides the preset) |
+| `PACE_SPEECH_SPEED` | preset | Delivery speed of the preset (0.25 to 4.0) |
 | `TTS_BACKEND` | `kokoro` | Used when no narrator is set: `kokoro`, `openai`, `elevenlabs` |
 | `ELEVENLABS_API_KEY` | | For `aria`, `milo` and `TTS_BACKEND=elevenlabs` |
 | `ELEVENLABS_MODEL_ID` | `eleven_v4` | ElevenLabs model |
@@ -467,7 +489,7 @@ The render quality is stored in the run's `manifest.json`. Passing a different `
 
 - **Captions and chapters.** Every full render writes `captions.srt`, embeds chapter markers in `final.mp4` (visible in QuickTime, VLC and most players), and prints a YouTube-style chapter list. `--burn-captions` also burns subtitles into the video.
 - **Quiz.** `--quiz` writes `quiz.json`: 4 to 6 multiple-choice questions with answers and explanations. It works with `--no-render` too, since it only needs the script.
-- **Speed.** `--speed 1.25` or `--speed 0.85`. OpenAI uses its native speed parameter; Kokoro and ElevenLabs audio goes through ffmpeg `atempo`. `segments.json` records the post-speed durations, so captions and chapters line up.
+- **Speed.** `--speed 1.25` or `--speed 0.85`, on top of the pace's delivery speed. Each voice's native speed control is used (ElevenLabs falls back to ffmpeg `atempo` outside 0.7 to 1.2). `segments.json` records the post-speed, post-pause durations, so captions and chapters line up.
 
 </details>
 
@@ -525,7 +547,7 @@ curl -s http://127.0.0.1:8000/api/jobs/<id>/events
 curl -o final.mp4 http://127.0.0.1:8000/api/jobs/<id>/files/final.mp4
 ```
 
-Request fields: `topic`, `effort`, `audience`, `tone`, `theme`, `template`, `quality` (omit for `MANIM_QUALITY`), `narrator` (omit for `NARRATOR` / `TTS_BACKEND`), `speed` (0.25 to 4.0), `burn_captions`, `quiz`, `qa_density`, `urls`, `github`. Unknown values return 422. Event and resource shapes are documented in [docs/ui-data-contract.md](docs/ui-data-contract.md).
+Request fields: `topic`, `effort`, `audience`, `tone`, `theme`, `template`, `quality` (omit for `MANIM_QUALITY`), `narrator` (omit for `NARRATOR` / `TTS_BACKEND`), `pace` (`relaxed`, `normal`, `brisk`; omit for `PACE`), `speed` (0.25 to 4.0), `burn_captions`, `quiz`, `qa_density`, `urls`, `github`. Unknown values return 422. Event and resource shapes are documented in [docs/ui-data-contract.md](docs/ui-data-contract.md).
 
 </details>
 

@@ -40,6 +40,14 @@ def mock_anthropic_client():
 
 
 @pytest.fixture(autouse=True)
+def _default_pace(monkeypatch):
+    """Pacing reads PACE / SCENE_HOLD_S / PACE_SPEECH_SPEED at call time; tests
+    expect the code defaults, whatever the machine's .env says."""
+    for k in ("PACE", "SCENE_HOLD_S", "PACE_SPEECH_SPEED"):
+        monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_llm_clients():
     """pipeline.llm caches clients; tests that patch anthropic.Anthropic need a fresh one."""
     from pipeline import llm

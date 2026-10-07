@@ -19,6 +19,10 @@ import re
 from bisect import bisect_left
 
 _MARKER = re.compile(r"\[\[\s*(\d+)\s*\]\]")
+# Beat markers: [[beat]] / [[pause]] ask for a deliberate silent pause at that
+# point (pipeline/pacing.py). Like cue markers they are never spoken or shown.
+_BEAT = re.compile(r"\[\[\s*(?:beat|pause)\s*\]\]", re.IGNORECASE)
+_ANY = re.compile(r"\[\[\s*(?:(\d+)|beat|pause)\s*\]\]", re.IGNORECASE)
 
 
 def strip_cues(text: str) -> str:
@@ -31,29 +35,69 @@ def parse_cues(text: str) -> tuple[str, dict[int, int]]:
 
     The offset points at the first non-space character after the marker in
     the clean text, i.e. the first letter of the cued word. A repeated number
-    keeps its first position.
+    keeps its first position. Beat markers are removed too (see parse_markers).
+    """
+    clean, offsets, _ = parse_markers(text)
+    return clean, offsets
+
+
+def parse_markers(text: str) -> tuple[str, dict[int, int], list[int]]:
+    """(clean_text, {cue_number: char_offset}, [beat_offset, ...]).
+
+    Cue offsets are as in parse_cues. A beat offset is where the pause goes:
+    the start of the next word after the marker (punctuation right after the
+    marker is skipped: "here[[beat]]. Next" pauses before "Next"), or
+    len(clean_text) for a beat at the very end of the text.
     """
     text = re.sub(r"[ \t]{2,}", " ", text or "")
     out: list[str] = []
     offsets: dict[int, int] = {}
+    beats: list[int] = []
     pos = 0
-    for m in _MARKER.finditer(text):
+    for m in _ANY.finditer(text):
         out.append(text[pos:m.start()])
         pos = m.end()
         built = "".join(out)
         rest = text[pos:]
         lead = len(rest) - len(rest.lstrip())
-        if not built or built[-1].isspace():
+        if built and built[-1].isspace() and rest[:1] in tuple(".,;:!?)"):
+            # "here [[beat]]." -> "here.": no space before the punctuation.
+            out[-1] = out[-1].rstrip()
+            built = "".join(out)
+            anchor = len(built)
+        elif not built or built[-1].isspace():
             # "the [[1]] slope" -> "the slope": drop the space after the marker.
             pos += lead
             anchor = len(built)
         else:
             # "slope.[[2]] Then" -> "slope. Then": the word starts after the space.
             anchor = len(built) + lead
-        offsets.setdefault(int(m.group(1)), anchor)
+        if m.group(1) is not None:
+            offsets.setdefault(int(m.group(1)), anchor)
+        else:
+            beats.append(anchor)
     out.append(text[pos:])
     clean = "".join(out)
-    return clean, {k: min(v, max(0, len(clean) - 1)) for k, v in offsets.items()}
+    if _ANY.search(text) and not text[pos:].strip():
+        # A trailing marker leaves the space before it behind: "end. [[beat]]".
+        clean = clean.rstrip()
+    n = len(clean)
+    beat_offsets = []
+    for b in beats:
+        # Skip punctuation glued to the marker, then spaces: the pause sits
+        # before the next spoken word.
+        while b < n and not clean[b].isspace() and not clean[b].isalnum():
+            b += 1
+        while b < n and clean[b].isspace():
+            b += 1
+        beat_offsets.append(len(clean.rstrip()) if b >= len(clean.rstrip()) else b)
+    return (clean, {k: min(v, max(0, n - 1)) for k, v in offsets.items()},
+            sorted(set(beat_offsets)))
+
+
+def strip_markers(text: str) -> str:
+    """Text without cue or beat markers (alias of strip_cues)."""
+    return parse_markers(text)[0]
 
 
 def char_time(offsets: dict[int, int], cues: list, clean_len: int, duration: float, char: int) -> float:
@@ -70,6 +114,25 @@ def char_time(offsets: dict[int, int], cues: list, clean_len: int, duration: flo
     return duration * char / max(1, clean_len)
 
 
+def anchor_time(anchors: list, char: int) -> float | None:
+    """Time of character `char` interpolated through measured (char_offset,
+    seconds) anchors (segments.json `anchors`, written by pipeline/pacing.py:
+    speech start, every cue word, every word after an inserted pause, speech
+    end). Holds the earlier anchor's time across an inserted pause, so a
+    caption never starts inside the silence. None without usable anchors."""
+    pts = sorted((int(a), float(t)) for a, t in (anchors or []) if t is not None)
+    if len(pts) < 2:
+        return None
+    if char <= pts[0][0]:
+        return pts[0][1]
+    for (a, ta), (b, tb) in zip(pts, pts[1:]):
+        if a <= char <= b:
+            if char == b:
+                return tb
+            return ta + max(0.0, tb - ta) * (char - a) / max(1, b - a)
+    return pts[-1][1]
+
+
 def segment_cue_text(seg: dict) -> str:
     """The marked text of a segment (falls back to its plain text)."""
     return seg.get("cue_text") or seg.get("text", "")
@@ -81,7 +144,7 @@ def clean_segments(segments: list[dict]) -> list[dict]:
     for s in segments:
         raw = segment_cue_text(s)
         clean = strip_cues(raw)
-        out.append({**s, "text": clean, **({"cue_text": raw} if _MARKER.search(raw) else {})})
+        out.append({**s, "text": clean, **({"cue_text": raw} if _ANY.search(raw) else {})})
     return out
 
 

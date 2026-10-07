@@ -19,6 +19,7 @@ class CreateJobRequest(BaseModel):
     qa_density: Literal["zero", "normal", "high"] = "normal"
     quality: Literal["low", "medium", "high", "4k"] | None = None   # None = server default
     narrator: Literal["kokoro", "aria", "milo", "alloy"] | None = None  # None = server default
+    pace: Literal["relaxed", "normal", "brisk"] | None = None  # None = server default (PACE, else relaxed)
 
 
 class JobResponse(BaseModel):
@@ -32,6 +33,7 @@ class JobResponse(BaseModel):
     effort: str | None = None
     quality: str | None = None
     narrator: str | None = None
+    pace: str | None = None
     qa_density: str | None = None
     quiz: bool = False
     burn_captions: bool = False

@@ -186,8 +186,11 @@ def test_layout_checker_writes_scene_and_segments_before_docker(tmp_path):
     assert written_before_docker["scene"], "scene.py must exist before Docker communicate()"
     assert written_before_docker["segments"], "segments.json must exist before Docker communicate()"
     segs = written_before_docker["segments_data"]
-    assert segs[0]["actual_duration_sec"] == 2.0
-    assert segs[1]["actual_duration_sec"] == 3.0
+    # Estimates at the run's pace: speech at the delivery speed + lead-in + hold.
+    from pipeline.pacing import estimate_segment, resolve_pace
+    for seg, est in zip(state["script_segments"], segs):
+        assert est["actual_duration_sec"] == estimate_segment(seg, resolve_pace())["actual_duration_sec"]
+        assert est["actual_duration_sec"] > seg["estimated_duration_sec"] + resolve_pace().hold
 
 
 def test_layout_checker_stale_report_not_used(tmp_path):
