@@ -514,10 +514,12 @@
           <span class="label">Server</span>
           <span class="box-line"><span class="dot unknown"></span><span class="faint">Checking</span></span>
         </a>
+        <a class="ver-line" href="/version" id="ver-line" title="Version of this server"></a>
       </div>`;
     wireMenu(side);
     refreshCounts();
     refreshBox();
+    refreshVersion();
     setInterval(refreshCounts, 15000);
     setInterval(refreshBox, 60000);
   }
@@ -609,6 +611,23 @@
       ns.classList.toggle('warn', bad > 0);
       ns.title = bad ? `${bad} check${bad > 1 ? 's' : ''} need attention` : '';
     }
+  }
+
+  // Running version from /api/version: `v0.3.1 · 1a2b3c4` (+ `· modified` if the
+  // checkout has uncommitted changes). Hidden if the endpoint does not answer.
+  async function refreshVersion() {
+    const el = document.getElementById('ver-line');
+    if (!el) return;
+    const res = await getJSON('/api/version');
+    const d = res.ok && res.data ? res.data : null;
+    if (!d || !d.version) { el.hidden = true; return; }
+    const g = d.git || {};
+    const parts = [`<span class="ver-num">v${esc(d.version)}</span>`];
+    if (g.short) parts.push(`<span class="ver-git">${esc(g.short)}</span>`);
+    if (g.dirty) parts.push('<span class="ver-git">modified</span>');
+    el.innerHTML = parts.join('<span class="ver-git"> · </span>');
+    el.title = `Chalkboard ${d.version}${g.commit ? ' at ' + g.commit : ''}${g.dirty ? ' (uncommitted changes)' : ''}. Full details at /version`;
+    el.setAttribute('aria-label', `Version ${d.version}${g.short ? ', commit ' + g.short : ''}${g.dirty ? ', modified' : ''}`);
   }
 
   window.CB = {

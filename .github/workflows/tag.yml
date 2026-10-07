@@ -1,0 +1,39 @@
+name: Tag version
+
+# On every push to main, tag the commit v<VERSION> unless that tag exists.
+# Tags only; no GitHub Release objects.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-version
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push v<VERSION>
+        run: |
+          v="$(tr -d '[:space:]' < VERSION)"
+          if ! echo "$v" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "VERSION '$v' is not semver; not tagging." >&2
+            exit 1
+          fi
+          git fetch -q --tags origin
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "Tag v$v already exists; nothing to do."
+            exit 0
+          fi
+          git tag "v$v" "$GITHUB_SHA"
+          git push origin "refs/tags/v$v"
+          echo "Tagged $GITHUB_SHA as v$v"

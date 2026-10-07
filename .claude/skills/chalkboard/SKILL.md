@@ -71,6 +71,10 @@ To re-render after hand-editing `output/<run_id>/scene.py`: delete `output/<run_
 
 A run whose pipeline ended in escalation (retries exhausted, status failed) is finished as far as the checkpoint is concerned; resuming it will not retry. Start a new run instead, perhaps with a `--template` or a narrower topic.
 
+## Which version is running
+
+`curl <base>/version` on a server (e.g. `curl -s http://127.0.0.1:8000/version`) returns the version, git commit (`dirty: true` = uncommitted changes), uptime, runtime, config and latest changelog entry. Locally: `python main.py --version`. Each run's `manifest.json` and `run_stats.json` record `chalkboard_version` and `git_commit`. If you change this repo, bump `VERSION` (see `CLAUDE.md`, Versioning).
+
 ## Debugging
 
 1. **Read the log.** Each node prints `[node] ... → status`; retries print `[label] failed (...) retrying`; the render prints `[render] animation N/M`; QA prints `[qa] issues found:` with each issue.

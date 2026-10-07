@@ -2,6 +2,11 @@
 
 This document is the reference for anyone (human or AI agent) contributing to Chalkboard. It covers architecture, design decisions, known pitfalls, and how to extend the project. User-facing setup lives in `README.md`; a Claude Code skill for running the tool lives in `.claude/skills/chalkboard/SKILL.md`.
 
+## Versioning (required for every change)
+
+- **Every change merged to main bumps `VERSION`** and adds a `CHANGELOG.md` entry: `python scripts/bump_version.py patch "what changed"` (patch by default, `minor` for notable features, `major` for breaking changes). Commit both files. CI (`version` job) fails a pull request whose `VERSION` is not greater than main's or has no changelog heading; if main moved on, merge it and bump past its version. Pushes to main are tagged `v<VERSION>` by `.github/workflows/tag.yml`.
+- **Check what a running server is** with `curl <base>/version` (pretty JSON; `/api/version` is the same, compact): version, git commit/branch/dirty, uptime, Python/Manim/ffmpeg, model, render backend, latest changelog entry, endpoints. `python main.py --version` for the CLI. `pipeline/version.py` reads `VERSION` and the git facts (null when git is unavailable, never guessed).
+
 ---
 
 ## What this project does
@@ -528,7 +533,8 @@ python run_server.py --reload         # dev (kills in-flight jobs on reload)
 | `GET` | `/api/jobs/{id}/events` | SSE stream: replays stored events (`?replay=0` to skip), then node updates and live telemetry (`peek`, `usage`, `render`, `tts`), then `{"done": true}` |
 | `GET` | `/api/jobs/{id}/files/{filename}` | Serve an output file (path-traversal-safe; also works for library runs) |
 | `GET` | `/api/claude-status` | Claude status summary |
-| `GET` | `/api/meta` | Defaults, narrators + `configured` (key set), render backend, model, running jobs |
+| `GET` | `/version`, `/api/version` | Version record (`server/version_routes.py`), `Cache-Control: no-store` |
+| `GET` | `/api/meta` | Defaults, narrators + `configured` (key set), render backend, model, running jobs, `version` |
 | `GET` | `/api/jobs/{id}/timeline` | Segments, measured durations, cues, waveform, rendered segments |
 | `GET` | `/api/library/{id}/timeline` | Same, for a finished run |
 | `GET` | `/api/library/{id}/quality` | Sync (render cue_log), layout report, visual QA |

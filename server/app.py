@@ -15,6 +15,8 @@ from server.jobs import JobStore
 from server.library import SQLiteLibraryStore, LibraryStore, VideoMeta
 from server.routes import make_router
 from server.library_routes import make_library_router, make_pages_router
+from server.version_routes import make_version_router
+from pipeline.version import __version__ as CHALKBOARD_VERSION, git as _git_info
 
 
 def _measured_duration(run_dir: Path) -> float | None:
@@ -106,12 +108,14 @@ def create_app(
         await _backfill(library_store, Path(OUTPUT_DIR).resolve(), refresh=True)
         yield
 
-    app = FastAPI(title="Chalkboard API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Chalkboard API", version=CHALKBOARD_VERSION or "unknown", lifespan=lifespan)
 
     # API routes (must come before StaticFiles mount)
     app.include_router(make_router(store, library_store))
     app.include_router(make_library_router(library_store))
     app.include_router(make_pages_router())
+    app.include_router(make_version_router())
+    _git_info()  # capture git facts at startup
 
     # Serve frontend static files
     static_dir = Path(__file__).parent / "static"

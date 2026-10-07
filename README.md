@@ -210,6 +210,7 @@ ssh -L 8000:localhost:8000 user@that-machine     # then open http://localhost:80
 - **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
 - **In progress.** Each pipeline stage as it happens, with Claude's script, fact check and scene code streaming in as they are written, token usage and cost per call, and render and TTS progress parsed from the real processes.
 - **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, your own notes (saved inline, searchable from the library), and a quality panel with measured cue delays, the layout check and visual QA.
+- **Version.** The sidebar footer shows the running version and commit; it links to `/version`, which returns the full version record as JSON.
 - **Status.** Real probes, cached for 60 seconds: Claude API, the Claude status page, ElevenLabs, Kokoro, OpenAI TTS, the renderer toolchain, GPU, disk and the job queue. Anything that cannot be checked without spending money shows as Unknown.
 
 The rule behind all of it: the UI never shows a value it cannot back with a real source. Missing data reads "Unknown" or "Not recorded", never a placeholder. The full contract is in [docs/ui-data-contract.md](docs/ui-data-contract.md).
@@ -257,6 +258,17 @@ Aria and Milo came out of a blind listening test against OpenAI, Fish and Gemini
 ## Reference
 
 The sections below are collapsed to keep this page short. For architecture and contribution notes see [CLAUDE.md](CLAUDE.md); for the web UI's data rules see [docs/ui-data-contract.md](docs/ui-data-contract.md).
+
+<details>
+<summary><b>Versioning</b> &nbsp;<sub><code>VERSION</code>, <code>/version</code>, <code>CHANGELOG.md</code></sub></summary>
+
+<br>
+
+`VERSION` at the repo root is the single source of truth, and every change merged to main bumps it (`python scripts/bump_version.py patch "what changed"`; `minor` for notable features), with an entry in [CHANGELOG.md](CHANGELOG.md). CI fails a pull request that does not bump, and each new version on main is tagged `v<VERSION>`.
+
+To see what a running server is: `curl http://127.0.0.1:8000/version` (version, git commit and whether the checkout is modified, uptime, Python/Manim/ffmpeg versions, model and render backend, the latest changelog entry, and where to go next). The CLI has `python main.py --version`, and every run records `chalkboard_version` and `git_commit` in `manifest.json` and `run_stats.json`.
+
+</details>
 
 <details>
 <summary><b>CLI flags</b> &nbsp;<sub>All <code>main.py</code> flags</sub></summary>
@@ -493,7 +505,8 @@ python run_server.py --reload           # dev auto-reload (kills in-flight jobs 
 | `GET /api/voices` | Narrators and their availability |
 | `GET /api/voices/{narrator}/sample` | A real, cached voice sample (generated on first request) |
 | `GET /api/stats`, `GET /api/estimate` | Library statistics and run-time estimates from past runs |
-| `GET /api/meta` | Server defaults, narrators, render backend, model, running jobs |
+| `GET /version`, `GET /api/version` | Running version, git commit, uptime, runtime, config, latest changelog entry, useful endpoints |
+| `GET /api/meta` | Server defaults, narrators, render backend, model, running jobs, `version` |
 | `GET /api/claude-status` | Claude status page summary |
 
 ```bash

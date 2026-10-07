@@ -69,6 +69,7 @@ from chalkboard import ChalkboardClient
 client = ChalkboardClient(base_url="http://127.0.0.1:8000/api")
 
 info = client.meta()                 # GET /api/meta
+print(info["version"])              # running Chalkboard version (GET /version has the full record)
 print(info["defaults"])              # quality, narrator, tts_backend, effort, ...
 print([n["id"] for n in info["narrators"] if n["configured"]])
 

@@ -910,6 +910,8 @@ def _generate_quiz(run_id: str) -> Path | None:
 
 def main():
     parser = argparse.ArgumentParser(description="Chalkboard — AI animation pipeline")
+    from pipeline.version import version_string
+    parser.add_argument("--version", action="version", version=version_string())
     parser.add_argument("--topic", required=True, help="Topic to explain")
     parser.add_argument("--effort", choices=EFFORT_CHOICES, default=DEFAULT_EFFORT)
     parser.add_argument("--audience", choices=AUDIENCE_CHOICES, default=DEFAULT_AUDIENCE,
