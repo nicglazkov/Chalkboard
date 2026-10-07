@@ -90,6 +90,9 @@ img { max-width: 100%; }
 .nav-link .count.warn { color: var(--warn); }
 .box-card { margin-top: auto; border: 1px solid var(--line); border-radius: .5rem; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; background: var(--raise); text-decoration: none; color: var(--text); flex: none; }
 .box-card:hover { border-color: var(--line-2); color: var(--text); }
+.ver-line { display: block; padding: .5rem .25rem 0; font: .625rem/1.4 var(--mono); letter-spacing: .02em; color: var(--faint); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.ver-line:hover { color: var(--muted); }
+.ver-line:empty { display: none; }
 .box-line { display: flex; align-items: flex-start; gap: .5rem; font-size: .8125rem; line-height: 1.4; overflow-wrap: anywhere; color: var(--text); }
 .box-line .dot { margin-top: .4rem; }
 .box-sub { font: .6875rem/1.45 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
@@ -493,6 +496,8 @@ select.input { font: .75rem var(--mono); }
   .box-line { justify-content: center; }
   .box-line > :not(.dot) { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .box-line .dot { width: .5rem; height: .5rem; }
+  .ver-line { text-align: center; padding: .375rem 0 0; font-size: .5625rem; letter-spacing: 0; }
+  .ver-line .ver-git { display: none; }
 }
 
 /* Narrow windows: a top bar with the brand, Generate and a menu button. */
@@ -509,6 +514,7 @@ select.input { font: .75rem var(--mono); }
   .nav-link { height: 2.75rem; font-size: .8125rem; }
   .nav-link .ico { width: 1.125rem; height: 1.125rem; }
   .box-card { margin-top: 0; }
+  .ver-line { padding: 0 .25rem; }
   .main { padding-bottom: 2.5rem; }
   /* touch targets */
   .btn, .input, select.input, .input.num, .pill-btn, .tab { min-height: 2.5rem; }

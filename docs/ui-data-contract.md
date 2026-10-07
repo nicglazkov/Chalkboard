@@ -27,7 +27,7 @@ Adds `totals: {"input_tokens", "output_tokens", "web_searches", "cost_usd"|null,
 summed from usage events (cost `null` if any call had an unknown price), and the job settings.
 
 ## Per-run record (`output/<run_id>/run_stats.json`, written by CLI and server runs)
-`{"started_at", "finished_at", "stage_seconds": {node: secs}, "input_tokens", "output_tokens",
+`{"chalkboard_version", "git_commit"|null, "started_at", "finished_at", "stage_seconds": {node: secs}, "input_tokens", "output_tokens",
 "web_searches", "cost_usd"|null, "tts_chars"|null, "narrator", "quality", "effort", "result": "done"|"failed"}`.
 Older runs have no file; anything derived from it is then `null`.
 
@@ -45,6 +45,11 @@ From the real render's `cue_log`/`layout_report.json` and a persisted `qa_report
 ## Stats (`GET /api/stats`)
 `{"videos_total", "videos_this_week", "median_sync_lag_s"|null, "sync_runs": int, "qa_pass_rate"|null,
 "qa_runs": int, "median_run_seconds"|null, "timed_runs": int, "computed_at"}` from library + run records only.
+
+## Version (`GET /version`, `GET /api/version`; also `version` in `/api/meta` and `/api/status`)
+`{"name", "version", "git": {"commit", "short", "date", "branch", "dirty"}, "server": {"started_at", "uptime_s", "host", "hostname", "port"},
+"changelog": {"version", "date", "heading", "items"}|null, "runtime": {"python", "manim", "ffmpeg"}, "config": {"model", "render_backend", "narrator", "pace"}, "endpoints": [{"path", "about"}]}`.
+Unknown values are `null` (git fields when git or the repo is unavailable). `Cache-Control: no-store`. The sidebar footer shows `v<version> · <short>` (`· modified` when `dirty`) linking to `/version`, and hides itself if the endpoint fails.
 
 ## Status (`GET /api/status`)
 `{"checked_at", "overall": "ok"|"degraded"|"down"|"unknown", "checks": [{"id", "name", "detail", "state": "ok"|"warn"|"down"|"unknown", "summary", "evidence", "checked_at"}]}`

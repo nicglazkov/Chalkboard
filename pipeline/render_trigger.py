@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 from config import OUTPUT_DIR, TTS_BACKEND, MANIM_QUALITY, NARRATOR
 from pipeline import telemetry
+from pipeline import version as _version
 from pipeline.cues import parse_cues, proportional_cue_times, segment_cue_text, strip_cues
 from pipeline.state import PipelineState
 from pipeline.tts.base import get_backend
@@ -92,6 +93,7 @@ async def render_trigger(state: PipelineState) -> dict:
     (run_dir / "manifest.json").write_text(json.dumps({
         "run_id": run_id,
         "scene_class_name": "ChalkboardScene",
+        **_version.stamp(),
         "quality": state.get("quality") or MANIM_QUALITY,
         "topic": state["topic"],
         "title": state.get("title", ""),

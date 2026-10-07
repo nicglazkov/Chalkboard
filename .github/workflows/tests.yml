@@ -58,3 +58,21 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q -rs
+
+  # Every change merged to main bumps VERSION and adds a CHANGELOG.md entry.
+  version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: VERSION bumped and in CHANGELOG.md
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch -q origin "$BASE_REF"
+          base="$(git show "origin/$BASE_REF:VERSION" 2>/dev/null || true)"
+          python3 scripts/check_version.py "$base"

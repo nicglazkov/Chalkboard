@@ -18,6 +18,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from pipeline import version as _version
 from pipeline.telemetry import now_iso
 
 # Events that are not graph nodes.
@@ -87,6 +88,7 @@ def build(events: list[dict], *, started_at: str, finished_at: str, settings: di
     t = totals(events)
     return {
         "run_id": settings.get("run_id"),
+        **_version.stamp(),
         "started_at": started_at,
         "finished_at": finished_at,
         "total_seconds": round((_parse_ts(finished_at) - _parse_ts(started_at)).total_seconds(), 3),

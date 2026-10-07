@@ -18,6 +18,7 @@ from server.upload import (
     validate_and_save,
     FileSizeError, TotalSizeError, UnsupportedFileTypeError,
 )
+from pipeline.version import __version__ as CHALKBOARD_VERSION
 from server import insights, run_data, status as status_mod, voices as voices_mod
 
 
@@ -167,6 +168,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             "running_jobs": sum(1 for j in store.list() if j.status in ("pending", "running")),
             # What the upload endpoint accepts, so the UI validates with the same list.
             "upload": _upload_rules(),
+            "version": CHALKBOARD_VERSION,
         }
 
     @router.get("/jobs", response_model=list[JobResponse])
@@ -212,7 +214,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
 
     @router.get("/status")
     async def service_status():
-        return await status_mod.status(store, Path(OUTPUT_DIR).resolve())
+        return {**await status_mod.status(store, Path(OUTPUT_DIR).resolve()), "version": CHALKBOARD_VERSION}
 
     @router.get("/voices")
     async def list_voices():
