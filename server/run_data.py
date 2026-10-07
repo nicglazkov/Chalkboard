@@ -41,12 +41,20 @@ def segments_timeline(segments: list[dict]) -> list[dict]:
         dur = seg.get("actual_duration_sec")
         dur = float(dur) if isinstance(dur, (int, float)) else None
         cues = seg.get("cues") if dur is not None else None
+        speech_end = seg.get("speech_end_sec") if dur is not None else None
+        pauses = seg.get("pauses") if dur is not None else None
         out.append({
             "index": i,
             "start_s": round(start, 3) if start is not None else None,
             "duration_s": round(dur, 3) if dur is not None else None,
             "label": _label(seg.get("text", "")),
             "cues": [c for c in cues] if isinstance(cues, list) else [],
+            # Pacing (pipeline/pacing.py): the last word ends here (seconds from
+            # the segment start; the rest is the silent hold), and the silences
+            # inserted inside the narration. null / [] for runs before pacing.
+            "speech_end_s": float(speech_end) if isinstance(speech_end, (int, float)) else None,
+            "pauses": [{"at_s": p.get("at"), "sec": p.get("sec"), "kind": p.get("kind")}
+                       for p in pauses if isinstance(p, dict)] if isinstance(pauses, list) else [],
         })
         start = start + dur if (start is not None and dur is not None) else None
     return out

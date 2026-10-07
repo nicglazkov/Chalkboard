@@ -28,6 +28,7 @@ class PipelineState(TypedDict):
     status: Literal["drafting", "validating", "needs_user_input", "approved", "failed"]
     context_file_paths: list[str]
     speed: float
+    pace: str | None      # "relaxed" | "normal" | "brisk"; None = PACE env, else relaxed (pipeline/pacing.py)
     template: str | None
     research_brief: str | None
     research_sources: list[str]

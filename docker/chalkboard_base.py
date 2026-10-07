@@ -213,7 +213,9 @@ class ChalkboardSceneBase:
     Public API (called by generated construct()):
         self.begin_segment(n, duration)   — start of each segment
         self.next_segment(n, duration, clear=items)
-                                          — hold, clear, then begin segment n
+                                          — hold, begin segment n, clear
+        self.segment_time_left()          — seconds until the segment ends
+        self.speech_time_left()           — seconds until its last word ends
         self.end_layout_check()           — BEFORE the final FadeOut
         self.cue(k)                       — wait for cue marker [[k]] of the
                                             current segment's narration, so the
@@ -224,19 +226,31 @@ class ChalkboardSceneBase:
     run short, the scene waits out the gap, so visuals can never drift ahead
     of the voiceover; next_segment() does that wait while the old content is
     still on screen. Running long is reported as a timing violation.
+
+    Pacing (pipeline/pacing.py): each segment's audio ends with a silent hold
+    (>= SCENE_HOLD_S after the last word, `speech_end_sec` in segments.json)
+    and starts with a short silent lead-in. The finished visual stays still
+    through the hold; the clean-slate fade runs at the start of the next
+    segment, inside its lead-in, never during the hold. An animation still
+    running more than _HOLD_BUSY_TOL into the hold is a `hold_busy` violation.
     """
 
     # Allowed lag of the visuals behind narration before it is a violation.
     _SYNC_DRIFT_TOL = 2.0
     # A cued animation starting later than this after its word is a violation.
     _CUE_LATE_TOL = 0.6
+    # An animation may finish this far into the silent hold after the last
+    # word (a reveal on the final word); later than that is `hold_busy`.
+    _HOLD_BUSY_TOL = 0.5
 
     # Word-level sync state. Class-level defaults so subclasses/test doubles
     # that skip __init__ still work. _cues: {segment: [t1, t2, ...]} seconds
     # from the segment's narration start (None = loaded lazily from
     # segments.json next to the scene file; tests may assign it directly).
     _cues = None
+    _speech_end = None   # {segment: seconds from segment start}; lazily loaded
     _seg_audio_start: float = 0.0
+    _seg_hold_flagged: bool = False
     _seg_cue_calls: int = 0
     # Set by templates: they cue what they can, so unused cues are not an error.
     _cues_template_driven: bool = False
@@ -274,26 +288,44 @@ class ChalkboardSceneBase:
         # (the voiceover is the segments' audio back to back).
         self._seg_audio_start = max(self._sync_target, 0.0)
         self._seg_cue_calls = 0
+        self._seg_hold_flagged = False
         self._sync_target = max(self._sync_target, 0.0) + duration
 
     def next_segment(self, n: int, duration: float, clear=(), fade: float = 0.5) -> None:
         """Finish the current segment and start segment n, in sync with narration.
 
-        Holds the current frame until `fade` seconds before the current
-        segment's narration ends, fades out `clear`, then begin_segment(n).
-        Use this instead of a manual remainder wait + FadeOut + begin_segment.
+        Holds the current frame until the current segment's audio ends (its
+        silent hold included), starts segment n, then fades out `clear`. The
+        fade runs in segment n's silent lead-in, so the hold after the last
+        word is never cut short. Use this instead of a manual remainder wait +
+        FadeOut + begin_segment.
         """
-        if self._lc_segment is not None:
-            self._sync_to(self._sync_target - (fade if clear else 0.0))
+        self.begin_segment(n, duration)
         items = list(clear)
         if items:
             from manim import FadeOut
             self.play(*[FadeOut(m) for m in items], run_time=fade)
-        self.begin_segment(n, duration)
 
     def segment_time_left(self) -> float:
-        """Seconds of narration left in the current segment (never negative)."""
+        """Seconds left in the current segment's audio, hold included (never negative)."""
         return max(0.0, self._sync_target - self._scene_time())
+
+    def speech_time_left(self) -> float:
+        """Seconds until the current segment's last word ends (never negative).
+        Equals segment_time_left() when the segment has no measured hold."""
+        end = self._segment_speech_end()
+        if end is None:
+            return self.segment_time_left()
+        return max(0.0, getattr(self, "_seg_audio_start", 0.0) + end - self._scene_time())
+
+    def _segment_speech_end(self):
+        seg = self._lc_segment
+        if seg is None:
+            return None
+        if self._speech_end is None:
+            self._speech_end = {i: s.get("speech_end_sec") for i, s in enumerate(self._load_segments())}
+        v = self._speech_end.get(seg)
+        return float(v) if isinstance(v, (int, float)) else None
 
     # ------------------------------------------------------------------
     # Word-level sync: cue markers
@@ -358,8 +390,12 @@ class ChalkboardSceneBase:
         return self._cues
 
     def _load_cues(self) -> dict:
-        """Read per-segment `cues` from segments.json next to the scene file
-        (falling back to the report directory, where renders keep it)."""
+        """Per-segment `cues` from segments.json."""
+        return {i: (s.get("cues") or []) for i, s in enumerate(self._load_segments())}
+
+    def _load_segments(self) -> list:
+        """segments.json next to the scene file (falling back to the report
+        directory, where renders keep it); [] when there is none."""
         candidates = []
         mod = sys.modules.get(type(self).__module__)
         f = getattr(mod, "__file__", None)
@@ -372,8 +408,8 @@ class ChalkboardSceneBase:
             except Exception:
                 continue
             if isinstance(data, list):
-                return {i: (s.get("cues") or []) for i, s in enumerate(data) if isinstance(s, dict)}
-        return {}
+                return [s if isinstance(s, dict) else {} for s in data]
+        return []
 
     def _scene_time(self) -> float:
         # In a real render, the renderer's clock counts the frames actually
@@ -449,7 +485,30 @@ class ChalkboardSceneBase:
             self._sync_tracked += actual
             if not self._lc_done and self._lc_segment is not None:
                 self._lc_run_time += actual
+                self._lc_check_hold()
         return result
+
+    def _lc_check_hold(self) -> None:
+        """Flag an animation that runs into the silent hold after the last word."""
+        if getattr(self, "_seg_hold_flagged", False):
+            return
+        end = self._segment_speech_end()
+        if end is None:
+            return
+        into = self._scene_time() - (getattr(self, "_seg_audio_start", 0.0) + end)
+        if into > self._HOLD_BUSY_TOL:
+            self._seg_hold_flagged = True
+            self._lc_violations.append({
+                "type": "hold_busy",
+                "segment": self._lc_segment,
+                "into_hold_sec": round(into, 2),
+                "description": (
+                    f"Segment {self._lc_segment}: an animation is still running {into:.1f}s after "
+                    f"the narration's last word, inside the silent hold that lets the viewer take "
+                    f"in the finished picture. Finish this segment's animations by its last word "
+                    f"(shorten them, or move them before the last cue) and let the hold stay still."
+                ),
+            })
 
     # ------------------------------------------------------------------
     # wait() override — accumulate duration

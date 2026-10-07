@@ -41,6 +41,7 @@ class Job:
     qa_density: _QADensity = "normal"
     quality: str | None = None
     narrator: str | None = None
+    pace: str | None = None
     upload_dir: Path | None = None          # temp dir for uploaded files; deleted after run
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     events: list[dict] = field(default_factory=list)
@@ -101,13 +102,15 @@ class JobStore:
                qa_density: _QADensity = "normal",
                upload_dir: Path | None = None,
                quality: str | None = None,
-               narrator: str | None = None) -> Job:
+               narrator: str | None = None,
+               pace: str | None = None) -> Job:
         job_id = str(uuid.uuid4())
         job = Job(id=job_id, topic=topic, effort=effort, audience=audience,
                   tone=tone, theme=theme, template=template, speed=speed,
                   burn_captions=burn_captions, quiz=quiz,
                   urls=urls or [], github=github or [],
-                  qa_density=qa_density, upload_dir=upload_dir, quality=quality, narrator=narrator)
+                  qa_density=qa_density, upload_dir=upload_dir, quality=quality, narrator=narrator,
+                  pace=pace)
         self._jobs[job_id] = job
         return job
 
@@ -198,7 +201,7 @@ def _video_meta(job: Job, run_dir: Path) -> VideoMeta:
 def _write_run_stats(job: Job, run_dir: Path) -> None:
     try:
         settings = {"run_id": job.id, "effort": job.effort, "quality": job.quality,
-                    "narrator": job.narrator, "source": "server"}
+                    "narrator": job.narrator, "pace": job.pace, "source": "server"}
         # The manifest holds the resolved values (server defaults applied).
         settings.update({k: v for k, v in run_stats.manifest_settings(run_dir).items() if v is not None})
         ok = job.status == "completed" and (run_dir / "final.mp4").exists()
@@ -272,6 +275,7 @@ async def _run_job_inner(job: Job, output_dir: Path, library_store=None) -> None
             interactive=False,
             quality=job.quality,
             narrator=job.narrator,
+            pace=job.pace,
         )
 
         # render_trigger writes manifest.json as its final step.

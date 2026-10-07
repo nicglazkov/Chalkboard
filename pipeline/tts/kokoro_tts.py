@@ -6,7 +6,6 @@ import soundfile as sf
 from pathlib import Path
 from pipeline.cues import cue_times_from_tokens, parse_cues, segment_cue_text
 from pipeline.retry import api_call_with_retry, TIMEOUT_TTS_KOKORO
-from pipeline.tts.base import _apply_speed_to_wav
 
 try:
     from kokoro import KPipeline
@@ -23,7 +22,8 @@ def _pipeline():
     return KPipeline(lang_code="a")
 
 
-def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = None, on_segment=None):
+def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = None, on_segment=None,
+                   speed: float = 1.0):
     if KPipeline is None:
         raise ImportError("Install kokoro: pip install kokoro")
     pipeline = _pipeline()
@@ -38,7 +38,10 @@ def _generate_sync(segments: list[dict], output_path: Path, voice: str | None = 
         # unpacked) whose .tokens carry start_ts/end_ts relative to that chunk.
         tokens: list[tuple[str, float | None]] = []
         chunk_start = 0.0
-        for result in pipeline(clean, voice=voice or DEFAULT_VOICE):
+        # Native speed: Kokoro scales its predicted durations, so the token
+        # timestamps already match the slower/faster audio (measured 2026-10-06).
+        kwargs = {"speed": speed} if speed != 1.0 else {}
+        for result in pipeline(clean, voice=voice or DEFAULT_VOICE, **kwargs):
             _gs, _ps, audio = result
             for tok in getattr(result, "tokens", None) or []:
                 ts = getattr(tok, "start_ts", None)
@@ -66,12 +69,8 @@ async def generate_audio(segments: list[dict], output_path: Path, speed: float =
     """Returns (wav_path, durations, cue_times); see pipeline/cues.py.
     on_segment(index, chars) is called as each segment finishes (from a worker thread)."""
     path, durations, cue_times = await api_call_with_retry(
-        lambda: _generate_sync(segments, output_path, voice, on_segment),
+        lambda: _generate_sync(segments, output_path, voice, on_segment, speed),
         timeout=TIMEOUT_TTS_KOKORO,
         label="kokoro_tts",
     )
-    if speed != 1.0:
-        _apply_speed_to_wav(output_path, speed)
-        durations = [d / speed for d in durations]
-        cue_times = [[None if t is None else round(t / speed, 3) for t in c] for c in cue_times]
     return path, durations, cue_times

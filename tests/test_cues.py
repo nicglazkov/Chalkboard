@@ -275,7 +275,13 @@ def test_layout_checker_stub_estimates_cue_times(tmp_path):
          patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc)):
         asyncio.run(layout_checker(state))
     stub = json.loads((run_dir / "segments.json").read_text())
-    assert stub[0]["cues"] == [1.0, 2.0]
+    # Estimated at the default (relaxed) pace: lead-in, then proportional
+    # through the speech at the delivery speed (no pause points in this text).
+    from pipeline.pacing import PRESETS
+    p = PRESETS["relaxed"]
+    assert stub[0]["cues"] == pytest.approx([p.lead_in + 1.0 / p.speech_speed,
+                                             p.lead_in + 2.0 / p.speech_speed], abs=0.002)
+    assert stub[0]["actual_duration_sec"] == pytest.approx(p.lead_in + 3.0 / p.speech_speed + p.hold, abs=0.002)
     assert stub[0]["text"] == "aaaa bbbb cccc!"
     assert stub[1]["cues"] == []
 
@@ -428,5 +434,6 @@ def test_manim_prompt_shows_markers_and_cue_times():
         {"text": "Plain.", "estimated_duration_sec": 1.0},
     ])
     assert "aaaa [[1]] bbbb [[2]] cccc!" in out
-    assert "[[1]]~1.0s, [[2]]~2.0s" in out
+    assert "[[1]]~1.6s, [[2]]~2.6s" in out   # relaxed: 0.5s lead-in, 0.94x delivery
+    assert "then hold still" in out
     assert "self.cue(" in SYSTEM_PROMPT

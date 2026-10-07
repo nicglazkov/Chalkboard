@@ -102,6 +102,7 @@ def build(events: list[dict], *, started_at: str, finished_at: str, settings: di
         "narrator": settings.get("narrator"),
         "quality": settings.get("quality"),
         "effort": settings.get("effort"),
+        "pace": settings.get("pace"),
         # Did research_agent run? Unknown for a resumed run (it may have run before).
         "research": None if resumed else any(e.get("node") == "research_agent" for e in events),
         "source": settings.get("source"),
@@ -136,12 +137,12 @@ def read(run_dir: Path) -> dict | None:
 
 
 def manifest_settings(run_dir: Path) -> dict:
-    """quality / narrator / effort as recorded by render_trigger (None if absent)."""
+    """quality / narrator / effort / pace as recorded by render_trigger (None if absent)."""
     try:
         m = json.loads((run_dir / "manifest.json").read_text())
     except Exception:
         return {}
-    return {k: m.get(k) for k in ("quality", "narrator", "effort")}
+    return {k: m.get(k) for k in ("quality", "narrator", "effort", "pace")}
 
 
 class Recorder:

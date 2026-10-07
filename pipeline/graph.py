@@ -89,6 +89,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "status": "drafting",
         "context_file_paths": state.get("context_file_paths", []),
         "speed": state.get("speed", 1.0),
+        "pace": state.get("pace"),
         "template": state.get("template"),
         "research_brief": state.get("research_brief"),
         "research_sources": state.get("research_sources", []),

@@ -79,7 +79,8 @@
                 <div class="opt-row"><span class="label" id="l-res">Resolution</span><div class="chips" data-key="quality" role="group" aria-labelledby="l-res"></div></div>
                 <div class="opt-row"><span class="label" id="l-eff" title="How much thinking Claude puts into the script and animation code">Effort</span><div class="chips" data-key="effort" role="group" aria-labelledby="l-eff"></div></div>
                 <div class="opt-row"><span class="label" id="l-qa" title="After rendering, Claude looks at frames for visual problems and fixes them">Visual QA</span><div class="chips" data-key="qa_density" role="group" aria-labelledby="l-qa"></div></div>
-                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted" style="align-self:center">× narration speed (1 is normal)</span></div></div>
+                <div class="opt-row"><span class="label" id="l-pace" title="How the narrator presents: relaxed holds each finished scene for 2 s and pauses after sentences and questions; brisk keeps it tight">Pace</span><div class="chips" data-key="pace" role="group" aria-labelledby="l-pace"></div></div>
+                <div class="opt-row"><label class="label" for="speed">Speed</label><div class="chips"><input class="input num" id="speed" type="number" min="0.25" max="4" step="0.05" value="1.0" inputmode="decimal"><span class="mono muted" style="align-self:center">× on top of the pace (1 keeps it)</span></div></div>
                 <div class="opt-row"><span class="label">Captions</span><label class="check-line"><input type="checkbox" id="burn"> Burn captions into the video</label></div>
               </div>
             </details>
@@ -124,10 +125,11 @@
     quality: [['low', '480p'], ['medium', '720p'], ['high', '1080p'], ['4k', '4K']],
     effort: [['low', 'low'], ['medium', 'medium']],
     qa_density: [['zero', 'off'], ['normal', 'normal'], ['high', 'high']],
+    pace: [['relaxed', 'relaxed'], ['normal', 'normal'], ['brisk', 'brisk']],
   };
   const S = {
     audience: 'intermediate', tone: 'casual', theme: 'chalkboard', template: '', quality: 'high',
-    effort: 'medium', qa_density: 'normal', research: false, quiz: false, narrator: null,
+    effort: 'medium', qa_density: 'normal', pace: 'relaxed', research: false, quiz: false, narrator: null,
     speed: 1.0, burn: false, files: [], urls: [], github: [], skipped: 0,
   };
   let voices = [];
@@ -164,7 +166,7 @@
   }
   function summaries() {
     $('style-sum').textContent = [voiceLabel().toLowerCase(), S.audience, S.tone, S.theme, S.template ? S.template + ' template' : 'auto template'].join(' · ');
-    $('output-sum').textContent = [resFull(S.quality), S.research ? 'high effort' : S.effort + ' effort', S.qa_density === 'zero' ? 'visual QA off' : 'visual QA ' + S.qa_density, `${S.speed}x speed`, S.burn ? 'burned captions' : 'captions file'].join(' · ');
+    $('output-sum').textContent = [resFull(S.quality), S.research ? 'high effort' : S.effort + ' effort', S.qa_density === 'zero' ? 'visual QA off' : 'visual QA ' + S.qa_density, `${S.pace} pace`, `${S.speed}x speed`, S.burn ? 'burned captions' : 'captions file'].join(' · ');
   }
   function changed() {
     $('t-research').setAttribute('aria-pressed', S.research);
@@ -453,6 +455,7 @@
       speed: S.speed || 1.0,
       burn_captions: S.burn, quiz: S.quiz,
       qa_density: S.qa_density,
+      pace: S.pace || null,
       quality: S.quality || null,
       narrator: S.narrator || null,
       urls: S.urls, github: S.github,
@@ -485,7 +488,7 @@
   const params = new URLSearchParams(location.search);
   const prefilled = params.has('topic');
   function applyPrefill() {
-    for (const k of ['audience', 'tone', 'theme', 'template', 'quality', 'qa_density']) if (params.has(k)) S[k] = params.get(k);
+    for (const k of ['audience', 'tone', 'theme', 'template', 'quality', 'qa_density', 'pace']) if (params.has(k)) S[k] = params.get(k);
     const eff = params.get('effort');
     if (eff === 'high') S.research = true; else if (eff) S.effort = eff;
     if (params.has('speed')) S.speed = parseFloat(params.get('speed')) || 1.0;
@@ -508,7 +511,7 @@
     applyUploadRules(meta && meta.upload);
     const d = (meta && meta.defaults) || {};
     if (!prefilled) {
-      for (const k of ['audience', 'tone', 'theme', 'quality']) if (d[k]) S[k] = d[k];
+      for (const k of ['audience', 'tone', 'theme', 'quality', 'pace']) if (d[k]) S[k] = d[k];
       if (d.effort === 'high') S.research = true; else if (d.effort) S.effort = d.effort;
       if (d.narrator) S.narrator = d.narrator;
     } else applyPrefill();

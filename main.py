@@ -199,8 +199,12 @@ def _format_srt_time(seconds: float) -> str:
 def _caption_cues(segments: list[dict]) -> list[tuple[float, float, str]]:
     """(start, end, text) caption lines: one per sentence (long sentences split
     at a comma). Times inside a segment follow the cue-marker timings when the
-    segment has them (word-accurate anchors), else character position."""
-    from pipeline.cues import caption_lines, char_time, parse_cues, strip_cues
+    segment has them (word-accurate anchors), else character position.
+    Paced segments carry `anchors` (speech start/end, cue words, the words
+    around every inserted pause): captions then appear with the first word,
+    wait through pauses, and clear shortly after the last word instead of
+    staying up through the silent hold."""
+    from pipeline.cues import anchor_time, caption_lines, char_time, parse_cues, strip_cues
     out: list[tuple[float, float, str]] = []
     t0 = 0.0
     for seg in segments:
@@ -209,10 +213,16 @@ def _caption_cues(segments: list[dict]) -> list[tuple[float, float, str]]:
         _, offsets = parse_cues(seg.get("cue_text") or "")
         cues = seg.get("cues") or []
         spans = caption_lines(text)
-        starts = [char_time(offsets, cues, len(text), dur, a) if i else 0.0
-                  for i, (a, _) in enumerate(spans)]
+        anchors = seg.get("anchors")
+        if anchors and anchor_time(anchors, 0) is not None:
+            starts = [anchor_time(anchors, a) for a, _ in spans]
+            last_end = min(dur, float(seg.get("speech_end_sec", dur)) + 0.6)
+        else:
+            starts = [char_time(offsets, cues, len(text), dur, a) if i else 0.0
+                      for i, (a, _) in enumerate(spans)]
+            last_end = dur
         for i, (a, b) in enumerate(spans):
-            end = starts[i + 1] if i + 1 < len(spans) else dur
+            end = starts[i + 1] if i + 1 < len(spans) else last_end
             line = text[a:b].strip()
             if line:
                 out.append((t0 + starts[i], t0 + max(end, starts[i]), line))
@@ -584,6 +594,8 @@ async def _qa_regenerate_scene(
         "tone": manifest.get("tone") or tone,
         "effort_level": manifest.get("effort") or effort_level,
         "template": manifest.get("template"),
+        "pace": manifest.get("pace"),
+        "speed": manifest.get("speed") or 1.0,
         "fact_feedback": None, "script_attempts": 0,
         "needs_web_search": False, "user_approved_search": False,
         "status": "validating", "context_file_paths": [],
@@ -719,6 +731,7 @@ async def run(
     interactive: bool = True,
     quality: str | None = None,
     narrator: str | None = None,
+    pace: str | None = None,
 ) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
@@ -731,6 +744,7 @@ async def run(
             "speed": speed, "template": template, "interactive": interactive,
             "quality": quality,
             "narrator": narrator,
+            "pace": pace,
         }
 
         # Resuming a thread that already has a checkpoint: continue from where it
@@ -929,6 +943,11 @@ def main():
     parser.add_argument("--narrator", choices=ALLOWED_NARRATORS, default=None,
                         help="Named voice (see pipeline/tts/voices.py); default: NARRATOR in .env, "
                              "else TTS_BACKEND's default voice")
+    from pipeline.pacing import PACE_CHOICES
+    parser.add_argument("--pace", choices=PACE_CHOICES, default=None,
+                        help="Presentation pacing: relaxed (default; 2 s hold after each scene, "
+                             "real pauses, 0.94x delivery), normal, brisk. Default: PACE in .env, "
+                             "else relaxed. See README > Narration")
     parser.add_argument("--run-id", default=None, help="Resume a previous run by ID")
     parser.add_argument("--no-render", action="store_true", help="Skip the render and ffmpeg merge")
     parser.add_argument("--verbose", action="store_true", help="Stream renderer output to terminal")
@@ -963,7 +982,9 @@ def main():
     )
     parser.add_argument(
         "--speed", type=float, default=1.0,
-        help="Narration speed multiplier (e.g. 1.25). OpenAI: 0.25-4.0 natively; others use ffmpeg atempo.",
+        help="Narration speed multiplier on top of the pace's delivery speed (e.g. 1.1). "
+             "Applied with each voice's native speed control (ElevenLabs 0.7-1.2, Kokoro, "
+             "OpenAI 0.25-4.0); ElevenLabs outside its range falls back to ffmpeg atempo.",
     )
     parser.add_argument(
         "--yes", action="store_true",
@@ -1029,7 +1050,7 @@ def main():
         telemetry.reset_sink(token)
         run_dir = Path(OUTPUT_DIR) / thread_id
         settings = {"run_id": thread_id, "effort": args.effort, "quality": args.quality,
-                    "narrator": args.narrator, "source": "cli"}
+                    "narrator": args.narrator, "pace": args.pace, "source": "cli"}
         settings.update({k: v for k, v in run_stats.manifest_settings(run_dir).items() if v is not None})
         try:
             run_stats.write(run_dir, run_stats.build(
@@ -1052,7 +1073,7 @@ def _cli_run(args, thread_id: str, context_blocks, context_file_paths, interacti
         audience=args.audience, tone=args.tone, theme=args.theme,
         context_blocks=context_blocks, context_file_paths=context_file_paths,
         speed=args.speed, template=args.template, interactive=interactive,
-        quality=args.quality, narrator=args.narrator, on_progress=_progress,
+        quality=args.quality, narrator=args.narrator, pace=args.pace, on_progress=_progress,
     ))
 
     run_dir = Path(OUTPUT_DIR) / thread_id

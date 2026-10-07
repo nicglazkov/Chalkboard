@@ -30,7 +30,7 @@ def _job_to_response(job: Job) -> JobResponse:
         events=job.events,
         error=job.error,
         output_files=job.output_files,
-        effort=job.effort, quality=job.quality, narrator=job.narrator,
+        effort=job.effort, quality=job.quality, narrator=job.narrator, pace=job.pace,
         qa_density=job.qa_density, quiz=job.quiz, burn_captions=job.burn_captions,
         template=job.template,
         audience=job.audience, tone=job.tone, theme=job.theme, speed=job.speed,
@@ -61,7 +61,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             tone=req.tone, theme=req.theme, template=req.template, speed=req.speed,
             burn_captions=req.burn_captions, quiz=req.quiz,
             urls=req.urls, github=req.github, qa_density=req.qa_density,
-            quality=req.quality, narrator=req.narrator,
+            quality=req.quality, narrator=req.narrator, pace=req.pace,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         _spawn(run_job(job, output_dir, library_store=library_store))
@@ -81,6 +81,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
         qa_density: str = Form("normal"),
         quality: str = Form(""),
         narrator: str = Form(""),
+        pace: str = Form(""),
         urls: list[str] = Form(default=[]),
         github: list[str] = Form(default=[]),
         files: list[UploadFile] = File(default=[]),
@@ -93,7 +94,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
                 topic=topic, effort=effort, audience=audience, tone=tone, theme=theme,
                 template=template or None, speed=speed, burn_captions=burn_captions,
                 quiz=quiz, urls=urls, github=github, qa_density=qa_density,
-                quality=quality or None, narrator=narrator or None,
+                quality=quality or None, narrator=narrator or None, pace=pace or None,
             )
         except ValidationError as e:
             raise RequestValidationError(e.errors())
@@ -119,6 +120,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
             burn_captions=req.burn_captions, quiz=req.quiz,
             urls=req.urls, github=req.github, qa_density=req.qa_density,
             upload_dir=upload_dir, quality=req.quality, narrator=req.narrator,
+            pace=req.pace,
         )
         output_dir = Path(OUTPUT_DIR).resolve()
         _spawn(run_job(job, output_dir, library_store=library_store))
@@ -160,6 +162,7 @@ def make_router(store: JobStore, library_store: LibraryStore | None = None) -> A
                 "audience": _cfg.DEFAULT_AUDIENCE,
                 "tone": _cfg.DEFAULT_TONE,
                 "theme": _cfg.DEFAULT_THEME,
+                "pace": _cfg.PACE,
             },
             "narrators": narrators,
             # backend() may import manim the first time; keep the event loop free.

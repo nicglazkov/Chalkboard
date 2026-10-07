@@ -10,6 +10,10 @@ DEFAULT_EFFORT = os.getenv("DEFAULT_EFFORT", "medium")
 DEFAULT_AUDIENCE = os.getenv("DEFAULT_AUDIENCE", "intermediate")
 DEFAULT_TONE    = os.getenv("DEFAULT_TONE", "casual")
 DEFAULT_THEME   = os.getenv("DEFAULT_THEME", "chalkboard")
+# Presentation pacing preset (pipeline/pacing.py): relaxed | normal | brisk.
+# Per-run --pace / API `pace` override it; SCENE_HOLD_S and PACE_SPEECH_SPEED
+# override single values of the preset.
+PACE           = (os.getenv("PACE", "") or "relaxed").strip().lower()
 OUTPUT_DIR     = os.getenv("OUTPUT_DIR", "./output")
 CHECKPOINT_DB  = os.getenv("CHECKPOINT_DB", "pipeline_state.db")
 SERVER_HOST    = os.getenv("SERVER_HOST", "127.0.0.1")

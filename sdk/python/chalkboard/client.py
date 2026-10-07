@@ -134,6 +134,7 @@ class ChalkboardClient:
         model: str | None = None,
         idempotency_key: str | None = None,
         narrator: str | None = None,
+        pace: str | None = None,
     ) -> JobResponse:
         """Submit a new job.
 
@@ -146,7 +147,9 @@ class ChalkboardClient:
         and let the server use its default (MANIM_QUALITY on a self-hosted
         server). `narrator` ("aria" | "milo" | "kokoro" | "alloy") is only
         sent when set; None means the server default. `meta()` lists the
-        narrators a self-hosted server can actually use.
+        narrators a self-hosted server can actually use. `pace`
+        ("relaxed" | "normal" | "brisk") is likewise only sent when set: how
+        long finished scenes hold and how much the narrator pauses.
         """
         body: dict[str, Any] = {
             "topic": topic,
@@ -161,6 +164,8 @@ class ChalkboardClient:
             body["quality"] = quality
         if narrator is not None:
             body["narrator"] = narrator
+        if pace is not None:
+            body["pace"] = pace
         if template is not None:
             body["template"] = template
         if model is not None:
@@ -180,7 +185,7 @@ class ChalkboardClient:
         """Server defaults and capabilities (`GET /meta`).
 
         On a self-hosted server this returns `defaults` (quality, narrator,
-        tts_backend, effort, audience, tone, theme), `narrators` (id, label,
+        tts_backend, effort, audience, tone, theme, pace), `narrators` (id, label,
         tagline, backend, model, configured), `render_backend`, `model`,
         `running_jobs`, `upload` and `version` (the running Chalkboard
         version). Returned as a plain dict; the hosted API may not

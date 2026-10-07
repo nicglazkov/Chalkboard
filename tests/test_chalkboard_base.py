@@ -480,9 +480,68 @@ def test_next_segment_holds_then_fades(tmp_path, monkeypatch):
     s.begin_segment(0, duration=4.0)
     s.play(run_time=1.0)
     s.next_segment(1, duration=2.0, clear=[MockMobject(0, 0, 1, 1)], fade=0.5)
-    # hold until 3.5s, 0.5s fade, so segment 1 starts exactly at 4.0s
-    assert s._sync_tracked == pytest.approx(4.0)
+    # The frame holds through the whole of segment 0 (its silent hold included):
+    # segment 1 starts at exactly 4.0s and the fade runs after that, in its lead-in.
+    assert s._seg_audio_start == pytest.approx(4.0)
+    assert s._sync_tracked == pytest.approx(4.5)
     assert s._lc_segment == 1
+    assert s._lc_run_time == pytest.approx(0.5)   # the fade is charged to segment 1
+
+
+class _PlayingScene(_FakeScene):
+    """_FakeScene whose play() runs the base class's hold check."""
+    def play(self, *args, run_time=None, **kwargs):
+        super().play(*args, run_time=run_time, **kwargs)
+        if not self._lc_done and self._lc_segment is not None:
+            self._lc_check_hold()
+
+
+def _paced_segments(tmp_path, segs):
+    (tmp_path / "segments.json").write_text(json.dumps(segs))
+
+
+def test_speech_time_left_stops_at_the_last_word(tmp_path):
+    _paced_segments(tmp_path, [{"actual_duration_sec": 6.0, "cues": [], "speech_end_sec": 4.0}])
+    s = _FakeScene(tmp_path)
+    s.begin_segment(0, duration=6.0)
+    s.play(run_time=1.0)
+    assert s.segment_time_left() == pytest.approx(5.0)
+    assert s.speech_time_left() == pytest.approx(3.0)
+
+
+def test_speech_time_left_without_pacing_is_segment_time_left(tmp_path):
+    s = _FakeScene(tmp_path)
+    s.begin_segment(0, duration=6.0)
+    s.play(run_time=1.0)
+    assert s.speech_time_left() == pytest.approx(5.0)
+
+
+def test_animation_into_the_hold_is_hold_busy(tmp_path):
+    _paced_segments(tmp_path, [{"actual_duration_sec": 6.0, "cues": [], "speech_end_sec": 3.5},
+                               {"actual_duration_sec": 3.0, "cues": [], "speech_end_sec": 1.0}])
+    s = _PlayingScene(tmp_path)
+    s.begin_segment(0, duration=6.0)
+    s.play(run_time=3.0)
+    s.play(run_time=1.5)                 # ends 1.0s into the 2.5s hold
+    s.begin_segment(1, duration=3.0)
+    s.end_layout_check()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    busy = [v for v in report["violations"] if v["type"] == "hold_busy"]
+    assert len(busy) == 1 and busy[0]["segment"] == 0
+    assert busy[0]["into_hold_sec"] == pytest.approx(1.0)
+    assert not any(v["type"] == "timing_overrun" for v in report["violations"])
+
+
+def test_still_hold_and_short_finish_pass(tmp_path):
+    """Waiting through the hold, and a reveal ending just after the last word, are fine."""
+    _paced_segments(tmp_path, [{"actual_duration_sec": 6.0, "cues": [], "speech_end_sec": 3.5}])
+    s = _PlayingScene(tmp_path)
+    s.begin_segment(0, duration=6.0)
+    s.play(run_time=3.8)                 # 0.3s into the hold: within tolerance
+    s.wait(s.segment_time_left())
+    s.end_layout_check()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    assert report["passed"], report["violations"]
 
 
 def test_lagging_visuals_are_reported(tmp_path):
