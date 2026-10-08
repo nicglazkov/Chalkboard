@@ -34,6 +34,7 @@ Older runs have no file; anything derived from it is then `null`.
 ## Timeline (`GET /api/jobs/{id}/timeline`, `GET /api/library/{run_id}/timeline`)
 `{"duration_s": float|null, "segments": [{"index", "start_s", "duration_s", "label", "cues": [secs from segment start],
 "speech_end_s": float|null, "pauses": [{"at_s", "sec", "kind"}]}],
+"chapters": [{"index", "start_s", "end_s", "title", "segment", "cue": int|null, "numbered": bool, "source": "script"|"segments"}],
 "waveform": [floats 0..1, ~400 buckets] | null, "rendered_segments": int|null}`
 Built from `segments.json` (measured TTS durations and cue times) and `voiceover.wav` (real peaks).
 `speech_end_s` is when the segment's last word ends (seconds from the segment start; from there to
@@ -41,6 +42,14 @@ Built from `segments.json` (measured TTS durations and cue times) and `voiceover
 (`at_s` from the segment start, `sec` inserted length, `kind` sentence | question | payoff | beat).
 Both come from the measured audio; runs made before pacing have `null` / `[]`.
 Before TTS has run, durations are absent (`null`), not estimated.
+`chapters` is exactly what `chapters.txt` embeds in `final.mp4` (`pipeline/chapters.py`): for runs since 0.5.0 one per
+`[[ch: Title]]` marker the script agent placed on each step or idea, starting when its cue is spoken on the
+paced timeline (`source: "script"`, `cue` = the cue number in `segment`, `numbered` for "3. ..."-style steps);
+for older runs one per segment titled with its first 60 characters (`source: "segments"`). `[]` before TTS.
+The video page draws them as a Chapters row (a tick at each start, the title where it fits, else the step
+number, else just the tick; the title is in the tooltip; click to jump) above the Scenes row (one block per segment).
+For older videos (`source: "segments"`) the chapters are the scenes, so there is no separate row and the scene row
+keeps its old name, Chapters.
 
 ## Quality (`GET /api/library/{run_id}/quality`)
 `{"sync": {"cues": [{"segment", "cue", "lag_s"}], "median_lag_s", "worst_lag_s", "source": "render"}|null,

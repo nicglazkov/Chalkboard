@@ -408,7 +408,23 @@
     const total = tl.duration_s != null ? tl.duration_s : (timed ? segs.reduce((a, s) => Math.max(a, s.start_s + s.duration_s), 0) : null);
     const rendered = opts.renderDone ? segs.length : (opts.renderedSegments != null ? opts.renderedSegments : (tl.rendered_segments != null ? tl.rendered_segments : 0));
     const curIdx = opts.currentSegment;
-    const sceneName = opts.mode === 'video' ? 'Chapters' : 'Scenes';
+    // Chapters (video page): one per step or idea on screen (pipeline/chapters.py),
+    // drawn as ticks at their start with a label wherever it fits. Older videos have
+    // one chapter per scene (source "segments"): the scene row already shows those,
+    // under its old name.
+    const chs = opts.mode === 'video' && timed && total && Array.isArray(tl.chapters)
+      && tl.chapters.some((c) => c && c.source !== 'segments')
+      ? tl.chapters.filter((c) => c && c.start_s != null && c.start_s < total) : [];
+    const sceneName = opts.mode === 'video' && !chs.length ? 'Chapters' : 'Scenes';
+    const chLane = chs.map((c, i) => {
+      const a = (Math.max(0, c.start_s) / total) * 100;
+      const end = i + 1 < chs.length ? chs[i + 1].start_s : Math.min(total, c.end_s != null ? c.end_s : total);
+      const w = Math.max(0, ((end - c.start_s) / total) * 100);
+      const num = (String(c.title || '').match(/^\s*(?:[A-Za-z]+\.?\s*)?#?(\d+)/) || [])[1];
+      const short = c.numbered && num ? num : '';
+      const tip = `${fmtClock(c.start_s)} · ${c.title || 'Chapter ' + (i + 1)}`;
+      return `<button type="button" class="tl-ch" data-t="${c.start_s}" style="left:${a.toFixed(3)}%;width:${w.toFixed(3)}%" title="${esc(tip)}" aria-label="${esc('Chapter ' + (i + 1) + ', ' + tip)}"><span class="lb">${esc(c.title || '')}</span>${short ? `<span class="sh">${esc(short)}</span>` : ''}</button>`;
+    }).join('');
     const blocks = segs.map((s, i) => {
       const w = timed && s.duration_s > 0 ? s.duration_s : 1;
       let cls = 'tl-seg';
@@ -451,29 +467,67 @@
     const seekable = !!opts.onSeek && timed && !!total;
     const lateN = opts.lateCues ? opts.lateCues.size : 0;
     const foot = opts.mode === 'video' && timed && total
-      ? `Diamonds mark sync cues, the words an animation is timed to start on${lateN ? '; red ones started late' : ''}.${seekable ? ' Click anywhere to jump there.' : ''}`
+      ? `${chs.length ? 'Chapter ticks mark where each step or idea starts on screen (hover for the title; the current one is named above). ' : ''}Diamonds mark sync cues, the words an animation is timed to start on${lateN ? '; red ones started late' : ''}.${seekable ? ' Click anywhere to jump there.' : ''}`
       : '';
     host.innerHTML = `
-      <div class="tl-track"><span class="tl-name" title="${opts.mode === 'video' ? 'Each block is one part of the narration' : 'Each block is one scene; filled blocks have rendered'}">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
+      ${chs.length ? `<div class="tl-now"><span class="tl-name">Now</span><span class="tl-now-t"><span class="n"></span><span class="t"></span></span></div>
+      <div class="tl-track"><span class="tl-name" title="Chapters embedded in the video: one per step or idea on screen. Click one to jump to it.">Chapters</span><div class="tl-lane chs">${chLane}</div></div>` : ''}
+      <div class="tl-track"><span class="tl-name" title="${opts.mode === 'video' ? 'Each block is one scene of the animation and its narration' : 'Each block is one scene; filled blocks have rendered'}">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
       <div class="tl-track"><span class="tl-name" title="Loudness of the recorded narration over time">${opts.mode === 'video' ? 'Voice' : 'Narration'}</span><div class="tl-lane wave-lane">${wave}</div></div>
       <div class="tl-track"><span class="tl-name" title="Sync cues: words in the narration that an animation is timed to start on">Cues</span><div class="tl-lane cues">${cuesLane}</div></div>
       ${opts.onSeek && total ? '<div class="tl-headwrap"><div class="tl-head" style="left:0%"></div></div>' : ''}
       ${foot ? `<div class="tl-foot">${esc(foot)}</div>` : ''}`;
     if (opts.onSeek && timed && total) {
+      host.querySelectorAll('.tl-ch').forEach((el) => el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        opts.onSeek(parseFloat(el.dataset.t));
+      }));
       host.querySelectorAll('.tl-lane').forEach((lane) => lane.addEventListener('click', (e) => {
         const r = lane.getBoundingClientRect();
         opts.onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * total);
       }));
     }
     const head = host.querySelector('.tl-head');
+    // Chapter labels: the full title where it fits, else the step number, else
+    // just the tick (the title is in the tooltip). The playhead spans every lane.
+    const fit = () => {
+      host.querySelectorAll('.tl-ch').forEach((el) => {
+        const w = el.getBoundingClientRect().width;
+        el.classList.toggle('narrow', w < 64);
+        el.classList.toggle('tick', w < 16);
+      });
+      const wrap = host.querySelector('.tl-headwrap');
+      const lanes = host.querySelectorAll('.tl-lane');
+      if (wrap && lanes.length) {
+        const first = lanes[0], last = lanes[lanes.length - 1];
+        wrap.style.top = `${first.offsetTop}px`;
+        wrap.style.height = `${last.offsetTop + last.offsetHeight - first.offsetTop}px`;
+      }
+    };
+    fit();
+    if (host._tlObs) host._tlObs.disconnect();
+    if (window.ResizeObserver) { host._tlObs = new ResizeObserver(fit); host._tlObs.observe(host); }
+    const chEls = host.querySelectorAll('.tl-ch');
+    const nowN = host.querySelector('.tl-now-t .n'), nowT = host.querySelector('.tl-now-t .t');
+    let nowIdx = -1;
     return {
-      total, timed, segments: segs.length, cues: cueCount,
+      total, timed, segments: segs.length, cues: cueCount, chapters: chs.length,
       setTime(t) {
         if (head && total) head.style.left = `${Math.max(0, Math.min(100, (t / total) * 100))}%`;
         if (opts.mode === 'video' && timed) {
           host.querySelectorAll('.tl-seg').forEach((el, i) => {
             const s = segs[i];
             el.classList.toggle('cur', t >= s.start_s && t < s.start_s + s.duration_s);
+          });
+          chEls.forEach((el, i) => {
+            const next = i + 1 < chs.length ? chs[i + 1].start_s : Infinity;
+            const on = t >= chs[i].start_s && t < next;
+            el.classList.toggle('cur', on);
+            if (on && nowIdx !== i && nowT) {
+              nowIdx = i;
+              nowN.textContent = `${fmtClock(chs[i].start_s)} · ${i + 1} of ${chs.length}`;
+              nowT.textContent = chs[i].title || `Chapter ${i + 1}`;
+            }
           });
         }
       },

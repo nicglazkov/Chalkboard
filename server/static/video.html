@@ -245,7 +245,12 @@
     return out.filter((c) => c.start != null).map((c) => ({ start: c.start * (c.base || base), title: c.title || '' }));
   }
   function renderChapters(chTxt, tl) {
+    // chapters.txt is exactly what final.mp4 embeds; the timeline API returns the
+    // same list (pipeline/chapters.py), then the scene labels for very old runs.
     let ch = parseChapters(chTxt);
+    if ((!ch || !ch.length) && tl && Array.isArray(tl.chapters) && tl.chapters.length) {
+      ch = tl.chapters.filter((c) => c.start_s != null).map((c) => ({ start: c.start_s, title: c.title }));
+    }
     if ((!ch || !ch.length) && tl && Array.isArray(tl.segments) && tl.segments.every((s) => s.start_s != null && s.label)) {
       ch = tl.segments.map((s) => ({ start: s.start_s, title: s.label }));
     }
@@ -253,6 +258,8 @@
     tabCount('tab-ch', ch.length);
     $('p-ch').innerHTML = `<ul class="chapters">${ch.map((c, i) => `<li><button type="button" data-t="${c.start}"><span class="ts">${fmtClock(c.start)}</span><span>${esc(c.title || 'Chapter ' + (i + 1))}</span></button></li>`).join('')}</ul>`;
     $('p-ch').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (b) seek(parseFloat(b.dataset.t)); });
+    const btns = $('p-ch').querySelectorAll('[data-t]');
+    onTime((t) => btns.forEach((b, i) => b.classList.toggle('cur', t >= ch[i].start && (i + 1 >= ch.length || t < ch[i + 1].start))));
   }
 
   // ── Quiz ───────────────────────────────────────────────────────────────

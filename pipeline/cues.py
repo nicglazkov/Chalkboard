@@ -22,7 +22,14 @@ _MARKER = re.compile(r"\[\[\s*(\d+)\s*\]\]")
 # Beat markers: [[beat]] / [[pause]] ask for a deliberate silent pause at that
 # point (pipeline/pacing.py). Like cue markers they are never spoken or shown.
 _BEAT = re.compile(r"\[\[\s*(?:beat|pause)\s*\]\]", re.IGNORECASE)
-_ANY = re.compile(r"\[\[\s*(?:(\d+)|beat|pause)\s*\]\]", re.IGNORECASE)
+# Chapter markers: [[ch: Short title]] start a chapter at the next word
+# (pipeline/chapters.py). Written right before a cue marker, the chapter starts
+# when that cue's visual lands. Never spoken or shown.
+_CHAPTER = re.compile(r"\[\[\s*(?:ch|chapter)\s*:\s*([^\]\n]*?)\s*\]\]", re.IGNORECASE)
+_ANY = re.compile(r"\[\[\s*(?:(\d+)|beat|pause|(?:ch|chapter)\s*:\s*([^\]\n]*?))\s*\]\]",
+                  re.IGNORECASE)
+_CUE_AFTER = re.compile(r"\s*\[\[\s*(\d+)\s*\]\]")
+_CUE_BEFORE = re.compile(r"\[\[\s*(\d+)\s*\]\]\s*$")
 
 
 def strip_cues(text: str) -> str:
@@ -44,15 +51,34 @@ def parse_cues(text: str) -> tuple[str, dict[int, int]]:
 def parse_markers(text: str) -> tuple[str, dict[int, int], list[int]]:
     """(clean_text, {cue_number: char_offset}, [beat_offset, ...]).
 
+    Chapter markers are removed too (see parse_chapter_markers).
+
     Cue offsets are as in parse_cues. A beat offset is where the pause goes:
     the start of the next word after the marker (punctuation right after the
     marker is skipped: "here[[beat]]. Next" pauses before "Next"), or
     len(clean_text) for a beat at the very end of the text.
     """
+    clean, offsets, beats, _ = _parse(text)
+    return clean, offsets, beats
+
+
+def parse_chapter_markers(text: str) -> list[tuple[int, str, int | None]]:
+    """[(char_offset, title, cue_number | None), ...] for the [[ch: Title]]
+    markers of a marked text, in reading order.
+
+    The offset is the first letter of the next word in the clean text (like a
+    cue). cue_number is the cue marker written right after (or right before)
+    the chapter marker: the chapter then starts when that cue lands.
+    """
+    return _parse(text)[3]
+
+
+def _parse(text: str):
     text = re.sub(r"[ \t]{2,}", " ", text or "")
     out: list[str] = []
     offsets: dict[int, int] = {}
     beats: list[int] = []
+    chapters: list[tuple[int, str, int | None]] = []
     pos = 0
     for m in _ANY.finditer(text):
         out.append(text[pos:m.start()])
@@ -74,6 +100,11 @@ def parse_markers(text: str) -> tuple[str, dict[int, int], list[int]]:
             anchor = len(built) + lead
         if m.group(1) is not None:
             offsets.setdefault(int(m.group(1)), anchor)
+        elif m.group(2) is not None:
+            after = _CUE_AFTER.match(text, m.end())
+            before = _CUE_BEFORE.search(text, 0, m.start())
+            cue = after or before
+            chapters.append((anchor, " ".join(m.group(2).split()), int(cue.group(1)) if cue else None))
         else:
             beats.append(anchor)
     out.append(text[pos:])
@@ -91,8 +122,9 @@ def parse_markers(text: str) -> tuple[str, dict[int, int], list[int]]:
         while b < n and clean[b].isspace():
             b += 1
         beat_offsets.append(len(clean.rstrip()) if b >= len(clean.rstrip()) else b)
-    return (clean, {k: min(v, max(0, n - 1)) for k, v in offsets.items()},
-            sorted(set(beat_offsets)))
+    clamp = lambda v: min(v, max(0, n - 1))  # noqa: E731
+    return (clean, {k: clamp(v) for k, v in offsets.items()},
+            sorted(set(beat_offsets)), [(clamp(a), t, c) for a, t, c in chapters])
 
 
 def strip_markers(text: str) -> str:

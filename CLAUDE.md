@@ -43,7 +43,8 @@ pipeline/
   design_tokens.py   Shim that loads docker/chalkboard_tokens.py by path and re-exports it
   render_trigger.py  Calls TTS, applies pacing, writes output files
   pacing.py          Pace presets, pause points, post-TTS silence insertion, pre-TTS estimates
-  cues.py            Cue / beat markers: parse_markers, parse_cues, timing helpers
+  chapters.py        Chapters from [[ch: Title]] markers on the paced timeline: chapters.txt, timeline API
+  cues.py            Cue / beat / chapter markers: parse_markers, parse_cues, parse_chapter_markers, timing helpers
   retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
   context.py         collect_files, load_context_blocks, fetch_url_blocks, measure_context
   visual_qa.py       Post-render frame sampling + Claude review
@@ -91,7 +92,7 @@ server/
   library.py          VideoMeta model, LibraryStore ABC, SQLiteLibraryStore
   library_routes.py   /api/library routes + /library page routes
   upload.py           Multipart upload handling for /api/jobs/upload
-  run_data.py         Timeline (segments + voiceover peaks), quality (cue_log, layout, QA) per run
+  run_data.py         Timeline (segments, chapters + voiceover peaks), quality (cue_log, layout, QA) per run
   insights.py         /api/stats and /api/estimate from library + run_stats.json
   status.py           /api/status probes (free endpoints only, cached 60 s, unknown when unsure)
   voices.py           /api/voices + real, cached voice samples (output/_voice_samples/)
@@ -267,11 +268,12 @@ Segment-level sync pins every segment start to the narration; cue markers pin th
 
 1. **Script** (`script_agent`): `[[k]]` markers before the cued words. `pipeline/cues.py` owns parsing: `parse_cues(text) -> (clean, {k: char_offset})` (offset = first letter of the cued word in the clean text), `strip_cues`, `clean_segments`. Clean text is what everything else reads (fact check, TTS, `script.txt`, captions, chapters, visual QA, quiz, library); the marked text lives only in a segment's `cue_text`.
 2. **Times** (TTS): backends return `(path, durations, cue_times)`; `cue_times[i][k-1]` is the time of marker k in seconds from segment i's audio start (`None` for a skipped number). ElevenLabs uses `POST /v1/text-to-speech/{voice}/with-timestamps` (same body and stitching; JSON `audio_base64` + `alignment.characters` / `character_start_times_seconds`, which match the input text one to one, verified 2026-10-02) via `cue_times_from_alignment`; Kokoro maps `KPipeline.Result.tokens` (`text`, `start_ts` relative to each chunk) via `cue_times_from_tokens`; OpenAI returns the old 2-tuple and `render_trigger` fills `proportional_cue_times`. Speed scaling divides cue times by `speed` too.
-3. **segments.json** per segment: `text` (clean), `actual_duration_sec`, `cues`, and `cue_text` when the segment has markers.
+3. **segments.json** per segment: `text` (clean), `actual_duration_sec`, `cues`, and `cue_text` when the segment has markers (cue, beat or chapter).
 4. **Scene** (`ChalkboardSceneBase.cue(k)`): waits until `segment narration start + cues[k-1]` and returns, so the next `play()` starts on the word. Segment narration start = sum of the earlier segment budgets (the voiceover is the segments back to back). Cues load lazily from `segments.json` next to the scene module (`sys.modules[type(self).__module__].__file__`), falling back to the report directory; tests assign `scene._cues = {seg: [t, ...]}` (or a list of lists). Unknown cue numbers warn and return `False` without waiting; `has_cue(k)` checks first. Templates call `_cue(1)` before each segment's main reveal and `_cue(2)` before the second element (callout, right-hand point, next derivation line), and `_rest` waits out `segment_time_left()`.
 5. **Scene clock:** in a real render (`not config.dry_run` and `frame_rate >= 10`) `_scene_time()` is `renderer.time`, the frames actually written. Manim rounds every play UP to whole frames (`np.arange(0, run_time, 1/fps)`) and static waits DOWN (`int(duration / dt)`), so summing requested run times drifts from the video by a frame per play. The 1 fps dry-run and unit tests keep the internal `_sync_tracked` clock.
 6. **Captions:** `main._caption_cues` writes one SRT line per sentence (long sentences split at commas), timed through the segment's `anchors` (pacing: speech start, cue words, both sides of every inserted pause, speech end; the last line clears 0.6 s into the hold), else by interpolating through the cue anchors.
 7. **`next_segment(n, d, clear=...)`** waits out the whole current segment (hold included), calls `begin_segment(n)`, then fades `clear` (charged to segment n, inside its silent lead-in). The fade never eats into the hold. `segment_time_left()` counts to the end of the segment's audio, `speech_time_left()` to its last word.
+8. **Chapters** (`pipeline/chapters.py`): the script agent writes `[[ch: Short title]]` at the start of every segment and right before the cue marker of every distinct step, item or idea the visuals present (`[[ch: 3. Region test]] [[2]] Number three: ...`), so an enumeration of N items gets N chapters even when several items share a segment. `cues.parse_markers` strips them like beats (no clean-text consumer, TTS timing text, caption or fact check ever sees them); `cues.parse_chapter_markers(text) -> [(char_offset, title, cue_or_None)]` attaches each to the cue written right after (or right before) it. `build_chapters(segments)` reads `segments.json` (paced, final times): a chapter tied to a cue starts at segment start + `cues[k-1]` (when the visual lands), else at the segment start (offset 0), else through `anchors`, else `char_time`. Chapters closer than `MIN_GAP_S` (4 s) are merged by dropping the later one, but two numbered steps (`is_numbered`: "3. ...", "Step 3", "#3") never merge, and a numbered step replaces an unnumbered chapter just before it; repeated titles drop; the first chapter is moved to 0:00. Runs without any chapter marker (everything before 0.5.0) get one chapter per segment titled with its first 60 characters (`legacy_title`), exactly their old `chapters.txt`; nothing finer is invented. `main._generate_caption_files` writes `chapters.txt` (`ffmetadata`, escaped titles) and prints `youtube_list`; the timeline API returns the same list as `chapters`. The manim prompt asks for each chapter's cue to introduce that item visibly (own card / heading).
 
 ### Pacing (`pipeline/pacing.py`)
 
@@ -436,7 +438,7 @@ Speak the clean text: `parse_cues(segment_cue_text(seg))` gives it plus the mark
 
 Written later by `main.py`: `layout_report.json` (layout_checker, before render_trigger), `run_stats.json` (every CLI and server run: timings, tokens, cost, TTS chars, settings, result; `pipeline/run_stats.py`), `qa_report.json` (latest visual QA result + `history`, `main._save_qa_report`), `waveform.json` (cached peak envelope, written by the timeline endpoint), `media/` or `media_preview/` (Manim output), `captions.srt` and `chapters.txt` (`_generate_caption_files`, before the merge), `final.mp4` or `preview.mp4`, `thumb.jpg` (`_extract_thumbnail`), `qa_frames/` (visual QA), `quiz.json` (`--quiz`).
 
-`chapters.txt` is FFMETADATA1 passed to ffmpeg as `-f ffmetadata -i chapters.txt -map_metadata 2`. `--burn-captions` adds `-vf subtitles=<path>` and switches `-c:v copy` to `libx264 -preset fast -crf 18`.
+`chapters.txt` (from `pipeline/chapters.py`, one chapter per `[[ch: ...]]` marker, or per segment for older scripts) is FFMETADATA1 passed to ffmpeg as `-f ffmetadata -i chapters.txt -map_metadata 2`. `--burn-captions` adds `-vf subtitles=<path>` and switches `-c:v copy` to `libx264 -preset fast -crf 18`.
 
 ---
 
