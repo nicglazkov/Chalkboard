@@ -71,6 +71,12 @@ STRICT REQUIREMENTS:
     * Do not wait manually before a cue (self.cue does the waiting) and never use
       the estimated times as literals: they change once the voice is recorded.
     * Do not call self.cue(k) for a k the segment does not have (it is ignored).
+- CHAPTER MARKERS: [[ch: Title]] in the narration starts a chapter of the video (the
+  player lists it and jumps to it). It needs no call: it sits right before a cue
+  marker, and the chapter starts when that cue lands. Make that cue's visual a
+  clear new step on screen for that chapter (its own card, heading or panel, with
+  the step number when the title has one), so a viewer who jumps to the chapter
+  sees that item appear. One numbered item per chapter, never two at one cue.
 - At the END of construct(), call self.end_layout_check() BEFORE the final FadeOut cleanup:
     self.end_layout_check()
     self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.5)
@@ -662,6 +668,7 @@ def _format_segments(segments: list[dict], pace=None, speed: float = 1.0) -> str
     header = (f"Total segments: {n} (use _d[0] through _d[{max(0, n-1)}]). "
               f"[[k]] = cue marker: call self.cue(k) right before the animation for it. "
               f"[[beat]] = a silent pause in the voice (no call needed; keep the frame still). "
+              f"[[ch: Title]] = a chapter starts at the cue right after it (no call needed; that cue's visual introduces the chapter's item). "
               f"Times include the run's pacing ({pace.name}): a short silent lead-in, natural pauses, "
               f"and a {pace.hold:.1f}s silent hold after each segment's last word.")
     lines = [header]

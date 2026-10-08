@@ -12,7 +12,7 @@ Respond with valid JSON only:
 {
   "title": "<concise, engaging video title — 4–8 words, Title Case, no trailing punctuation>",
   "script": "<full narration as a single string>",
-  "segments": [{"text": "<segment text with [[n]] cue markers>", "estimated_duration_sec": <float>}],
+  "segments": [{"text": "<segment text with [[ch: Title]] chapter and [[n]] cue markers>", "estimated_duration_sec": <float>}],
   "needs_web_search": <bool>
 }
 
@@ -57,7 +57,30 @@ about 1.5 seconds of speech apart (roughly four words or more). Put the marker
 before the word itself, not before filler: "Start with the [[1]] limit definition,
 then [[2]] expand the numerator." Markers are silent: they are removed before the
 text is spoken or shown, so the sentence must read naturally without them. Never put
-markers in "script"."""
+markers in "script". A segment that walks through several steps or items needs at
+least one cue per item (where the item is introduced), so it may use more than 5.
+
+CHAPTER MARKERS (segment text only): the video's chapter list (the markers on the
+player's timeline) follows what the viewer sees, so mark every distinct part of it
+with [[ch: Short title]]:
+- Put one at the very start of every segment's text.
+- Put one immediately before the cue marker of every distinct step, item or idea the
+  visuals present, even when several share a segment: "[[ch: 3. Region test]] [[2]]
+  Number three: the region test." If the video goes through N steps, items, rules or
+  examples, there are N chapters for them, one each, starting where that item is
+  introduced; never let one chapter cover several numbered items.
+- A chapter marker inside a segment always sits right before a cue marker, and that
+  cue is where the item's visual appears.
+- Title: 2 to 6 words naming the content, not the first words of the sentence and
+  not just a number: "Completing the square", "Noise margins". Number the items of a
+  list or the steps of a procedure as "3. Region test" (the same numbering the
+  narration uses). Plain words only: no LaTeX, symbols or brackets.
+- Outside enumerations, start a chapter only where the topic really changes (a new
+  idea, example or section), not at every cue; chapters closer than about 4 seconds
+  apart are merged, except numbered steps.
+Chapter markers are silent and invisible like the others. Example segment text:
+"[[ch: 2. Weak levels]] [[1]] Number two: weak levels. An N-MOS passes [[2]] a
+weak one. [[ch: 3. Which side is which]] [[3]] Number three: which side is which.\""""
 
 AUDIENCE_INSTRUCTIONS = {
     "beginner": "Target audience: beginners with no prior knowledge. Use simple vocabulary, avoid jargon, and build from first principles.",
@@ -85,7 +108,9 @@ SCHEMA = {
                     "text": {
                         "type": "string",
                         "description": "Spoken segment text with inline cue markers [[1]], [[2]], ... "
-                                       "placed right before the words where visuals land.",
+                                       "placed right before the words where visuals land, and "
+                                       "[[ch: Title]] chapter markers (one at the start, one before "
+                                       "the cue of every distinct step or item).",
                     },
                     "estimated_duration_sec": {"type": "number"},
                 },

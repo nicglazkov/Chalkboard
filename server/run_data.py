@@ -10,6 +10,8 @@ import json
 import statistics
 from pathlib import Path
 
+from pipeline.chapters import build_chapters
+
 WAVEFORM_BUCKETS = 400
 WAVEFORM_CACHE = "waveform.json"
 
@@ -113,9 +115,16 @@ def run_timeline(run_dir: Path) -> dict | None:
     duration = wav_duration(run_dir / "voiceover.wav")
     if duration is None and timeline and all(s["duration_s"] is not None for s in timeline):
         duration = round(sum(s["duration_s"] for s in timeline), 3)
+    try:
+        chapters = build_chapters(segs)
+    except Exception:
+        chapters = []
     return {
         "duration_s": duration,
         "segments": timeline,
+        # pipeline/chapters.py: one per [[ch: ...]] marker on the paced timeline,
+        # or one per segment for runs made before chapter markers.
+        "chapters": chapters,
         "waveform": waveform(run_dir),
         # final.mp4 exists only after the whole scene rendered and merged.
         "rendered_segments": len(timeline) if (run_dir / "final.mp4").exists() else None,
@@ -141,7 +150,7 @@ def job_timeline(run_dir: Path, events: list[dict]) -> dict:
     for i, s in enumerate(segs or []):
         timeline.append({"index": i, "start_s": None, "duration_s": None,
                          "label": _label(s.get("text", "")), "cues": []})
-    return {"duration_s": None, "segments": timeline, "waveform": None,
+    return {"duration_s": None, "segments": timeline, "chapters": [], "waveform": None,
             "rendered_segments": _rendered_from_events(events)}
 
 

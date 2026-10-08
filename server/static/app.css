@@ -640,3 +640,18 @@ select.input { font: .75rem var(--mono); }
   .vid-split { gap: 2.25rem; }
   .vid-split > aside { flex-basis: 22rem; }
 }
+
+/* ── Timeline chapters row: a tick at each chapter start, the title where it fits ── */
+.tl-lane.chs { display: block; height: 1.75rem; }
+.tl-ch { position: absolute; top: 0; bottom: 0; min-width: 0; margin: 0; padding: 0 .375rem 0 .4375rem; border: 0; border-left: 2px solid var(--gold-45); border-radius: 0; background: none; color: var(--muted); font: .6875rem/1.75rem var(--mono); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.tl-ch:nth-child(even) { background: rgba(255,255,255,.025); }
+.tl-ch:hover, .tl-ch:focus-visible { color: var(--chalk); background: var(--gold-12); border-left-color: var(--gold); outline: none; }
+.tl-ch.cur { color: var(--chalk); background: rgba(212,194,122,.16); border-left-color: var(--gold); }
+.tl-ch .lb { display: inline; }
+.tl-ch .sh { display: none; }
+.tl-ch.narrow { padding: 0 0 0 .1875rem; text-overflow: clip; }
+.tl-ch.narrow .lb { display: none; }
+.tl-ch.narrow .sh { display: inline; }
+.tl-ch.tick .sh { display: none; }
+.chapters button.cur { background: rgba(212,194,122,.08); }
+.chapters button.cur .ts { color: var(--gold); }

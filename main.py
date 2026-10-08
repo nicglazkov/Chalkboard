@@ -251,31 +251,18 @@ def _generate_caption_files(run_dir: Path) -> tuple[Path | None, Path | None]:
         srt_lines.append(f"{n}\n{_format_srt_time(start_s)} --> {_format_srt_time(end_s)}\n{line}\n")
     srt_path.write_text("\n".join(srt_lines), encoding="utf-8")
 
-    # FFMETADATA1 chapter file
+    # FFMETADATA1 chapter file (pipeline/chapters.py): one chapter per
+    # [[ch: ...]] marker, timed on the paced timeline; older scripts without
+    # markers keep one chapter per segment.
+    from pipeline.chapters import build_chapters, ffmetadata, youtube_list
+    chapters = build_chapters(segments)
     chapters_path = run_dir / "chapters.txt"
-    meta_lines = [";FFMETADATA1\n"]
-    t_ms = 0
-    for seg in segments:
-        dur_ms = int(seg["actual_duration_sec"] * 1000)
-        raw = seg["text"]
-        title = (raw[:60].rstrip() + "...") if len(raw) > 60 else raw
-        meta_lines.append(
-            f"\n[CHAPTER]\nTIMEBASE=1/1000\n"
-            f"START={t_ms}\nEND={t_ms + dur_ms}\ntitle={title}\n"
-        )
-        t_ms += dur_ms
-    chapters_path.write_text("".join(meta_lines), encoding="utf-8")
+    chapters_path.write_text(ffmetadata(chapters), encoding="utf-8")
 
     # Print YouTube-compatible chapter list
     print("\n  Chapters:")
-    t = 0.0
-    for seg in segments:
-        m = int(t // 60)
-        s = int(t % 60)
-        raw = seg["text"]
-        title = (raw[:60].rstrip() + "...") if len(raw) > 60 else raw
-        print(f"    {m}:{s:02d}  {title}")
-        t += seg["actual_duration_sec"]
+    for line in youtube_list(chapters):
+        print(f"    {line}")
 
     return srt_path, chapters_path
 
