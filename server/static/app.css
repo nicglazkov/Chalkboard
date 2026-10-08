@@ -655,3 +655,8 @@ select.input { font: .75rem var(--mono); }
 .tl-ch.tick .sh { display: none; }
 .chapters button.cur { background: rgba(212,194,122,.08); }
 .chapters button.cur .ts { color: var(--gold); }
+.tl-now { display: grid; grid-template-columns: 4.875rem minmax(0, 1fr); gap: .625rem; align-items: baseline; }
+.tl-now-t { min-width: 0; display: flex; gap: .625rem; align-items: baseline; overflow: hidden; }
+.tl-now-t .n { flex: none; font: .6875rem var(--mono); color: var(--faint); }
+.tl-now-t .t { min-width: 0; font: .9375rem var(--serif); color: var(--chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 860px) { .tl-now { grid-template-columns: 4.25rem minmax(0, 1fr); gap: .375rem; } .tl-now-t { flex-direction: column; gap: 0; } }

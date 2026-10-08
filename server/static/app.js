@@ -467,10 +467,11 @@
     const seekable = !!opts.onSeek && timed && !!total;
     const lateN = opts.lateCues ? opts.lateCues.size : 0;
     const foot = opts.mode === 'video' && timed && total
-      ? `${chs.length && chs[0].source !== 'segments' ? 'Chapter ticks mark where each step or idea starts on screen; hover one for its title. ' : ''}Diamonds mark sync cues, the words an animation is timed to start on${lateN ? '; red ones started late' : ''}.${seekable ? ' Click anywhere to jump there.' : ''}`
+      ? `${chs.length ? 'Chapter ticks mark where each step or idea starts on screen (hover for the title; the current one is named above). ' : ''}Diamonds mark sync cues, the words an animation is timed to start on${lateN ? '; red ones started late' : ''}.${seekable ? ' Click anywhere to jump there.' : ''}`
       : '';
     host.innerHTML = `
-      ${chs.length ? `<div class="tl-track"><span class="tl-name" title="${chs[0].source === 'segments' ? 'Chapters embedded in the video: one per scene (this video predates step-level chapters)' : 'Chapters embedded in the video: one per step or idea on screen'}">Chapters</span><div class="tl-lane chs">${chLane}</div></div>` : ''}
+      ${chs.length ? `<div class="tl-now"><span class="tl-name">Now</span><span class="tl-now-t"><span class="n"></span><span class="t"></span></span></div>
+      <div class="tl-track"><span class="tl-name" title="Chapters embedded in the video: one per step or idea on screen. Click one to jump to it.">Chapters</span><div class="tl-lane chs">${chLane}</div></div>` : ''}
       <div class="tl-track"><span class="tl-name" title="${opts.mode === 'video' ? 'Each block is one scene of the animation and its narration' : 'Each block is one scene; filled blocks have rendered'}">${sceneName}</span><div class="tl-lane">${blocks}</div></div>
       <div class="tl-track"><span class="tl-name" title="Loudness of the recorded narration over time">${opts.mode === 'video' ? 'Voice' : 'Narration'}</span><div class="tl-lane wave-lane">${wave}</div></div>
       <div class="tl-track"><span class="tl-name" title="Sync cues: words in the narration that an animation is timed to start on">Cues</span><div class="tl-lane cues">${cuesLane}</div></div>
@@ -507,6 +508,8 @@
     if (host._tlObs) host._tlObs.disconnect();
     if (window.ResizeObserver) { host._tlObs = new ResizeObserver(fit); host._tlObs.observe(host); }
     const chEls = host.querySelectorAll('.tl-ch');
+    const nowN = host.querySelector('.tl-now-t .n'), nowT = host.querySelector('.tl-now-t .t');
+    let nowIdx = -1;
     return {
       total, timed, segments: segs.length, cues: cueCount, chapters: chs.length,
       setTime(t) {
@@ -518,7 +521,13 @@
           });
           chEls.forEach((el, i) => {
             const next = i + 1 < chs.length ? chs[i + 1].start_s : Infinity;
-            el.classList.toggle('cur', t >= chs[i].start_s && t < next);
+            const on = t >= chs[i].start_s && t < next;
+            el.classList.toggle('cur', on);
+            if (on && nowIdx !== i && nowT) {
+              nowIdx = i;
+              nowN.textContent = `${fmtClock(chs[i].start_s)} · ${i + 1} of ${chs.length}`;
+              nowT.textContent = chs[i].title || `Chapter ${i + 1}`;
+            }
           });
         }
       },
