@@ -408,11 +408,14 @@
     const total = tl.duration_s != null ? tl.duration_s : (timed ? segs.reduce((a, s) => Math.max(a, s.start_s + s.duration_s), 0) : null);
     const rendered = opts.renderDone ? segs.length : (opts.renderedSegments != null ? opts.renderedSegments : (tl.rendered_segments != null ? tl.rendered_segments : 0));
     const curIdx = opts.currentSegment;
-    const sceneName = 'Scenes';
     // Chapters (video page): one per step or idea on screen (pipeline/chapters.py),
-    // drawn as ticks at their start with a label wherever it fits.
+    // drawn as ticks at their start with a label wherever it fits. Older videos have
+    // one chapter per scene (source "segments"): the scene row already shows those,
+    // under its old name.
     const chs = opts.mode === 'video' && timed && total && Array.isArray(tl.chapters)
+      && tl.chapters.some((c) => c && c.source !== 'segments')
       ? tl.chapters.filter((c) => c && c.start_s != null && c.start_s < total) : [];
+    const sceneName = opts.mode === 'video' && !chs.length ? 'Chapters' : 'Scenes';
     const chLane = chs.map((c, i) => {
       const a = (Math.max(0, c.start_s) / total) * 100;
       const end = i + 1 < chs.length ? chs[i + 1].start_s : Math.min(total, c.end_s != null ? c.end_s : total);

@@ -48,6 +48,8 @@ paced timeline (`source: "script"`, `cue` = the cue number in `segment`, `number
 for older runs one per segment titled with its first 60 characters (`source: "segments"`). `[]` before TTS.
 The video page draws them as a Chapters row (a tick at each start, the title where it fits, else the step
 number, else just the tick; the title is in the tooltip; click to jump) above the Scenes row (one block per segment).
+For older videos (`source: "segments"`) the chapters are the scenes, so there is no separate row and the scene row
+keeps its old name, Chapters.
 
 ## Quality (`GET /api/library/{run_id}/quality`)
 `{"sync": {"cues": [{"segment", "cue", "lag_s"}], "median_lag_s", "worst_lag_s", "source": "render"}|null,
