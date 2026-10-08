@@ -209,7 +209,7 @@ ssh -L 8000:localhost:8000 user@that-machine     # then open http://localhost:80
 
 - **New video.** Topic, attachments (files, folders, links), deep research, quiz, a narrator picker with playable samples, style (audience, tone, theme, template) and output (quality, effort, visual QA, pace, speed, captions). The time estimate comes from your own finished runs and only appears once there are enough of them.
 - **In progress.** Each pipeline stage as it happens, with Claude's script, fact check and scene code streaming in as they are written, token usage and cost per call, and render and TTS progress parsed from the real processes.
-- **Video page.** Player, chapters, a timeline with the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, your own notes (saved inline, searchable from the library), and a quality panel with measured cue delays, the layout check and visual QA.
+- **Video page.** Player, chapters (a list, and ticks on the timeline you can click, labelled where they fit), a timeline with the scenes, the voice waveform and every sync cue, a transcript you can click to seek, quiz, sources, scene code, downloads, your own notes (saved inline, searchable from the library), and a quality panel with measured cue delays, the layout check and visual QA.
 - **Version.** The sidebar footer shows the running version and commit; it links to `/version`, which returns the full version record as JSON.
 - **Status.** Real probes, cached for 60 seconds: Claude API, the Claude status page, ElevenLabs, Kokoro, OpenAI TTS, the renderer toolchain, GPU, disk and the job queue. Anything that cannot be checked without spending money shows as Unknown.
 
@@ -487,7 +487,7 @@ The render quality is stored in the run's `manifest.json`. Passing a different `
 
 <br>
 
-- **Captions and chapters.** Every full render writes `captions.srt`, embeds chapter markers in `final.mp4` (visible in QuickTime, VLC and most players), and prints a YouTube-style chapter list. `--burn-captions` also burns subtitles into the video.
+- **Captions and chapters.** Every full render writes `captions.srt`, embeds chapter markers in `final.mp4` (visible in QuickTime, VLC and most players), and prints a YouTube-style chapter list. Chapters follow what is on screen: the script agent marks every step, item or idea the visuals present (`[[ch: 3. Region test]]`, silent like the cue markers), so a video that walks through ten steps has a chapter for each of the ten, with a short title, starting the moment that step is spoken and appears (the cue it is tied to, on the final paced timeline). Chapters closer than 4 seconds are merged, except numbered steps. Videos made before 0.5.0 keep their one chapter per scene. `--burn-captions` also burns subtitles into the video.
 - **Quiz.** `--quiz` writes `quiz.json`: 4 to 6 multiple-choice questions with answers and explanations. It works with `--no-render` too, since it only needs the script.
 - **Speed.** `--speed 1.25` or `--speed 0.85`, on top of the pace's delivery speed. Each voice's native speed control is used (ElevenLabs falls back to ffmpeg `atempo` outside 0.7 to 1.2). `segments.json` records the post-speed, post-pause durations, so captions and chapters line up.
 
