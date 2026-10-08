@@ -31,7 +31,7 @@ MAX_TITLE_CHARS = 60
 
 _NUMBERED = re.compile(
     r"^\s*(?:(?:step|part|no\.?|number|tip|rule|stage|phase|item|formula|level|layer|day|week)\s*#?\d+\b"
-    r"|#?\d+\s*[.):])",
+    r"|#\d+\b|\d+\s*[.):])",
     re.IGNORECASE,
 )
 
