@@ -23,7 +23,7 @@ def _run_script(code: str, timeout: float, **kw):
                           capture_output=True, text=True, timeout=timeout, **kw)
 
 
-_FAKE_RUN = """
+_FAKE_RUN = textwrap.dedent("""
     import sys, threading, time
     import main
     def fake_main():
@@ -34,7 +34,7 @@ _FAKE_RUN = """
     main.main = fake_main
     main._guard_stdio()
     code = main._run_cli()
-"""
+""")
 
 
 def test_process_exits_promptly_despite_a_stuck_worker_thread():
