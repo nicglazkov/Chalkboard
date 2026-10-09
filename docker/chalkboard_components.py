@@ -102,6 +102,13 @@ TEX_TEMPLATE = getattr(_style, "TEX_TEMPLATE", None)
 CODE_FONT = getattr(_style, "CODE_FONT", None)
 
 
+def tick_decimal_places(x_range):
+    """Decimals an axis' tick labels need for its [min, max, step]
+    (chalkboard_style.tick_decimal_places; 0 when unavailable)."""
+    fn = getattr(_style, "tick_decimal_places", None)
+    return fn(x_range) if fn else 0
+
+
 # tex() prose (Latin Modern) is scaled up by this to match the optical size
 # of Text in the UI face at the same token size.
 TEX_PROSE_SCALE = 1.0
@@ -794,6 +801,7 @@ class ChalkAxis(_ChalkComponent):
             stroke_color=color,
             stroke_width=t.stroke_width("hair"),
             font_size=t.type("micro"),
+            decimal_number_config={"num_decimal_places": tick_decimal_places(x_range) or 0},
         )
         self.add(self.number_line)
 
@@ -849,9 +857,15 @@ class ChalkAxes(_ChalkComponent):
                 "stroke_width": t.stroke_width("normal"),
                 "include_numbers": include_numbers,
                 "font_size": t.type("caption"),
-                "decimal_number_config": {"color": num_color, "num_decimal_places": 0},
+                "decimal_number_config": {"color": num_color},
                 "tick_size": t.space("xs") * 0.6,
             },
+            # Tick labels show as many decimals as the step needs (0.5 -> "0.5,
+            # 1.0, ..."; integers -> "1, 2"); a fixed 0 printed "0, 1, 2, 2, 2".
+            x_axis_config={"decimal_number_config": {
+                "color": num_color, "num_decimal_places": tick_decimal_places(x_range) or 0}},
+            y_axis_config={"decimal_number_config": {
+                "color": num_color, "num_decimal_places": tick_decimal_places(y_range) or 0}},
         )
         self.add(self.axes)
         self.x_label = None
@@ -914,6 +928,34 @@ class ChalkAxes(_ChalkComponent):
         from manim import Dot
 
         return Dot(self.axes.c2p(x, y), radius=0.07, color=ManimColor(self._t.role(role)))
+
+    def hline(self, y: float, label: str = "", *, role: str = "focus_primary", dashed: bool = False):
+        """Horizontal reference line across the plot at value y (a threshold,
+        an asymptote, V_in = 1.9 V), with its value label (LaTeX) placed just
+        past the right end of the axis, outside the plot area, so no curve
+        can run through it. Returns VGroup(line[, label]); `.line` / `.label`."""
+        return self._ref_line(self.axes.c2p(self.axes.x_range[0], y),
+                              self.axes.c2p(self.axes.x_range[1], y), label, RIGHT, role, dashed)
+
+    def vline(self, x: float, label: str = "", *, role: str = "focus_primary", dashed: bool = True):
+        """Vertical reference line at x (a time constant, a threshold input),
+        labelled above the top of the plot, off every curve."""
+        return self._ref_line(self.axes.c2p(x, self.axes.y_range[0]),
+                              self.axes.c2p(x, self.axes.y_range[1]), label, UP, role, dashed)
+
+    def _ref_line(self, start, end, label, direction, role, dashed):
+        from manim import DashedLine
+
+        t = self._t
+        kind = DashedLine if dashed else Line
+        line = kind(start, end, color=ManimColor(t.role(role)), stroke_width=t.stroke_width("normal"))
+        group = VGroup(line)
+        group.line, group.label = line, None
+        if label:
+            group.label = math_tex(label, size="caption", role=role, theme=self.theme)
+            group.label.next_to(line.get_end(), direction, buff=t.space("xs"))
+            group.add(group.label)
+        return group
 
 
 class ChalkPanel(_ChalkComponent):

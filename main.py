@@ -5,12 +5,16 @@ load_dotenv()
 import asyncio
 import argparse
 import collections
+import contextlib
+import errno
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from pathlib import Path
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -39,6 +43,116 @@ RENDER_TIMEOUT_MAX          = 1200.0
 
 class RenderFailed(Exception):
     """Raised when a render attempt fails (timeout or non-zero exit)."""
+
+
+# ---------------------------------------------------------------------------
+# Process plumbing: a reader that goes away, a clean exit, the checkpoint DB
+# ---------------------------------------------------------------------------
+# Seconds a SQLite writer waits for another run's lock on the shared checkpoint
+# DB (WAL mode; every CLI run and every server job uses the same file).
+CHECKPOINT_BUSY_TIMEOUT_S = 30.0
+# After main() returns, worker threads get this long to finish before the
+# process exits anyway (see _exit_promptly).
+EXIT_GRACE_S = 10.0
+
+
+class _PipeSafeStream:
+    """stdout/stderr that survive their reader going away.
+
+    Remote clients run main.py as `python main.py ... | tee log | grep ...` in an
+    ssh -> wsl.exe session. When that session's relay closed mid-run (run
+    244514b9, 2026-10-09), the next print raised BrokenPipeError: the QA loop
+    died right after the re-render, run_stats said "failed", and the traceback
+    was lost with the pipe. Output is progress only, so once the reader is gone
+    it is dropped (fd pointed at /dev/null, so child processes cannot hit EPIPE
+    either) and the run carries on to its files.
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+        self.broken = False
+
+    def _drop(self) -> None:
+        self.broken = True
+        try:
+            fd = self._stream.fileno()
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, fd)
+            os.close(devnull)
+        except (OSError, ValueError, AttributeError):
+            pass
+
+    def _guard(self, fn, *args):
+        if self.broken:
+            return None
+        try:
+            return fn(*args)
+        except BrokenPipeError:
+            self._drop()
+        except OSError as e:
+            if e.errno not in (errno.EPIPE, errno.EIO, errno.ECONNRESET):
+                raise
+            self._drop()
+        return None
+
+    def write(self, data):
+        n = self._guard(self._stream.write, data)
+        return len(data) if n is None else n
+
+    def flush(self):
+        self._guard(self._stream.flush)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _guard_stdio() -> None:
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if stream is not None and not isinstance(stream, _PipeSafeStream):
+            setattr(sys, name, _PipeSafeStream(stream))
+
+
+def _exit_promptly(code: int, grace: float = EXIT_GRACE_S) -> None:
+    """Exit now that the run's work is done, even if a worker thread is stuck.
+
+    A clean interpreter exit joins every non-daemon thread, including the
+    asyncio.to_thread workers of an api_call_with_retry attempt that timed out
+    (wait_for cancels the await, not the blocking HTTP call in its thread).
+    Such a thread can keep a finished run alive for many minutes, and with it
+    the client's ssh session. Threads get `grace` seconds; then the output is
+    flushed and the process ends with os._exit, which skips those joins. All
+    run files are written before this point (run_stats.json last).
+    """
+    deadline = time.monotonic() + grace
+    main_thread = threading.main_thread()
+    for t in threading.enumerate():
+        if t is not main_thread and not t.daemon:
+            t.join(max(0.0, deadline - time.monotonic()))
+    stuck = [t.name for t in threading.enumerate()
+             if t is not main_thread and not t.daemon and t.is_alive()]
+    if not stuck:
+        return
+    print(f"  [exit] {len(stuck)} worker thread(s) still running after {grace:.0f}s "
+          f"({', '.join(stuck[:4])}); exiting anyway", file=sys.stderr)
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            stream.flush()
+    os._exit(code)
+
+
+@contextlib.asynccontextmanager
+async def _open_checkpointer(path: str | None = None):
+    """AsyncSqliteSaver on the shared checkpoint DB with a generous busy
+    timeout, so overlapping runs (two CLI runs, or CLI + server jobs) wait for
+    each other's write lock instead of failing with "database is locked".
+    The saver switches the DB to WAL on setup; the connection is always closed
+    (an unclosed aiosqlite connection is a live thread that blocks exit)."""
+    import aiosqlite
+
+    async with aiosqlite.connect(path or CHECKPOINT_DB, timeout=CHECKPOINT_BUSY_TIMEOUT_S) as conn:
+        await conn.execute(f"PRAGMA busy_timeout = {int(CHECKPOINT_BUSY_TIMEOUT_S * 1000)}")
+        yield AsyncSqliteSaver(conn)
 
 
 def _github_to_raw_url(repo: str) -> str:
@@ -722,7 +836,7 @@ async def run(
 ) -> None:
     print(f"\nChalkboard — topic: {topic!r} | effort: {effort} | run: {thread_id}\n")
 
-    async with AsyncSqliteSaver.from_conn_string(CHECKPOINT_DB) as checkpointer:
+    async with _open_checkpointer() as checkpointer:
         graph = build_graph(checkpointer=checkpointer, context_blocks=context_blocks)
         config = {"configurable": {"thread_id": thread_id}}
         input_state = {
@@ -1142,5 +1256,27 @@ def _cli_run(args, thread_id: str, context_blocks, context_file_paths, interacti
     return ok
 
 
+def _run_cli() -> int:
+    """main() with its outcome as an exit status (SystemExit and uncaught
+    exceptions reported the way the interpreter would)."""
+    try:
+        main()
+        return 0
+    except SystemExit as e:
+        if e.code is None or isinstance(e.code, int):
+            return e.code or 0
+        print(e.code, file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+    except BaseException:
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
 if __name__ == "__main__":
-    main()
+    _guard_stdio()
+    _code = _run_cli()
+    _exit_promptly(_code)
+    sys.exit(_code)

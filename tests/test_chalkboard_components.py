@@ -795,3 +795,39 @@ def test_callout_wraps_long_text_and_stays_on_canvas():
                 offset=RIGHT * 1.0)
     assert c.label.width <= 4.5 + 1e-6
     assert c.label.get_right()[0] <= 7.11
+
+
+# ── Axis tick labels follow the step (run 3253240e: "0, 1, 2, 2, 2") ──
+
+def _tick_labels(number_line) -> list[str]:
+    d = number_line.decimal_number_config["num_decimal_places"]
+    return [f"{float(n.number) + 0.0:.{d}f}" for n in number_line.numbers]
+
+
+def test_chalkaxes_half_step_ticks_show_one_decimal():
+    ax = ChalkAxes([0, 6, 1], [0, 2.5, 0.5])
+    assert _tick_labels(ax.axes.y_axis) == ["0.5", "1.0", "1.5", "2.0", "2.5"]
+    assert _tick_labels(ax.axes.x_axis) == ["1", "2", "3", "4", "5", "6"]
+
+
+def test_chalkaxes_keeps_token_number_color_with_decimals():
+    ax = ChalkAxes([0, 1, 0.25], [0, 3, 1])
+    cfg = ax.axes.x_axis.decimal_number_config
+    assert cfg["num_decimal_places"] == 2 and "color" in cfg
+    assert _tick_labels(ax.axes.x_axis) == ["0.25", "0.50", "0.75", "1.00"]
+
+
+def test_chalkaxis_quarter_steps():
+    ax = ChalkAxis([0, 1, 0.25], length=4.0)
+    assert _tick_labels(ax.number_line) == ["0.00", "0.25", "0.50", "0.75", "1.00"]
+
+
+def test_chalkaxes_hline_label_sits_outside_the_plot():
+    ax = ChalkAxes([0, 6, 1], [0, 2.5, 0.5], x_length=5.2, y_length=4.4)
+    ref = ax.hline(1.9, label=r"V_{in} = 1.9\,\mathrm{V}")
+    assert ref.label is not None and ref.line in ref.submobjects
+    assert ref.label.get_left()[0] >= ax.c2p(6, 0)[0]          # right of the plot
+    assert abs(ref.label.get_center()[1] - ax.c2p(0, 1.9)[1]) < 1e-6
+    v = ax.vline(1.3, label=r"\tau")
+    assert v.label.get_bottom()[1] >= ax.c2p(0, 2.5)[1]         # above the plot
+    assert ax.hline(1.0).label is None

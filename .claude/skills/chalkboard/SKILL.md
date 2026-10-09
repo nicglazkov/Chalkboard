@@ -26,6 +26,8 @@ Always pass `--yes`. It skips confirmations and makes the run non-interactive: n
 
 The first output line contains `run: <run_id>`; note it. When the run ends the log shows `Done → .../final.mp4`.
 
+Several runs can go at once (each has its own run id; the checkpoint DB is shared safely). When driving a run over ssh (or `wsl.exe`), detach it and follow the log instead of streaming it through the session: `setsid -f bash -c 'python main.py ... --yes > logs/<id>.log 2>&1 < /dev/null; echo $? > logs/<id>.rc'`, then poll the log and wait for the `.rc` file (or `tail -f --pid`). Never pipe `main.py` through `tee`/`grep` held open by a remote session: if that session's relay stalls, the client waits forever even though the video is done.
+
 ## Choosing options
 
 Pick from the request; leave the rest at defaults.
@@ -78,7 +80,7 @@ A run whose pipeline ended in escalation (retries exhausted, status failed) is f
 ## Debugging
 
 1. **Read the log.** Each node prints `[node] ... → status`; retries print `[label] failed (...) retrying`; the render prints `[render] animation N/M`; QA prints `[qa] issues found:` with each issue.
-2. **Layout problems:** read `output/<run_id>/layout_report.json` (`passed`, `violations` with `type` such as `off_screen`, `overlap`, `zone_collision`, `timing_overrun`, and a per-segment `description`).
+2. **Layout problems:** read `output/<run_id>/layout_report.json` (`passed`, `violations` with `type` such as `off_screen`, `overlap`, `zone_collision`, `label_on_curve`, `timing_overrun`, and a per-segment `description`).
 3. **Scene crashes:** the layout feedback includes the traceback tail. Reproduce locally (local backend) with `PYTHONPATH=docker CHALKBOARD_REPORT_DIR=output/<run_id> python -m manim render -ql output/<run_id>/scene.py ChalkboardScene`. Known Manim 0.21.0 pitfalls are listed in `CLAUDE.md`.
 4. **Render failures:** rerun with `--verbose` (not combinable with `--preview`) to stream Manim output.
 5. **API errors:** auth, bad request and out-of-credit errors fail immediately; tell the user rather than retrying in a loop.

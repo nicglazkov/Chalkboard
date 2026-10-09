@@ -199,6 +199,109 @@ def _has_text(m) -> bool:
     return any(isinstance(sm, (Text, MarkupText, Tex, MathTex, Paragraph)) for sm in m.get_family())
 
 
+# A plotted curve that enters a text label's box (shrunk by this much on every
+# side) runs through the glyphs. Bounding boxes cannot see this: a curve's box
+# covers most of its plot, so curves are connectors in the overlap check.
+_CURVE_LABEL_INSET = 0.03
+# Samples per Bezier piece when following a curve (pieces are short already).
+_CURVE_SAMPLES = 4
+
+
+def _text_classes():
+    from manim import MarkupText, MathTex, Paragraph, SingleStringMathTex, Tex, Text
+    return (Text, MarkupText, Tex, MathTex, SingleStringMathTex, Paragraph)
+
+
+def _text_labels(mobjects) -> list:
+    """Outermost visible text mobjects (MathTex, Tex, Text, ...) in the scene,
+    including text inside components (boxes, callouts, a ChalkAxes' axis
+    labels). Number lines and axes are not entered: their tick numbers sit on
+    the axis by design."""
+    try:
+        from manim import NumberLine
+        from manim.mobject.graphing.coordinate_systems import CoordinateSystem
+        texts = _text_classes()
+    except ImportError:
+        return []
+    out: list = []
+
+    def walk(m):
+        if isinstance(m, (NumberLine, CoordinateSystem)):
+            return
+        if isinstance(m, texts):
+            if _is_visible(m) and len(m.get_all_points()):
+                out.append(m)
+            return
+        for sm in getattr(m, "submobjects", []):
+            walk(sm)
+
+    for m in mobjects:
+        walk(m)
+    return out
+
+
+def _plotted_curves(mobjects) -> list:
+    """Visible plotted curves (ax.plot / FunctionGraph / ParametricFunction)
+    anywhere in the scene, including inside groups."""
+    try:
+        from manim import ParametricFunction
+    except ImportError:
+        return []
+    out = []
+    for m in mobjects:
+        for sm in m.get_family():
+            if isinstance(sm, ParametricFunction) and len(sm.points) >= 4:
+                try:
+                    if sm.get_stroke_opacity() > 0.05:
+                        out.append(sm)
+                except Exception:
+                    out.append(sm)
+    return out
+
+
+def _curve_polyline(curve):
+    """(starts, ends) of short straight pieces that follow the curve: every
+    cubic Bezier piece sampled at _CURVE_SAMPLES points, so the check uses the
+    curve itself, not its bounding box. Gaps between subpaths stay gaps."""
+    import numpy as np
+
+    pts = np.asarray(curve.points, dtype=float)
+    n = len(pts) // 4
+    if n == 0:
+        return np.zeros((0, 3)), np.zeros((0, 3))
+    b = pts[: n * 4].reshape(n, 4, 3)
+    ts = np.linspace(0.0, 1.0, _CURVE_SAMPLES + 1)
+    mt = 1.0 - ts
+    coef = np.stack([mt ** 3, 3 * mt ** 2 * ts, 3 * mt * ts ** 2, ts ** 3], axis=1)  # (S+1, 4)
+    samples = np.einsum("sk,nkd->nsd", coef, b)                                       # (n, S+1, 3)
+    return samples[:, :-1, :].reshape(-1, 3), samples[:, 1:, :].reshape(-1, 3)
+
+
+def _segments_hit_box(starts, ends, lo, hi) -> bool:
+    """True if any straight piece starts[i] -> ends[i] passes through the
+    axis-aligned box [lo, hi] (x/y only; Liang-Barsky clipping, vectorized)."""
+    import numpy as np
+
+    if len(starts) == 0:
+        return False
+    p0 = starts[:, :2]
+    d = ends[:, :2] - p0
+    tmin = np.zeros(len(p0))
+    tmax = np.ones(len(p0))
+    ok = np.ones(len(p0), dtype=bool)
+    for k in range(2):
+        dk = d[:, k]
+        flat = np.abs(dk) < 1e-12
+        inside = (p0[:, k] >= lo[k]) & (p0[:, k] <= hi[k])
+        ok &= ~flat | inside
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t1 = (lo[k] - p0[:, k]) / dk
+            t2 = (hi[k] - p0[:, k]) / dk
+        tmin = np.where(flat, tmin, np.maximum(tmin, np.minimum(t1, t2)))
+        tmax = np.where(flat, tmax, np.minimum(tmax, np.maximum(t1, t2)))
+    return bool(np.any(ok & (tmin <= tmax)))
+
+
 def _grazing(bb1, bb2) -> bool:
     ow = min(bb1[2][0], bb2[2][0]) - max(bb1[0][0], bb2[0][0])
     oh = min(bb1[2][1], bb2[2][1]) - max(bb1[0][1], bb2[0][1])
@@ -694,6 +797,53 @@ class ChalkboardSceneBase:
                             f"while left-zone elements are also present in this segment."
                         ),
                     })
+
+        # 5. Label on a curve: a plotted curve running through a text label
+        # (a value label put next to a point the curve passes, as in run
+        # 3253240e segment 5). Tested against the curve's own sampled path.
+        self._lc_check_labels_on_curves(n, list(getattr(self, "mobjects", [])))
+
+    def _lc_check_labels_on_curves(self, n, mobjects) -> None:
+        try:
+            curves = _plotted_curves(mobjects)
+            if not curves:
+                return
+            labels = _text_labels(mobjects)
+            paths = [(c, *_curve_polyline(c)) for c in curves]
+        except Exception:
+            return  # advisory check; never break a render
+        flagged = set()
+        for label in labels:
+            bb = _measure(label)
+            if bb is None:
+                continue
+            lo = bb[0][:2] + _CURVE_LABEL_INSET
+            hi = bb[2][:2] - _CURVE_LABEL_INSET
+            if (hi <= lo).any():
+                continue
+            for curve, starts, ends in paths:
+                if id(label) in flagged or not _segments_hit_box(starts, ends, lo, hi):
+                    continue
+                flagged.add(id(label))
+                text = getattr(label, "tex_string", None) or getattr(label, "text", None) or ""
+                self._lc_violations.append({
+                    "type": "label_on_curve",
+                    "segment": n,
+                    "objects": [repr(label)[:60], repr(curve)[:60]],
+                    "label": str(text)[:60],
+                    "label_box": {
+                        "x": [round(float(bb[0][0]), 2), round(float(bb[2][0]), 2)],
+                        "y": [round(float(bb[0][1]), 2), round(float(bb[2][1]), 2)],
+                    },
+                    "description": (
+                        f"Segment {n}: the plotted curve runs through the label "
+                        f"{str(text)[:40]!r} at x=[{bb[0][0]:.2f},{bb[2][0]:.2f}] "
+                        f"y=[{bb[0][1]:.2f},{bb[2][1]:.2f}]. Place value labels off the curve: "
+                        f"ax.hline(y, label=...) / ax.vline(x, label=...) put them outside the plot, "
+                        f"or next_to the curve's end or the axis with a buff, on the side the curve "
+                        f"does not pass."
+                    ),
+                })
 
     def _lc_write_report(self) -> None:
         report = {

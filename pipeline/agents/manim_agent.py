@@ -107,7 +107,13 @@ COMPONENTS (chalkboard_components) — semantic wrappers around Manim primitives
   ChalkAxes(x_range, y_range, x_length=, y_length=, x_label="x", y_label="y")
                                        — 2-D axes for function plots. Helpers return mobjects:
                                          ax.plot(fn, role=, x_range=), ax.area(graph, x_range=, role=),
-                                         ax.tangent(fn, x=, role=), ax.dot_at(x, y), ax.c2p(x, y)
+                                         ax.tangent(fn, x=, role=), ax.dot_at(x, y), ax.c2p(x, y),
+                                         ax.hline(y, label=r"V_{in} = 1.9\,\mathrm{V}", dashed=False),
+                                         ax.vline(x, label=r"t = \tau") — reference lines whose
+                                         value label sits outside the plot, off every curve.
+                                       Tick labels follow the step automatically ([0, 2.5, 0.5] ->
+                                       0.5, 1.0, ... 2.5; [0, 6, 1] -> 1, 2, ...). Pick the step you
+                                       want printed; never pass decimal_number_config.
   ChalkPanel(title=, width=, height=)  — section frame for grouped content.
                                         Place content with panel.body_center / body_top /
                                         body_bottom (NOT panel.get_center(), which overlaps the title).
@@ -221,6 +227,11 @@ MATH — every formula must look like a textbook typeset it:
     BEFORE revealing it, or split it across segments.
   - Plots: ChalkAxes + ax.plot(...). Label curves with math_tex(..., size="caption")
     placed with .next_to(...). Areas / Riemann sums: ax.area(...).
+  - Labels never sit on a curve (the layout check flags label_on_curve). A curve
+    label goes next_to(curve.get_end(), RIGHT) or beside a point the curve has
+    already left; a threshold or value line uses ax.hline(y, label=...) /
+    ax.vline(x, label=...), which put the label outside the plot. Never put a
+    value label next_to(ax.c2p(x, y)) where the curve passes near (x, y).
 
 TOKENS (chalkboard_tokens) — every color, size, gap, stroke, run_time:
 
@@ -350,7 +361,7 @@ EXEMPLAR 4 — Calculus: area under a curve, then the derivation:
   curve = ax.plot(lambda x: x**2, role="focus_secondary", x_range=[0, 3])
   area = ax.area(curve, x_range=[0, 2], role="accent_cool")
   label = math_tex(r"f(x) = x^2", size="body", role="focus_secondary")
-  label.next_to(ax.c2p(3, 9), LEFT, buff=t.space("sm"))
+  label.next_to(curve.get_end(), RIGHT, buff=t.space("sm"))   # past the curve's end, off it
   seg_items.extend([ax, curve, area, label])
   reveal_with_emphasis(self, ax, motion_name="snap")     # scaffolding: no fanfare
   self.play(Create(curve), **resolve_motion(t.motion("emphasis")))
