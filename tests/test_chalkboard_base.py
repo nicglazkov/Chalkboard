@@ -602,3 +602,86 @@ def test_real_scene_flags_overlapping_text_and_offscreen(tmp_path):
     kinds = {v["type"] for v in json.loads((tmp_path / "layout_report.json").read_text())["violations"]}
     assert "overlap" in kinds
     assert "off_screen" in kinds
+
+
+# ── label_on_curve: a plotted curve running through a text label ─────────────
+
+def _curve_label_scene(tmp_path, place):
+    """Run 3253240e segment 5 (RC charging to V_in = 1.9 V) as a real dry-run;
+    place(ax, curve, label) positions the value label."""
+    pytest.importorskip("manim")
+    import manim
+    import numpy as np
+    from manim import Scene
+    from docker.chalkboard_base import ChalkboardSceneBase
+    from docker.chalkboard_components import ChalkAxes, math_tex
+
+    class S(ChalkboardSceneBase, Scene):
+        _REPORT_DIR = str(tmp_path)
+
+        def construct(self):
+            self.begin_segment(0, duration=2.0)
+            ax = ChalkAxes([0, 6, 1], [0, 2.5, 0.5], x_length=5.2, y_length=4.4,
+                           x_label="t", y_label="V_{out}")
+            curve = ax.plot(lambda x: 1.9 - 1.6 * np.exp(-x / 1.3), role="focus_secondary",
+                            x_range=[0, 6])
+            label = math_tex(r"V_{in} = 1.9\,\mathrm{V}", size="caption", role="focus_primary")
+            extra = place(ax, curve, label) or []
+            self.add(ax, curve, label, *extra)
+            self.wait(2.0)
+            self.end_layout_check()
+
+    with manim.tempconfig({"dry_run": True, "frame_rate": 1, "verbosity": "ERROR"}):
+        S().render()
+    report = json.loads((tmp_path / "layout_report.json").read_text())
+    return [v for v in report["violations"] if v["type"] == "label_on_curve"]
+
+
+def test_label_on_curve_flags_the_3253240e_segment_5_label(tmp_path):
+    """Positive control: QA attempt 1 of run 3253240e put the label with
+    next_to(ax.c2p(1.6, 1.9), DOWN) and the charging curve crossed it."""
+    from manim import DOWN
+
+    def place(ax, curve, label):
+        label.next_to(ax.c2p(1.6, 1.9), DOWN, buff=0.1)
+
+    flags = _curve_label_scene(tmp_path, place)
+    assert len(flags) == 1
+    assert "1.9" in flags[0]["label"] and flags[0]["segment"] == 0
+
+
+def test_label_past_the_curve_end_is_not_flagged(tmp_path):
+    from manim import RIGHT
+
+    def place(ax, curve, label):
+        label.next_to(curve.get_end(), RIGHT, buff=0.15)
+
+    assert _curve_label_scene(tmp_path, place) == []
+
+
+def test_hline_value_label_is_not_flagged(tmp_path):
+    def place(ax, curve, label):
+        label.set_opacity(0)                     # replaced by the hline's own label
+        return [ax.hline(1.9, label=r"V_{in} = 1.9\,\mathrm{V}")]
+
+    assert _curve_label_scene(tmp_path, place) == []
+
+
+def test_label_above_the_curve_in_empty_space_is_not_flagged(tmp_path):
+    from manim import UP
+
+    def place(ax, curve, label):
+        label.next_to(ax.c2p(1.0, 2.0), UP, buff=0.1)   # curve is at ~0.8 V there
+
+    assert _curve_label_scene(tmp_path, place) == []
+
+
+def test_segments_hit_box_geometry():
+    from docker.chalkboard_base import _segments_hit_box
+    lo, hi = np.array([0.0, 0.0]), np.array([1.0, 1.0])
+    s = np.array([[-1.0, 0.5, 0], [-1.0, 2.0, 0], [0.5, -1.0, 0], [2.0, 2.0, 0]])
+    e = np.array([[2.0, 0.5, 0], [2.0, 2.0, 0], [0.5, -0.5, 0], [3.0, 3.0, 0]])
+    hits = [_segments_hit_box(s[i:i + 1], e[i:i + 1], lo, hi) for i in range(4)]
+    assert hits == [True, False, False, False]
+    # a diagonal crossing only the corner region still counts
+    assert _segments_hit_box(np.array([[-0.5, 0.6, 0]]), np.array([[0.6, -0.5, 0]]), lo, hi)

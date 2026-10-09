@@ -151,7 +151,7 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"- chalkboard_tokens.T: t.role(...), t.surface(...), t.type(...), t.space(...), "
         f"t.stroke_width(...), t.motion(...), t.lag(...), t.bg, t.body\n"
         f"- chalkboard_components: ChalkBox, ChalkArrow, ChalkCode (.code_lines), Callout, "
-        f"StepCounter (.advance()), ChalkAxis, ChalkAxes (.plot/.area/.tangent/.dot_at/.c2p), "
+        f"StepCounter (.advance()), ChalkAxis, ChalkAxes (.plot/.area/.tangent/.dot_at/.c2p/.hline/.vline), "
         f"ChalkPanel (.body_center/.body_top/.body_bottom), ChalkBadge, EquationGroup "
         f"(.lines/.focus(i)), ChalkMatrix, NetworkNode, math_tex(...), tex(...), resolve_motion(...); "
         f"every component has .highlight(role) and .mute()\n"
