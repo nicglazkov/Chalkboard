@@ -43,6 +43,7 @@ pipeline/
   design_tokens.py   Shim that loads docker/chalkboard_tokens.py by path and re-exports it
   render_trigger.py  Calls TTS, applies pacing, writes output files
   pacing.py          Pace presets, pause points, post-TTS silence insertion, pre-TTS estimates
+  scene_parts.py     Scene written in parts: part_ranges, extract_method, assemble, route_feedback
   chapters.py        Chapters from [[ch: Title]] markers on the paced timeline: chapters.txt, timeline API
   cues.py            Cue / beat / chapter markers: parse_markers, parse_cues, parse_chapter_markers, timing helpers
   retry.py           TimeoutExhausted, api_call_with_retry, timeout constants
@@ -141,6 +142,8 @@ server/
 | `layout_renderable` | bool | Set by `layout_checker`: `True` when the last dry-run ran to completion (only layout/timing violations, no crash) |
 | `claude_review_failures` | int | Count of advisory rejections by code_validator's Claude review; reset to 0 by code_validator's own hard failures (syntax, Mobject arithmetic, AST guards). Layout failures leave it as is, so once it is over the limit later rejections go straight to the dry-run |
 | `code_feedback_advisory` | bool | `True` when the current `code_feedback` came from the Claude review, not a deterministic check |
+| `scene_parts` | list[dict] \| None | Set when manim_agent wrote the scene in parts: `[{"segments": [a, b], "code": "def part_K(...)", "imports": [...]}]`; `manim_code` is their assembly. `None` for a single-response scene |
+| `scene_plan` | dict \| None | The shared visual plan (`title`, `style`, per-segment `visuals` / `end_state`) the parts follow |
 
 `_init_state` in `graph.py` fills defaults for the optional fields, including `quality`, `narrator`, `claude_review_failures` and `code_feedback_advisory`. A new field has to be threaded through `state.py`, `_init_state`, `main.run()` (parameter and `input_state`) and `server/jobs.py` (`Job`, `JobStore.create`, the `run(...)` call). `layout_renderable` has no default there; it is only read with `.get()`.
 
@@ -159,7 +162,7 @@ CLAUDE_REVIEW_ADVISORY_LIMIT = 2
 def _after_fact_validator(state):
     if not state.get("fact_feedback"):        # None = approved
         return "manim_agent"
-    if state["script_attempts"] >= 3:
+    if state["script_attempts"] >= SCRIPT_ATTEMPT_LIMIT:   # 3
         return "escalate_to_user"
     return "script_agent"
 
@@ -187,6 +190,8 @@ def _after_layout_checker(state):
 
 **Advisory Claude review.** The deterministic gates are the AST checks in `code_validator` and the headless dry-run in `layout_checker`. Claude's semantic review can reject a scene (triggering a revision), but its rejections increment `claude_review_failures`, not `code_attempts`, so a nit-picking review cannot exhaust the retry budget meant for real bugs. Once the review has rejected more than `CLAUDE_REVIEW_ADVISORY_LIMIT` times in a row, the scene goes to the layout dry-run anyway.
 
+**Fact check in non-interactive runs.** When the fact check rejects the script for the `SCRIPT_ATTEMPT_LIMIT`-th time (3) and `interactive` is `False` (`--yes`, the server), `fact_validator` returns `fact_feedback=None` with a printed note and a `warning` telemetry event carrying the remaining notes (kept in `run_stats.json` `warnings`): the run continues with the latest script, which already went through every earlier round of fixes, instead of escalating to a dead end with no video (run f82835bb, 2026-10-09, high effort: the third rejection listed one inconsistent example value, two wording fixes and three clarity notes, and the run ended with no video). Interactive runs still escalate.
+
 **Layout-only failures.** When `code_attempts` hits 3 on a layout failure, a scene that ran end to end (`layout_renderable=True`) is rendered anyway in non-interactive runs (visual QA still reviews it). A scene that crashed, or any failure in an interactive run, escalates.
 
 ---
@@ -195,7 +200,8 @@ def _after_layout_checker(state):
 
 Every agent (plus visual QA, the quiz and context measurement) talks to Claude through `pipeline/llm.py`:
 
-- **`call_json(agent, *, content, schema, system=None, max_tokens=16000, tools=None, client=None, stream=False)`**: blocking structured-output call returning `(parsed_dict, response)`. Agents run it inside `api_call_with_retry` (it is sync). `stream=True` uses `client.messages.stream(...).get_final_message()`; `manim_agent` streams because scene code is long. After every call it emits a `usage` event (tokens, web searches, `cost_usd` from `pipeline/pricing.py`) to the telemetry sink, if one is set. When the sink asks for peeks (`telemetry.Sink(..., peek=True)`, the server), the `script`, `fact` and `manim` agents always stream and publish `peek` events: the growing value of `script` / `feedback` / `manim_code`, read from the SDK's live text snapshot with `pipeline/partial_json.extract_string_field`, at most every `PEEK_INTERVAL` (0.25 s), then a final `done: true`. With no sink (tests, plain library use) the call path is unchanged.
+- **`call_json(agent, *, content, schema, system=None, max_tokens=16000, tools=None, client=None, stream=False, effort=None)`**: blocking structured-output call returning `(parsed_dict, response)` (it is sync). `stream=True` uses `client.messages.stream(...).get_final_message()`; budgets above `NON_STREAMING_MAX` (16000) always stream (the SDK refuses long non-streaming requests). `effort` overrides the agent's effort for this call. After every call it emits a `usage` event (tokens, web searches, `cost_usd` from `pipeline/pricing.py`, plus `max_tokens`, `effort` and `stop_reason`) to the telemetry sink, if one is set, before the response is parsed, so a call that ran out of room is still counted.
+- **Output budgets** (`call_json_budgeted`, async; every agent uses it): `max_tokens` caps adaptive thinking **plus** the answer, and it is not billed unless used. A response that runs out of room (`stop_reason == "max_tokens"`, including the thinking-only case where no text block exists) raises `ClaudeTruncated(thinking_only=...)`, which `api_call_with_retry(..., passthrough=(ClaudeTruncated,))` hands straight back instead of repeating the identical call. `call_json_budgeted` then walks `budget_steps(max_tokens, ceiling, effort)`: the requested budget, the model's whole output cap (`model_max_output`: Models API `max_tokens`, cached; 128000 for Opus 5.5; `DEFAULT_OUTPUT_CEILING` 64000 if the lookup fails), then the cap at one effort level lower. Each escalation prints `[label] out of output room ... retrying with max_tokens=..., effort ...` and emits a `budget` event (in `run_stats.json` `budget_retries`). When every step runs out it raises `ClaudeOutOfRoom`, a `TimeoutExhausted` subclass, so the graceful handlers (fact check, code review, research) keep working. `max_steps=1` disables escalation (manim_agent's single-response scene, whose fallback is writing in parts); `on_last_step(kwargs)` can change the request for the last step (script_agent adds a length limit). Per-attempt timeouts grow with the budget (`budget_timeout`: at least `max_tokens / 40 tok/s + 60 s`). Measured 2026-10-09 on Opus 5.5: the af68f322 scene call, replayed with room to spare, used 80,863 output tokens in 694 s: about 22.5k for the answer (an 845-line scene, hand-written although the run asked for the derivation template) and about 58k of thinking, which is why the old fixed 48000 failed three times in a row. When the sink asks for peeks (`telemetry.Sink(..., peek=True)`, the server), the `script`, `fact` and `manim` agents always stream and publish `peek` events: the growing value of `script` / `feedback` / `manim_code`, read from the SDK's live text snapshot with `pipeline/partial_json.extract_string_field`, at most every `PEEK_INTERVAL` (0.25 s), then a final `done: true`. With no sink (tests, plain library use) the call path is unchanged.
 - **Telemetry** (`pipeline/telemetry.py`): a ContextVar holds the run's `Sink`; `asyncio.to_thread` copies context, so `call_json`, Kokoro and the render reader (all in worker threads) reach it. `emit(node, updates)` stamps `ts` at emission and never raises. The server's sink (`server/jobs._job_sink`) appends directly on the loop thread and via `call_soon_threadsafe` from others; the CLI's sink is a `run_stats.Recorder` (no peeks). Render progress: `ChalkboardSceneBase.begin_segment` prints `CB_SEGMENT n` in a real render, `main._render_once` parses it and Manim's `Animation N` lines into throttled `render` events (`_RenderProgress`). TTS progress: backends accept `on_segment(index, chars)`; `render_trigger` turns it into `tts` events (backends without it get one `done` event with the text length).
 - **`model_params(agent)`**: `model` from `config.agent_model(agent)`, `thinking={"type": "adaptive"}` and `output_config={"effort": agent_effort(agent)}`. Haiku models get neither thinking nor effort.
 - **`response_text(response)`**: returns the **last** text block. Current models think, so `content[0]` is often a `thinking` block (and with web search, server tool blocks come first). Never read `response.content[0].text`. Raises `ClaudeRefused` on `stop_reason == "refusal"` and `ClaudeTruncated` on `max_tokens`.
@@ -213,14 +219,14 @@ Structured output schemas must have `"additionalProperties": false` on **every n
 All agents are `async def` and wrap their `call_json` call with `api_call_with_retry` from `pipeline/retry.py`. LangGraph awaits async nodes directly.
 
 ### research_agent
-- Agent key `research`, default `max_tokens` (16000), timeout `TIMEOUT_RESEARCH_AGENT` = 300s
+- Agent key `research`, `max_tokens` 32000 (budgeted), timeout `TIMEOUT_RESEARCH_AGENT` = 300s
 - Output: `{"research_brief": str, "sources": list[str], "search_warning": str|null}`
 - Only runs when `effort_level == "high"` (`_after_init`). Uses `web_search_tool("research")`
 - When present, `research_brief` is injected into `script_agent`'s message and `script_agent`'s own web search is disabled
 - **Graceful fallback:** on `TimeoutExhausted`, `RuntimeError` or `ValueError` it returns `research_brief=None` and a `search_warning`; the script then relies on training data. The pipeline does not abort.
 
 ### script_agent
-- Agent key `script`, default `max_tokens`, timeout `TIMEOUT_SCRIPT_AGENT` = 300s
+- Agent key `script`, `max_tokens` `SCRIPT_MAX_TOKENS` = 32000 (budgeted; the old 16000 default truncated twice on a high-effort rewrite with a research brief and 44k tokens of context, run f82835bb), timeout `TIMEOUT_SCRIPT_AGENT` = 300s. The last budget step appends `TIGHTEN_NOTE` (at most 8 short segments, plan briefly) instead of failing
 - Output: `{"title": str, "script": str, "segments": [{text, estimated_duration_sec}], "needs_web_search": bool}`
 - Web search enabled when `effort_level == "high"` or `user_approved_search`, **unless** `research_brief` is set
 - Injects `AUDIENCE_INSTRUCTIONS` / `TONE_INSTRUCTIONS`
@@ -229,13 +235,16 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - **Presenting:** the prompt asks for a teacher's delivery (one idea per short sentence, a question before its answer, signposts, a closing recap) and allows sparse `[[beat]]` markers (0-2 per segment) where a deliberate pause belongs (see Pacing below). Durations are estimated for speech only; pauses are added by pacing.
 
 ### fact_validator
-- Agent key `fact`, `max_tokens` 8000, timeout `TIMEOUT_FACT_VALIDATOR` = 180s
+- Agent key `fact`, `max_tokens` 16000 (budgeted), timeout `TIMEOUT_FACT_VALIDATOR` = 180s
 - Output: `{"verdict": "approved"|"needs_revision", "feedback": str}`
 - Effort-based instructions: low = light check, medium = spot-check, high = thorough
 
 ### manim_agent
-- Agent key `manim`, `max_tokens` 48000, **streamed**, timeout `TIMEOUT_MANIM_AGENT` = 900s
-- Output: `{"manim_code": str}`
+- Agent key `manim`, **streamed**, base timeout `TIMEOUT_MANIM_AGENT` = 900s (scaled with the budget)
+- Output: `{"manim_code": str}` (single response) or a scene written in parts (below)
+- **Single response**: `max_tokens` `MANIM_MAX_TOKENS` = 128000, clamped to the model cap, no escalation (`max_steps=1`). If it still runs out of room it is rewritten in parts (`budget` event with `fallback: "scene_parts"`); with `SCENE_CHUNKING=off` it gets the budget ladder instead and fails when that runs out.
+- **Written in parts** (`pipeline/scene_parts.py`), up front when `should_chunk(state)`: `SCENE_CHUNKING` = `auto` (default: >= `CHUNK_MIN_SEGMENTS` (7) segments or >= `CHUNK_MIN_CUE_CHARS` (5000) characters of marked segment text, with or without a template: the measured 8-segment scene needed 63% of the cap in one response, and it ignored its derivation template), `always` or `off`. Segments are split into balanced consecutive parts of about `SEGMENTS_PER_PART` (3). One plan call (`PLAN_SCHEMA`: persistent title, shared style = roles per concept, zones, recurring components; per segment what lands on each cue and the `end_state`; sees the context files) then one call per part, concurrently (`PART_MODE` appended to the system prompt; `PART_SCHEMA` `{imports, code}`; each part sees the whole script, every segment, the theme block and the plan, not the context files). A part is one method `def part_K(self, t, _d, seg_items)`: part 0 begins segment 0 and creates `self.title_mob`; every other segment, including a later part's first, starts with `next_segment(N, clear=seg_items)`; it returns what it leaves on screen. `extract_method` rejects anything else (one immediate re-ask). `assemble` writes the scaffold imports once (plus the parts' extra import statements, validated), `construct()` with the duration loading, `T(theme=...)`, background, the part calls in order, `end_layout_check()` and the final FadeOut, then the part methods, so the AST guards, code review and dry-run see one normal scene. A template (a whole-scene beats dict) cannot be split: the parts are told to compose its look from components and moves.
+- **Revision of a scene in parts**: when `scene_parts` is set and `manim_code` is still exactly their assembly, `route_feedback` maps the feedback to parts by the assembled line numbers it cites (`line N`) and the segments it names (`[Segment N ...]`); feedback naming neither goes to every part. Only those parts are rewritten (minimal edits, given their current code and their line span), concurrently, and the scene is reassembled. A visual-QA revision starts from `scene.py` without `scene_parts`; `split_assembled` reads the parts back from the code (exact round trip through `assemble`, else `None`), so QA fixes are part revisions too (the parts get no plan then and keep their look). A scene that is not an assembly is revised as a single response; a wide one is rewritten in parts with the feedback given to the plan.
 - Scene class **must** be `ChalkboardScene(ChalkboardSceneBase, Scene)`
 - The system prompt targets **Manim CE v0.21.0** and teaches the design system: required scaffold (imports of tokens, components, moves, templates), the component / move / template vocabulary, a MATH section (all math through `math_tex` / `tex` / `EquationGroup` / `ChalkMatrix`, house macros, role-colored terms, aligned derivations), the token API and what is forbidden in scene code (raw hex/Manim color constants, raw `font_size`/`buff`/`stroke_width`/`run_time` literals, math in `Text`), role and motion semantics, five annotated exemplars (the fifth: word-level sync with `self.cue(k)`), the WORD-LEVEL SYNC rules, the verified pitfall list (below), LAYOUT RULES and the CLEAN SLATE rule
 - `_format_segments` shows each segment's marked `cue_text` with its paced estimate (`pacing.estimate_segment`: duration, each marker's time, "last word ~Xs, then hold still"; measured values when present, e.g. on QA regeneration)
@@ -246,7 +255,7 @@ All agents are `async def` and wrap their `call_json` call with `api_call_with_r
 - manim_agent does not touch `code_attempts`; code_validator and layout_checker count failures
 
 ### code_validator
-- Agent key `code_validator`, `max_tokens` 8000, timeout `TIMEOUT_CODE_VALIDATOR` = 240s
+- Agent key `code_validator`, `max_tokens` 16000 (budgeted), timeout `TIMEOUT_CODE_VALIDATOR` = 240s
 - Gates, in order (each hard failure increments `code_attempts`, resets `claude_review_failures`, sets `code_feedback_advisory=False`):
   1. `ast.parse()` syntax check
   2. Mobject arithmetic scan (`Text(...) + 0` and friends crash at render time)
@@ -372,7 +381,7 @@ The persistent title is never in `seg_items`; multi-segment elements are faded o
 
 ## Timeout & retry infrastructure
 
-**`api_call_with_retry(fn, timeout, max_attempts=3, label)`** (`pipeline/retry.py`) runs a sync callable in `asyncio.to_thread` under `asyncio.wait_for`, retrying on timeouts and errors. It raises `TimeoutExhausted` after the last attempt, or **immediately** for errors that cannot succeed on retry: `BadRequestError`, `AuthenticationError`, `PermissionDeniedError`, `NotFoundError`, and quota errors (`insufficient_quota`, `credit balance is too low`). The Anthropic SDK additionally retries 429/5xx inside each attempt (`max_retries=3`). `TimeoutExhausted` propagates out of `graph.astream()` and is handled in `run()`: interactive runs offer `retry / abort`; non-interactive runs re-raise.
+**`api_call_with_retry(fn, timeout, max_attempts=3, label, passthrough=())`** (`pipeline/retry.py`) runs a sync callable in `asyncio.to_thread` under `asyncio.wait_for`, retrying on timeouts and errors. It raises `TimeoutExhausted` after the last attempt, or **immediately** for errors that cannot succeed on retry: `BadRequestError`, `AuthenticationError`, `PermissionDeniedError`, `NotFoundError`, and quota errors (`insufficient_quota`, `credit balance is too low`). The Anthropic SDK additionally retries 429/5xx inside each attempt (`max_retries=3`). Exceptions of a `passthrough` type are re-raised at once, unwrapped (`call_json_budgeted` passes `ClaudeTruncated`: repeating a call that ran out of room fails the same way). `TimeoutExhausted` propagates out of `graph.astream()` and is handled in `run()`: interactive runs offer `retry / abort`; non-interactive runs re-raise.
 
 **`subprocess_with_timeout(cmd, timeout, on_line=None, env=None)`** (`main.py`) kills the process via `threading.Timer` after `timeout`; returns `(returncode, lines_buffer, timed_out)`. Used for render subprocesses.
 
@@ -385,7 +394,7 @@ The persistent title is never in `seg_items`; multi-segment elements are faded o
 | `TIMEOUT_SCRIPT_AGENT` | 300s | script_agent |
 | `TIMEOUT_RESEARCH_AGENT` | 300s | research_agent |
 | `TIMEOUT_FACT_VALIDATOR` | 180s | fact_validator |
-| `TIMEOUT_MANIM_AGENT` | 900s | manim_agent (streams up to 48k tokens) |
+| `TIMEOUT_MANIM_AGENT` | 900s | manim_agent (base; Claude calls scale it with the budget, see `budget_timeout`) |
 | `TIMEOUT_CODE_VALIDATOR` | 240s | code_validator |
 | `TIMEOUT_LAYOUT_CHECKER` | 180s | layout_checker |
 | `TIMEOUT_VISUAL_QA` | 240s | visual_qa |
@@ -441,7 +450,7 @@ Speak the clean text: `parse_cues(segment_cue_text(seg))` gives it plus the mark
 | `script.txt` | Full narration script |
 | `manifest.json` | `{run_id, scene_class_name, quality, topic, title, effort, audience, tone, theme, template, speed, pace, pacing, narrator}`; `quality` is `state["quality"] or MANIM_QUALITY`; `pacing` = the resolved preset values + `effective_speed` + `applied` |
 
-Written later by `main.py`: `layout_report.json` (layout_checker, before render_trigger), `run_stats.json` (every CLI and server run: timings, tokens, cost, TTS chars, settings, result; `pipeline/run_stats.py`), `qa_report.json` (latest visual QA result + `history`, `main._save_qa_report`), `waveform.json` (cached peak envelope, written by the timeline endpoint), `media/` or `media_preview/` (Manim output), `captions.srt` and `chapters.txt` (`_generate_caption_files`, before the merge), `final.mp4` or `preview.mp4`, `thumb.jpg` (`_extract_thumbnail`), `qa_frames/` (visual QA), `quiz.json` (`--quiz`).
+Written later by `main.py`: `layout_report.json` (layout_checker, before render_trigger), `run_stats.json` (every CLI and server run: timings, tokens, cost, TTS chars, settings, result, per-agent usage `by_agent`, `budget_retries`, `scene_parts`, `warnings`; a run that fails before render_trigger gets its directory created for this file when it made Claude calls; `pipeline/run_stats.py`), `qa_report.json` (latest visual QA result + `history`, `main._save_qa_report`), `waveform.json` (cached peak envelope, written by the timeline endpoint), `media/` or `media_preview/` (Manim output), `captions.srt` and `chapters.txt` (`_generate_caption_files`, before the merge), `final.mp4` or `preview.mp4`, `thumb.jpg` (`_extract_thumbnail`), `qa_frames/` (visual QA), `quiz.json` (`--quiz`).
 
 `chapters.txt` (from `pipeline/chapters.py`, one chapter per `[[ch: ...]]` marker, or per segment for older scripts) is FFMETADATA1 passed to ffmpeg as `-f ffmetadata -i chapters.txt -map_metadata 2`. `--burn-captions` adds `-vf subtitles=<path>` and switches `-c:v copy` to `libx264 -preset fast -crf 18`.
 
@@ -597,7 +606,7 @@ Current `JobStore` is in-memory (jobs are lost on restart). Auth is not implemen
 
 ```bash
 pip install -r requirements-dev.txt   # requirements.txt + pytest, pytest-asyncio
-pytest                        # 749 tests (with Manim + TeX installed)
+pytest                        # 829 tests (with Manim + TeX installed)
 pytest tests/test_graph.py    # one file
 ```
 

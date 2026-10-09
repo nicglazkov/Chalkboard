@@ -7,6 +7,14 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.6.0] - 2026-10-09
+
+- Big topics no longer fail for lack of output room. `max_tokens` caps Claude's thinking plus its answer, and the scene call's fixed 48000 ran out on wide lecture recaps, sometimes before writing any code (`no text block ... ['thinking']`), then repeated the identical call twice more. Measured: one 8-segment scene needs about 81k output tokens (58k thinking, 22.5k code). A call that runs out of room is now retried with the model's whole output cap (128000 on Opus 5.5, read from the Models API) and then with one effort level less thinking, never repeated unchanged; each step is logged and recorded in `run_stats.json` (`budget_retries`). Budgets above 16000 always stream, and per-call timeouts grow with the budget.
+- Wide scripts (7+ segments or 5000+ characters) are written in parts: a short visual plan (title, roles per concept, layout, what is on screen at the end of each segment), then one method per group of about three segments, written concurrently and assembled into one normal `ChalkboardScene`, so the AST guards, code review and layout dry-run see one scene. A scene too long for one response falls back to parts too (`SCENE_CHUNKING` = `auto`, `always`, `off`). Validator feedback goes back only to the part whose lines or segments it names. Visual QA revisions do the same: the parts are read back from `scene.py`, so a QA fix rewrites the named parts with their current code instead of the whole scene.
+- The script agent gets 32000 tokens (a high-effort rewrite with a research brief ran out at 16000 twice) and, if still too long, a tighter length instruction instead of failing. Fact check and code review get 16000, research 32000.
+- Non-interactive runs (`--yes`, the server) no longer dead-end when the fact check still has notes after three script attempts: the run continues with the latest script and keeps the notes in `run_stats.json` (`warnings`). Interactive runs still escalate.
+- `run_stats.json` adds `by_agent` (calls, tokens, cost and out-of-room calls per agent), `scene_parts` and `warnings`, and is now written for runs that fail before producing a scene. `usage` events carry `max_tokens`, `effort` and `stop_reason`.
+
 ## [0.5.1] - 2026-10-09
 
 - Axis tick labels follow the step. `ChalkAxes` hard-coded 0 decimals, so a 0 to 2.5 V axis in 0.5 V steps read "0, 1, 2, 2, 2" (runs 3253240e and 9043e20b). Tick labels now show the decimals the step needs (0.5 -> "0.5, 1.0, ... 2.5", 0.25 -> two places, integer steps including `1.0` -> none) in `ChalkAxes`, `ChalkAxis` and, through a house-style patch on `NumberLine`, raw `Axes` / `NumberLine` / `NumberPlane` calls too; a scene that passes too few decimals is corrected, more are kept.
@@ -42,6 +50,7 @@ reports its version at `/version`.
 
 - Self-hosted revival: local Manim rendering (Docker optional), Claude Opus 5.5 by default with per-agent overrides, a design system with six scene templates, word-level narration sync, Aria and Milo on ElevenLabs plus Kokoro and OpenAI, working layout checks, a new web UI built only on live data, `run_stats.json` run records, and CI on every push. See the [release notes](https://github.com/nicglazkov/Chalkboard/releases/tag/v0.3.0).
 
+[0.6.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.6.0
 [0.5.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.1
 [0.5.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.0
 [0.4.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.4.0

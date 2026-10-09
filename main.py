@@ -1154,6 +1154,10 @@ def main():
                     "narrator": args.narrator, "pace": args.pace, "source": "cli"}
         settings.update({k: v for k, v in run_stats.manifest_settings(run_dir).items() if v is not None})
         try:
+            if not run_dir.exists() and any(e.get("node") == "usage" for e in recorder.events):
+                # A run that failed before render_trigger still spent tokens:
+                # keep its record (the library only lists dirs with a video).
+                run_dir.mkdir(parents=True, exist_ok=True)
             run_stats.write(run_dir, run_stats.build(
                 recorder.events, started_at=recorder.started_at, finished_at=telemetry.now_iso(),
                 settings=settings, result="done" if finished_ok else "failed",

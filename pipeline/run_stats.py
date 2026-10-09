@@ -22,7 +22,7 @@ from pipeline import version as _version
 from pipeline.telemetry import now_iso
 
 # Events that are not graph nodes.
-TELEMETRY_NODES = {"peek", "usage", "tts", "render", "visual_qa", "quiz"}
+TELEMETRY_NODES = {"peek", "usage", "tts", "render", "visual_qa", "quiz", "budget", "warning", "scene_parts"}
 PHASE_NODES = {"render", "visual_qa", "quiz"}
 
 
@@ -55,6 +55,30 @@ def totals(events: list[dict]) -> dict:
         "cost_usd": cost,
         "tts_chars": tts_chars,
     }
+
+
+def by_agent(events: list[dict]) -> dict[str, dict]:
+    """Calls, tokens and cost per agent, plus how many calls ran out of output
+    room (stop_reason max_tokens). Cost is None when any of its calls is unknown."""
+    out: dict[str, dict] = {}
+    for e in events:
+        if e.get("node") != "usage":
+            continue
+        u = e.get("updates") or {}
+        a = out.setdefault(u.get("agent") or "?", {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+                                                   "cost_usd": 0.0, "out_of_room": 0})
+        a["calls"] += 1
+        a["input_tokens"] += u.get("input_tokens") or 0
+        a["output_tokens"] += u.get("output_tokens") or 0
+        if a["cost_usd"] is not None:
+            a["cost_usd"] = None if u.get("cost_usd") is None else round(a["cost_usd"] + u["cost_usd"], 6)
+        if u.get("stop_reason") == "max_tokens":
+            a["out_of_room"] += 1
+    return out
+
+
+def _updates(events: list[dict], node: str) -> list[dict]:
+    return [{k: v for k, v in (e.get("updates") or {}).items()} for e in events if e.get("node") == node]
 
 
 def stage_seconds(events: list[dict], started_at: str) -> dict[str, float]:
@@ -99,6 +123,12 @@ def build(events: list[dict], *, started_at: str, finished_at: str, settings: di
         "web_searches": t["web_searches"],
         "cost_usd": t["cost_usd"],
         "tts_chars": t["tts_chars"],
+        "by_agent": by_agent(events),
+        # Output-budget escalations (pipeline/llm.call_json_budgeted) and scenes
+        # written in parts (manim_agent), as they happened.
+        "budget_retries": _updates(events, "budget"),
+        "scene_parts": _updates(events, "scene_parts"),
+        "warnings": _updates(events, "warning"),
         "narrator": settings.get("narrator"),
         "quality": settings.get("quality"),
         "effort": settings.get("effort"),

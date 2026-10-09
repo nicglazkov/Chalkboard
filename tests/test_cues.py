@@ -405,7 +405,7 @@ def test_script_agent_strips_markers_and_keeps_cue_text(base_state):
         {"title": "T", "script": "The [[1]] slope is two.", "segments": segments,
          "needs_web_search": False}))]
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = msg
+        MockClient.return_value.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = msg
         from pipeline.agents.script_agent import script_agent
         result = asyncio.run(script_agent(base_state))
     assert result["script"] == "The slope is two."

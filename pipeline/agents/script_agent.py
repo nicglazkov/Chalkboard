@@ -1,7 +1,7 @@
 # pipeline/agents/script_agent.py
 from pipeline.cues import clean_segments, strip_cues
-from pipeline.llm import call_json, get_client, has_pdf, web_search_tool
-from pipeline.retry import api_call_with_retry, TIMEOUT_SCRIPT_AGENT
+from pipeline.llm import call_json_budgeted, get_client, has_pdf, web_search_tool
+from pipeline.retry import TIMEOUT_SCRIPT_AGENT
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = """You are an educational script writer. Given a topic, write a clear,
@@ -125,6 +125,28 @@ SCHEMA = {
 }
 
 
+# Ceiling for thinking + the JSON script (not billed unless used). Seen
+# 2026-10-09: a high-effort rewrite with a ~5k-char research brief and ~44k
+# tokens of context ran past 16000 twice (run f82835bb: ClaudeTruncated at the old 16000 default).
+SCRIPT_MAX_TOKENS = 32000
+
+TIGHTEN_NOTE = (
+    "\n\nLENGTH LIMIT: the previous attempt ran out of output room. Keep this version "
+    "tight: at most 8 segments of 2 to 4 short sentences, plan briefly, and do not "
+    "repeat the source material; the narration only needs what the video shows."
+)
+
+
+def _tighten(call_kwargs: dict) -> dict:
+    """Last budget step: same request plus a tighter length instruction."""
+    content = call_kwargs["content"]
+    if isinstance(content, str):
+        content = content + TIGHTEN_NOTE
+    else:
+        content = list(content) + [{"type": "text", "text": TIGHTEN_NOTE.strip()}]
+    return {**call_kwargs, "content": content}
+
+
 def _build_user_message(state: PipelineState) -> str:
     topic = state["topic"]
     effort = state["effort_level"]
@@ -171,13 +193,16 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
     else:
         content = _build_user_message(state)
 
-    def _call():
-        return call_json(
-            "script", system=SYSTEM_PROMPT, content=content, schema=SCHEMA,
-            tools=tools or None, client=client,
-        )
-
-    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_SCRIPT_AGENT, label="script_agent")
+    # The research brief and context files make this a long prompt, and at high
+    # effort the thinking before the JSON can be long too (both count against
+    # max_tokens). A response that still runs out of room is retried with the
+    # model's whole output cap, then with less thinking and a tighter brief.
+    data, _ = await call_json_budgeted(
+        "script", label="script_agent", timeout=TIMEOUT_SCRIPT_AGENT,
+        max_tokens=SCRIPT_MAX_TOKENS, client=client,
+        system=SYSTEM_PROMPT, content=content, schema=SCHEMA, tools=tools or None,
+        on_last_step=_tighten,
+    )
     # Segments keep the marked text in `cue_text` (for manim_agent); `text` and
     # `script` are clean prose for everything that reads or speaks them.
     return {

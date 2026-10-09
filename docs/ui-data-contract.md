@@ -16,6 +16,16 @@ Every event carries `ts` (server ISO time). Existing pipeline node events stay a
 - `{"node": "usage", "updates": {"agent": "...", "model": "...", "input_tokens": int, "output_tokens": int,
    "web_searches": int, "cost_usd": float|null}}` one per Claude call, from `response.usage`.
    `cost_usd` uses the price table in `pipeline/pricing.py`; unknown model => `null`.
+   Calls made through `call_json` also carry `"max_tokens": int, "effort": str|null, "stop_reason": str|null`
+   (`"max_tokens"` = the call ran out of output room; its tokens were still spent).
+- `{"node": "budget", "updates": {"agent", "label", "reason": "thinking_only"|"max_tokens", "from_max_tokens",
+   "to_max_tokens", "from_effort", "to_effort", "output_tokens"}}` when a call ran out of output room and is
+   retried with a bigger budget or less thinking; `{"agent": "manim", "reason": "out_of_room", "fallback": "scene_parts"}`
+   when a single-response scene is rewritten in parts.
+- `{"node": "scene_parts", "updates": {"status": "planning"|"assembled"|"revising", "parts": int, "targets"?: [int]}}`
+   while manim_agent writes (or revises) a scene in parts.
+- `{"node": "warning", "updates": {"stage": "fact_check", "message", "feedback"}}`: a non-interactive run continued
+   with a script the fact check still had notes on.
 - `{"node": "render", "updates": {"status": "running", "segment": int|null, "segments": int|null,
    "animation": int|null, "animations": int|null}}` parsed live from the renderer's output
    (Manim "Animation N" lines and a `CB_SEGMENT n` line ChalkboardSceneBase prints at each segment start).
@@ -28,7 +38,10 @@ summed from usage events (cost `null` if any call had an unknown price), and the
 
 ## Per-run record (`output/<run_id>/run_stats.json`, written by CLI and server runs)
 `{"chalkboard_version", "git_commit"|null, "started_at", "finished_at", "stage_seconds": {node: secs}, "input_tokens", "output_tokens",
-"web_searches", "cost_usd"|null, "tts_chars"|null, "narrator", "quality", "effort", "pace"|null, "result": "done"|"failed"}`.
+"web_searches", "cost_usd"|null, "tts_chars"|null, "by_agent": {agent: {"calls", "input_tokens", "output_tokens", "cost_usd"|null, "out_of_room"}},
+"budget_retries": [budget event updates], "scene_parts": [scene_parts event updates], "warnings": [warning event updates],
+"narrator", "quality", "effort", "pace"|null, "result": "done"|"failed"}`. A run that fails before writing any
+output still gets the file when it made Claude calls (its directory is created for it).
 Older runs have no file; anything derived from it is then `null`.
 
 ## Timeline (`GET /api/jobs/{id}/timeline`, `GET /api/library/{run_id}/timeline`)

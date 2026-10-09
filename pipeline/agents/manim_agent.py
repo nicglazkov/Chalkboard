@@ -1,9 +1,13 @@
 # pipeline/agents/manim_agent.py
-from pipeline import pacing
+import asyncio
+import json
+import os
+
+from pipeline import pacing, scene_parts, telemetry
 from pipeline.cues import parse_cues, segment_cue_text
 from pipeline.design_tokens import render_prompt_block
-from pipeline.llm import call_json, get_client, has_pdf
-from pipeline.retry import api_call_with_retry, TIMEOUT_MANIM_AGENT
+from pipeline.llm import ClaudeOutOfRoom, call_json_budgeted, get_client, has_pdf
+from pipeline.retry import TIMEOUT_MANIM_AGENT
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = r"""You are an expert Manim Community Edition (v0.21.0) developer.
@@ -701,11 +705,48 @@ def _format_segments(segments: list[dict], pace=None, speed: float = 1.0) -> str
     return "\n".join(lines)
 
 
-async def manim_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
-    if client is None:
-        client = get_client(pdf=has_pdf(context_blocks))
+# ── Output budgets and chunking ───────────────────────────────────────────────
+# Measured 2026-10-09 (runs af68f322, 6c8582b4: 8-segment lecture recaps with
+# ~44k tokens of PDF context): at effort high the scene call used all of the
+# old 48000-token budget, sometimes before writing any code. Replayed with room
+# to spare, the af68f322 call used 80,863 output tokens in 694 s: ~22.5k for
+# the answer (an 845-line scene) and ~58k of thinking. max_tokens caps
+# thinking + text and is not billed unless used, so the single-shot call gets
+# the model's whole output cap (128000 on Opus 5.5). Wide scripts are written
+# in parts up front, and a single-shot scene that runs out of room is rewritten
+# in parts. Each plan/part call has the full
+# budget ladder of call_json_budgeted: the model's cap (128000 on Opus 5.5),
+# then one effort level lower. With SCENE_CHUNKING=off the single-shot call
+# gets that ladder instead.
+MANIM_MAX_TOKENS = 128000  # clamped to the model's cap (Models API)
+PLAN_MAX_TOKENS = 32000
+PART_MAX_TOKENS = 64000
+# Write the scene in parts up front when the script is this wide. The measured
+# 8-segment scene above needed 63% of the model's cap in one response, so a
+# wider one risks a wasted full-cap call. This applies with a template too: the
+# af68f322 replay ignored the derivation template and hand-wrote the scene.
+CHUNK_MIN_SEGMENTS = 7
+CHUNK_MIN_CUE_CHARS = 5000
 
-    user_msg = (
+
+def _chunking_mode() -> str:
+    mode = (os.getenv("SCENE_CHUNKING", "") or "auto").strip().lower()
+    return mode if mode in ("auto", "always", "off") else "auto"
+
+
+def should_chunk(state: PipelineState) -> bool:
+    """Write this scene in parts from the start?"""
+    mode = _chunking_mode()
+    if mode != "auto":
+        return mode == "always"
+    segs = state.get("script_segments") or []
+    chars = sum(len(segment_cue_text(s)) for s in segs)
+    return len(segs) >= CHUNK_MIN_SEGMENTS or chars >= CHUNK_MIN_CUE_CHARS
+
+
+def _scene_request(state: PipelineState) -> str:
+    """Topic, timed segments, script and theme: what every scene call sees."""
+    return (
         f"Create a Manim animation for this educational script.\n\n"
         f"Topic: {state['topic']}\n\n"
         f"Narration segments with timings:\n"
@@ -714,6 +755,35 @@ async def manim_agent(state: PipelineState, client=None, context_blocks=None) ->
         f"{THEME_SPECS[state.get('theme', 'chalkboard')]}"
     )
 
+
+def _with_context(user_msg: str, context_blocks) -> str | list:
+    if not context_blocks:
+        return user_msg
+    content = [{
+        "type": "text",
+        "text": "The following files are provided as source material. Use them to inform what the animation should visualize:",
+    }]
+    content.extend(context_blocks)
+    content.append({"type": "text", "text": user_msg})
+    return content
+
+
+async def manim_agent(state: PipelineState, client=None, context_blocks=None) -> dict:
+    if client is None:
+        client = get_client(pdf=has_pdf(context_blocks))
+
+    if state.get("code_feedback") and state.get("manim_code"):
+        # A scene written in parts is revised part by part. The parts come from
+        # the state, or are read back from the code (visual-QA revisions start
+        # from scene.py on disk).
+        parts = state.get("scene_parts") or scene_parts.split_assembled(
+            state["manim_code"], len(state["script_segments"]), state.get("theme", "chalkboard"))
+        if parts and _is_assembled(state, parts):
+            return await _revise_parts({**state, "scene_parts": parts}, client)
+    if should_chunk(state):
+        return await _write_in_parts(state, client, context_blocks)
+
+    user_msg = _scene_request(state)
     template = state.get("template")
     if template and template in TEMPLATE_SPECS:
         user_msg += f"\n\n{TEMPLATE_SPECS[template]}"
@@ -734,25 +804,224 @@ async def manim_agent(state: PipelineState, client=None, context_blocks=None) ->
     elif state.get("code_feedback"):
         user_msg += f"\n\nIssues to address:\n{state['code_feedback']}"
 
-    if context_blocks:
-        content = [
-            {
-                "type": "text",
-                "text": "The following files are provided as source material. Use them to inform what the animation should visualize:",
-            }
-        ]
-        content.extend(context_blocks)
-        content.append({"type": "text", "text": user_msg})
-    else:
-        content = user_msg
+    try:
+        # Streams (budget > 16000): scene code is long and thinking adds latency.
+        data, _ = await call_json_budgeted(
+            "manim", label="manim_agent", timeout=TIMEOUT_MANIM_AGENT,
+            max_tokens=MANIM_MAX_TOKENS, client=client,
+            system=SYSTEM_PROMPT, content=_with_context(user_msg, context_blocks), schema=SCHEMA,
+            # Out of room once: writing in parts beats a bigger single response
+            # (each part is a smaller task, and the parts run concurrently).
+            max_steps=3 if _chunking_mode() == "off" else 1,
+        )
+    except ClaudeOutOfRoom as e:
+        if _chunking_mode() == "off":
+            raise
+        print(f"  [manim_agent] one response cannot hold this scene ({e}); writing it in parts")
+        telemetry.emit("budget", {"agent": "manim", "label": "manim_agent", "reason": "out_of_room",
+                                  "fallback": "scene_parts"})
+        return await _write_in_parts(state, client, context_blocks)
 
-    def _call():
-        # Streams: scene code is long and thinking adds latency.
-        return call_json(
-            "manim", system=SYSTEM_PROMPT, content=content, schema=SCHEMA,
-            max_tokens=48000, client=client, stream=True,
+    return {"manim_code": data["manim_code"], "scene_parts": None, "scene_plan": None,
+            "status": "validating"}
+
+
+# ── Writing the scene in parts ────────────────────────────────────────────────
+
+PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "style": {"type": "string"},
+        "segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "visuals": {"type": "string"},
+                    "end_state": {"type": "string"},
+                },
+                "required": ["index", "visuals", "end_state"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["title", "style", "segments"],
+    "additionalProperties": False,
+}
+
+PART_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "imports": {"type": "array", "items": {"type": "string"}},
+        "code": {"type": "string"},
+    },
+    "required": ["imports", "code"],
+    "additionalProperties": False,
+}
+
+PART_MODE = r"""
+
+PART MODE (overrides the REQUIRED SCAFFOLD and the response format above):
+This scene is too long for one response, so it is written in parts that are
+assembled into one ChalkboardScene. You write ONE part: a single method,
+written at top level (no class around it), with exactly this signature:
+
+    def part_K(self, t, _d, seg_items):
+
+- `t` is the bound theme tokens, `_d` the segment durations, `seg_items` what the
+  previous part left on screen (empty for part 0).
+- Part 0 starts with `# ── Segment 0: <title> ──`, then
+  `self.begin_segment(0, duration=_d[0])` and `seg_items = []`. It creates the
+  persistent title from the plan as `self.title_mob` (revealed once, never added to
+  seg_items). Later parts never touch self.title_mob.
+- Every other segment N, INCLUDING the first segment of a later part, starts with
+  `# ── Segment N: <title> ──`, then `self.next_segment(N, duration=_d[N], clear=seg_items)`
+  and `seg_items = []`.
+- End the method with `return seg_items`: everything your part leaves on screen
+  except self.title_mob. Nothing else crosses a part boundary.
+- The assembler writes the imports (everything in the REQUIRED SCAFFOLD import
+  block is available), the class, construct(), the segments.json loading, the
+  T(...) binding, the background, end_layout_check() and the final FadeOut. Do not
+  write any of those. Helper functions go inside the method. If you need another
+  import (e.g. `import numpy as np`), list the statement in "imports".
+- Follow the VISUAL PLAN for your segments (roles per concept, layout, what is on
+  screen at the end of each segment) so the parts read as one video. Every other
+  rule above (cues, pacing, layout zones, clean slate, tokens, math) applies.
+
+Respond with JSON only: {"imports": ["<import statement>", ...], "code": "<the method source>"}"""
+
+
+def _template_note(state: PipelineState) -> str:
+    template = state.get("template")
+    if not template:
+        return ""
+    return (f"\n\nThe request asked for the {template} template. A whole-scene template cannot be "
+            f"split into parts, so compose its look from components and moves instead (for a "
+            f"derivation: EquationGroup + derivation_step, one line per beat).")
+
+
+def _parts_overview(ranges) -> str:
+    return "; ".join(f"part {k} = segments {a}-{b}" for k, (a, b) in enumerate(ranges))
+
+
+async def _plan_scene(state: PipelineState, ranges, client, context_blocks) -> dict:
+    msg = (
+        _scene_request(state) + _template_note(state)
+        + f"\n\nPLAN ONLY, NO CODE. This scene will be written in {len(ranges)} parts by separate "
+          f"calls ({_parts_overview(ranges)}), each seeing only this plan and the script. "
+          f"Write the visual plan that keeps them one coherent video:\n"
+          f"- title: the persistent on-screen title (plain words; $...$ for math).\n"
+          f"- style: the shared visual language, concretely: which role (focus_primary, "
+          f"accent_cool, ...) each recurring concept gets, recurring components and where they "
+          f"sit (zones), naming of recurring symbols, motion habits.\n"
+          f"- segments: for every segment index, what is shown at each cue (component + zone), "
+          f"using numbers and facts from the script and the source material, and end_state: "
+          f"what is on screen when the segment ends. Nothing except the title crosses a part "
+          f"boundary, so the last segment of each part ends self-contained."
+    )
+    if state.get("code_feedback"):
+        msg += (f"\n\nA previous version of this scene had these issues; plan so they cannot recur:\n"
+                f"{state['code_feedback']}")
+    data, _ = await call_json_budgeted(
+        "manim", label="manim_agent plan", timeout=TIMEOUT_MANIM_AGENT,
+        max_tokens=PLAN_MAX_TOKENS, client=client,
+        system=SYSTEM_PROMPT, content=_with_context(msg, context_blocks), schema=PLAN_SCHEMA,
+    )
+    return data
+
+
+def _part_request(state: PipelineState, plan: dict, ranges, k: int) -> str:
+    a, b = ranges[k]
+    return (
+        _scene_request(state) + _template_note(state)
+        + (f"\n\nVISUAL PLAN (shared by all parts):\n{json.dumps(plan, indent=1)}" if plan else
+           "\n\nNo visual plan is available for this revision: keep your part's existing look.")
+        + f"\n\nThe scene has {len(ranges)} parts ({_parts_overview(ranges)}). "
+          f"Write part {k}: `def part_{k}(self, t, _d, seg_items):` covering segments {a} to {b}."
+    )
+
+
+async def _write_part(state, plan, ranges, k, client, *, revise: str | None = None) -> dict:
+    """One part method. Returns {"segments": [a, b], "code", "imports"}."""
+    a, b = ranges[k]
+    label = f"manim_agent part {k + 1}/{len(ranges)}"
+    msg = _part_request(state, plan, ranges, k)
+    if revise:
+        msg += revise
+    last_error = None
+    for _ in range(2):
+        content = msg if last_error is None else (
+            msg + f"\n\nYour previous answer for this part was not usable: {last_error}. "
+                  f"Return exactly one method `def part_{k}(self, t, _d, seg_items):`.")
+        data, _ = await call_json_budgeted(
+            "manim", label=label, timeout=TIMEOUT_MANIM_AGENT, max_tokens=PART_MAX_TOKENS,
+            client=client, system=SYSTEM_PROMPT + PART_MODE.replace("part_K", f"part_{k}"),
+            content=content, schema=PART_SCHEMA,
+        )
+        try:
+            code = scene_parts.extract_method(data.get("code", ""), k)
+            return {"segments": [a, b], "code": code,
+                    "imports": scene_parts.clean_imports(data.get("imports"))}
+        except scene_parts.PartError as e:
+            last_error = str(e)
+            print(f"  [{label}] unusable part ({e}); asking again")
+    # Keep the raw text: the validators report what is wrong and the revision
+    # round comes back to this part.
+    return {"segments": [a, b], "code": data.get("code", ""),
+            "imports": scene_parts.clean_imports(data.get("imports"))}
+
+
+def _parts_result(state: PipelineState, parts: list[dict], plan: dict) -> dict:
+    code, _ = scene_parts.assemble(parts, len(state["script_segments"]), state.get("theme", "chalkboard"))
+    return {"manim_code": code, "scene_parts": parts, "scene_plan": plan, "status": "validating"}
+
+
+async def _write_in_parts(state: PipelineState, client, context_blocks) -> dict:
+    ranges = scene_parts.part_ranges(len(state["script_segments"]))
+    print(f"  [manim_agent] writing the scene in {len(ranges)} parts ({_parts_overview(ranges)})")
+    telemetry.emit("scene_parts", {"status": "planning", "parts": len(ranges)})
+    plan = await _plan_scene(state, ranges, client, context_blocks)
+    # The parts share the plan, so they are written concurrently.
+    parts = await asyncio.gather(*[_write_part(state, plan, ranges, k, client) for k in range(len(ranges))])
+    telemetry.emit("scene_parts", {"status": "assembled", "parts": len(ranges)})
+    return _parts_result(state, list(parts), plan)
+
+
+def _is_assembled(state: PipelineState, parts: list[dict]) -> bool:
+    """The current scene is still exactly the assembly of these parts (nobody
+    replaced it with a single-shot scene since)."""
+    try:
+        code, _ = scene_parts.assemble(parts, len(state["script_segments"]), state.get("theme", "chalkboard"))
+    except Exception:
+        return False
+    return code == state.get("manim_code")
+
+
+async def _revise_parts(state: PipelineState, client) -> dict:
+    """Revision round on a scene written in parts: only the parts the feedback
+    is about are rewritten (minimal edits), each with its own current code."""
+    parts = [dict(p) for p in state["scene_parts"]]
+    plan = state.get("scene_plan") or {}
+    ranges = [tuple(p["segments"]) for p in parts]
+    _, spans = scene_parts.assemble(parts, len(state["script_segments"]), state.get("theme", "chalkboard"))
+    targets = scene_parts.route_feedback(state["code_feedback"], parts, spans)
+    print(f"  [manim_agent] revising part(s) {', '.join(str(k) for k in targets)} of {len(parts)}")
+    telemetry.emit("scene_parts", {"status": "revising", "parts": len(parts), "targets": targets})
+
+    def note(k):
+        lo, hi = spans[k]
+        return (
+            f"\n\nYour part had issues. Below is its current code; MAKE MINIMAL TARGETED CHANGES "
+            f"to fix the issues that concern your segments ({ranges[k][0]}-{ranges[k][1]}) and "
+            f"return the whole method. Line numbers in the issues refer to the assembled scene, "
+            f"where your method spans lines {lo}-{hi}. Ignore issues about other segments.\n\n"
+            f"Issues:\n{state['code_feedback']}\n\n"
+            f"Current code of part {k}:\n```python\n{parts[k]['code']}\n```"
         )
 
-    data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_MANIM_AGENT, label="manim_agent")
-
-    return {"manim_code": data["manim_code"], "status": "validating"}
+    new = await asyncio.gather(*[_write_part(state, plan, ranges, k, client, revise=note(k)) for k in targets])
+    for k, p in zip(targets, new):
+        parts[k] = p
+    return _parts_result(state, parts, plan)

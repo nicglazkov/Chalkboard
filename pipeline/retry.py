@@ -43,7 +43,7 @@ class TimeoutExhausted(Exception):
 TIMEOUT_SCRIPT_AGENT   = 300.0   # script_agent (may use web search tool)
 TIMEOUT_RESEARCH_AGENT = 300.0   # research_agent (web search, may take multiple queries)
 TIMEOUT_FACT_VALIDATOR = 180.0   # fact_validator
-TIMEOUT_MANIM_AGENT    = 900.0   # manim_agent (streams up to 48k tokens)
+TIMEOUT_MANIM_AGENT    = 900.0   # manim_agent (base; llm.budget_timeout scales it with max_tokens)
 TIMEOUT_CODE_VALIDATOR = 240.0   # code_validator
 TIMEOUT_LAYOUT_CHECKER = 180.0   # layout_checker (headless dry-run — scales with animation count)
 TIMEOUT_VISUAL_QA      = 240.0   # visual_qa (several base64 frames)
@@ -55,17 +55,22 @@ TIMEOUT_TTS_KOKORO     = 120.0   # Kokoro full call (includes model load)
 # Retry wrapper
 # ---------------------------------------------------------------------------
 
-async def api_call_with_retry(fn, timeout, max_attempts=3, label="API call"):
+async def api_call_with_retry(fn, timeout, max_attempts=3, label="API call", passthrough=()):
     """
     Run sync callable `fn` in a thread with a timeout.
     Retry up to `max_attempts` times on timeouts and transient errors.
     Raises TimeoutExhausted when all attempts are exhausted, or immediately for
     request errors that cannot succeed on retry (bad request, auth, 404).
+    Exceptions of a `passthrough` type are re-raised at once, unwrapped: the
+    caller handles them (e.g. running out of output room, where repeating the
+    identical call would fail the same way).
     """
     for attempt in range(1, max_attempts + 1):
         try:
             return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout)
         except (asyncio.TimeoutError, Exception) as e:
+            if passthrough and isinstance(e, passthrough):
+                raise
             if _is_fatal(e):
                 raise TimeoutExhausted(f"{label} failed: {e}") from e
             if attempt == max_attempts:
