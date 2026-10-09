@@ -7,6 +7,14 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.5.1] - 2026-10-09
+
+- Axis tick labels follow the step. `ChalkAxes` hard-coded 0 decimals, so a 0 to 2.5 V axis in 0.5 V steps read "0, 1, 2, 2, 2" (runs 3253240e and 9043e20b). Tick labels now show the decimals the step needs (0.5 -> "0.5, 1.0, ... 2.5", 0.25 -> two places, integer steps including `1.0` -> none) in `ChalkAxes`, `ChalkAxis` and, through a house-style patch on `NumberLine`, raw `Axes` / `NumberLine` / `NumberPlane` calls too; a scene that passes too few decimals is corrected, more are kept.
+- New layout check `label_on_curve`: a plotted curve that runs through a text label (tested on the curve's sampled path, not its bounding box) is flagged in the dry-run, so the scene is revised before rendering. On Nic's library it found two real crossings (one QA had missed) and no false ones.
+- `ChalkAxes.hline(y, label=)` / `vline(x, label=)`: reference lines whose value label sits outside the plot. The scene prompt says to keep labels off curves and not to pass `decimal_number_config`.
+- `main.py` exits promptly once the run's files are written, even if a worker thread is stuck in a timed-out API call; a closed output pipe (an ssh or `wsl.exe` session that went away) no longer aborts the run (244514b9 lost its QA pass and was recorded as failed); the checkpoint DB waits up to 30 s for another run's lock instead of failing.
+- Remote use: the skill explains how to run main.py detached and follow its log, so a stalled ssh session cannot leave a client waiting after the video is done.
+
 ## [0.5.0] - 2026-10-07
 
 - Chapters follow what is on screen. Before, a video had exactly one chapter per narration segment (3 to 8 per video, 3 to 4 at low effort) titled with the segment's first 60 characters, so a list of ten items packed into four segments showed chapters only at items 1, 3, 6 and 9. The script agent now marks every step, item or idea the visuals present with a silent `[[ch: Short title]]` marker tied to the cue where that item appears, so ten steps give ten chapters with short, meaningful titles (`3. Region test`).
@@ -34,6 +42,7 @@ reports its version at `/version`.
 
 - Self-hosted revival: local Manim rendering (Docker optional), Claude Opus 5.5 by default with per-agent overrides, a design system with six scene templates, word-level narration sync, Aria and Milo on ElevenLabs plus Kokoro and OpenAI, working layout checks, a new web UI built only on live data, `run_stats.json` run records, and CI on every push. See the [release notes](https://github.com/nicglazkov/Chalkboard/releases/tag/v0.3.0).
 
+[0.5.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.1
 [0.5.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.0
 [0.4.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.4.0
 [0.3.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.3.1
