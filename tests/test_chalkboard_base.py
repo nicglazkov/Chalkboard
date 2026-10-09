@@ -639,15 +639,28 @@ def _curve_label_scene(tmp_path, place):
 
 def test_label_on_curve_flags_the_3253240e_segment_5_label(tmp_path):
     """Positive control: QA attempt 1 of run 3253240e put the label with
-    next_to(ax.c2p(1.6, 1.9), DOWN) and the charging curve crossed it."""
+    next_to(ax.c2p(1.6, 1.9), DOWN, ...) and QA saw the charging curve run
+    through it near t = 2-2.5 (that scene was overwritten; the buff is
+    reconstructed as t.space("sm"), which reproduces the crossing there)."""
     from manim import DOWN
 
     def place(ax, curve, label):
-        label.next_to(ax.c2p(1.6, 1.9), DOWN, buff=0.1)
+        label.next_to(ax.c2p(1.6, 1.9), DOWN, buff=0.25)
 
     flags = _curve_label_scene(tmp_path, place)
     assert len(flags) == 1
     assert "1.9" in flags[0]["label"] and flags[0]["segment"] == 0
+
+
+def test_original_3253240e_label_clears_the_curve(tmp_path):
+    """The first scene of 3253240e (next_to(ax.c2p(1.2, 1.9), DOWN, buff=xs))
+    did not cross the curve, and QA attempt 0 did not report a crossing."""
+    from manim import DOWN
+
+    def place(ax, curve, label):
+        label.next_to(ax.c2p(1.2, 1.9), DOWN, buff=0.12)
+
+    assert _curve_label_scene(tmp_path, place) == []
 
 
 def test_label_past_the_curve_end_is_not_flagged(tmp_path):
