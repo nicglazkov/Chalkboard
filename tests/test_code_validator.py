@@ -317,7 +317,7 @@ def test_review_outage_does_not_fail_the_run(base_state):
     async def boom(*a, **k):
         raise TimeoutExhausted("code_validator failed after 3 attempts: 529 overloaded")
 
-    with patch("pipeline.agents.code_validator.api_call_with_retry", new=boom):
+    with patch("pipeline.agents.code_validator.call_json_budgeted", new=boom):
         result = asyncio.run(code_validator(base_state))
     assert result["code_feedback"] is None
     assert result["code_attempts"] == 1

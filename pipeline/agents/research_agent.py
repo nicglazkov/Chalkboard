@@ -1,6 +1,6 @@
 # pipeline/agents/research_agent.py
-from pipeline.llm import call_json, web_search_tool
-from pipeline.retry import api_call_with_retry, TIMEOUT_RESEARCH_AGENT, TimeoutExhausted
+from pipeline.llm import call_json_budgeted, web_search_tool
+from pipeline.retry import TIMEOUT_RESEARCH_AGENT, TimeoutExhausted
 from pipeline.state import PipelineState
 
 SYSTEM_PROMPT = """You are a research assistant preparing material for an educational video script writer.
@@ -34,16 +34,13 @@ SCHEMA = {
 
 
 async def research_agent(state: PipelineState, client=None) -> dict:
-    def _call():
-        # Always enabled: research_agent only runs at effort_level="high" (graph routing guarantees this)
-        return call_json(
-            "research", system=SYSTEM_PROMPT, content=f"Topic: {state['topic']}",
-            schema=SCHEMA, tools=[web_search_tool("research")], client=client,
-        )
-
     try:
-        data, _ = await api_call_with_retry(
-            _call, timeout=TIMEOUT_RESEARCH_AGENT, label="research_agent"
+        # Web search always on: research_agent only runs at effort_level="high"
+        # (graph routing guarantees this).
+        data, _ = await call_json_budgeted(
+            "research", label="research_agent", timeout=TIMEOUT_RESEARCH_AGENT, max_tokens=32000,
+            system=SYSTEM_PROMPT, content=f"Topic: {state['topic']}",
+            schema=SCHEMA, tools=[web_search_tool("research")], client=client,
         )
     except (TimeoutExhausted, RuntimeError, ValueError) as e:
         warning = f"Web search failed after all retries ({e}) — script will rely on training data only."

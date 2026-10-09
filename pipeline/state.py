@@ -39,3 +39,5 @@ class PipelineState(TypedDict):
     layout_renderable: bool  # last dry-run completed (only layout violations, no crash)
     claude_review_failures: int     # consecutive advisory rejections by Claude's code review
     code_feedback_advisory: bool    # current code_feedback came from Claude review, not a hard check
+    scene_parts: list[dict] | None  # scene written in parts: [{"segments": [a, b], "code", "imports"}] (manim_agent)
+    scene_plan: dict | None         # the shared visual plan those parts follow

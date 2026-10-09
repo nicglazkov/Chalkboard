@@ -6,7 +6,7 @@ from config import CHECKPOINT_DB
 from pipeline.state import PipelineState
 from pipeline.agents.research_agent import research_agent
 from pipeline.agents.script_agent import script_agent
-from pipeline.agents.fact_validator import fact_validator
+from pipeline.agents.fact_validator import fact_validator, SCRIPT_ATTEMPT_LIMIT
 from pipeline.agents.manim_agent import manim_agent
 from pipeline.agents.code_validator import code_validator
 from pipeline.agents.layout_checker import layout_checker
@@ -17,7 +17,7 @@ from pipeline.render_trigger import render_trigger
 def _after_fact_validator(state: PipelineState) -> str:
     if not state.get("fact_feedback"):  # approved
         return "manim_agent"
-    if state["script_attempts"] >= 3:
+    if state["script_attempts"] >= SCRIPT_ATTEMPT_LIMIT:
         return "escalate_to_user"
     return "script_agent"
 
@@ -99,6 +99,8 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "narrator": state.get("narrator"),
         "claude_review_failures": state.get("claude_review_failures", 0),
         "code_feedback_advisory": state.get("code_feedback_advisory", False),
+        "scene_parts": state.get("scene_parts"),
+        "scene_plan": state.get("scene_plan"),
     }
 
 

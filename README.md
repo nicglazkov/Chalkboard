@@ -348,6 +348,7 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 | `CLAUDE_MODEL` | `claude-opus-5-5` | Model for every agent |
 | `CLAUDE_MODEL_<AGENT>` | `CLAUDE_MODEL` | Per-agent model override |
 | `CLAUDE_EFFORT_<AGENT>` | per agent | Per-agent effort: `low`, `medium`, `high` |
+| `SCENE_CHUNKING` | `auto` | Write the scene code in parts: `auto` (wide scripts, and any scene too long for one response), `always`, `off` |
 | `RENDER_BACKEND` | `auto` | `auto`, `local`, `docker` |
 | `MANIM_QUALITY` | `medium` | `low`, `medium`, `high`, `4k` |
 | `NARRATOR` | unset | Default narrator: `aria`, `milo`, `kokoro`, `alloy` |
@@ -384,7 +385,7 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 
 <br>
 
-Every Claude call goes through `pipeline/llm.py`. By default every agent uses `claude-opus-5-5` with adaptive thinking. Change the model for all agents with `CLAUDE_MODEL`, or per agent with `CLAUDE_MODEL_<AGENT>`; tune effort with `CLAUDE_EFFORT_<AGENT>`.
+Every Claude call goes through `pipeline/llm.py`. By default every agent uses `claude-opus-5-5` with adaptive thinking. Change the model for all agents with `CLAUDE_MODEL`, or per agent with `CLAUDE_MODEL_<AGENT>`; tune effort with `CLAUDE_EFFORT_<AGENT>`. A call that runs out of output room (thinking counts against it) is retried with the model's full output budget and then with less thinking, never repeated unchanged; a scene too long for one response is written in parts and assembled (`SCENE_CHUNKING`). Retries and token use per agent are recorded in `run_stats.json`.
 
 | `<AGENT>` | Default effort | Role |
 | --- | --- | --- |

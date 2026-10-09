@@ -209,6 +209,8 @@ def _write_run_stats(job: Job, run_dir: Path) -> None:
             job.events, started_at=job.started_at, finished_at=job.finished_at,
             settings=settings, result="done" if ok else "failed",
         )
+        if not run_dir.exists() and any(e.get("node") == "usage" for e in job.events):
+            run_dir.mkdir(parents=True, exist_ok=True)  # failed before render_trigger, still spent tokens
         run_stats.write(run_dir, stats)
     except Exception as e:
         print(f"  [run_stats] could not write for {job.id}: {e}")

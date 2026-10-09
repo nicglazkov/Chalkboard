@@ -1,8 +1,8 @@
 # pipeline/agents/code_validator.py
 import ast
 from pipeline.ast_guards import run_guards
-from pipeline.llm import call_json
-from pipeline.retry import api_call_with_retry, TimeoutExhausted, TIMEOUT_CODE_VALIDATOR
+from pipeline.llm import call_json_budgeted
+from pipeline.retry import TimeoutExhausted, TIMEOUT_CODE_VALIDATOR
 from pipeline.state import PipelineState, ValidationResult
 
 SCHEMA = {
@@ -191,11 +191,11 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"zone — return needs_revision."
     )
 
-    def _call():
-        return call_json("code_validator", content=user_msg, schema=SCHEMA, max_tokens=8000, client=client)
-
     try:
-        data, _ = await api_call_with_retry(_call, timeout=TIMEOUT_CODE_VALIDATOR, label="code_validator")
+        data, _ = await call_json_budgeted(
+            "code_validator", label="code_validator", timeout=TIMEOUT_CODE_VALIDATOR,
+            max_tokens=16000, content=user_msg, schema=SCHEMA, client=client,
+        )
     except TimeoutExhausted as e:
         # The review is advisory and the deterministic checks above passed;
         # the headless layout dry-run is the real gate. Don't lose the run.

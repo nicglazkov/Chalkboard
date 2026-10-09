@@ -19,7 +19,7 @@ def test_script_agent_returns_script_and_segments(base_state):
     mock_response = _make_claude_response("B-trees are balanced.", segments)
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_response
+        MockClient.return_value.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         result = asyncio.run(script_agent(base_state))
 
@@ -38,7 +38,7 @@ def test_script_agent_sets_needs_web_search_when_flagged(base_state):
     mock_response.content = [MagicMock(type="text", text=content)]
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
-        MockClient.return_value.messages.create.return_value = mock_response
+        MockClient.return_value.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         result = asyncio.run(script_agent(base_state))
 
@@ -53,11 +53,11 @@ def test_script_agent_includes_feedback_in_revision(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
     user_content = messages[0]["content"]
     assert "Claim X is incorrect" in user_content
@@ -70,11 +70,11 @@ def test_script_agent_includes_audience_in_prompt(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    user_content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "expert" in user_content.lower()
 
 
@@ -85,11 +85,11 @@ def test_script_agent_uses_default_audience_when_not_set(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    user_content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "intermediate" in user_content.lower()
 
 
@@ -100,11 +100,11 @@ def test_script_agent_includes_tone_in_prompt(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    user_content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "question" in user_content.lower()
 
 
@@ -115,11 +115,11 @@ def test_script_agent_uses_default_tone_when_not_set(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    user_content = client_instance.messages.create.call_args.kwargs["messages"][0]["content"]
+    user_content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
     assert "conversational" in user_content.lower()
 
 
@@ -133,11 +133,11 @@ def test_script_agent_with_context_blocks_sends_list_content(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state, context_blocks=context_blocks))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, list)
     assert any("source material" in b.get("text", "") for b in content)
@@ -150,11 +150,11 @@ def test_script_agent_without_context_blocks_sends_string_content(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         client_instance = MockClient.return_value
-        client_instance.messages.create.return_value = mock_response
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    call_args = client_instance.messages.create.call_args
+    call_args = client_instance.messages.stream.call_args
     content = call_args.kwargs["messages"][0]["content"]
     assert isinstance(content, str)
 
@@ -180,11 +180,11 @@ def test_research_brief_injected_into_message(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
-        instance.messages.create.return_value = _mock_response()
+        instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = _mock_response()
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    messages = instance.messages.create.call_args.kwargs["messages"]
+    messages = instance.messages.stream.call_args.kwargs["messages"]
     content = messages[0]["content"]  # no context_blocks passed, so always a str
     assert "B-trees store multiple keys per node." in content
 
@@ -198,11 +198,11 @@ def test_web_search_disabled_when_brief_present(base_state):
 
     with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
         instance = MockClient.return_value
-        instance.messages.create.return_value = _mock_response()
+        instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = _mock_response()
         from pipeline.agents.script_agent import script_agent
         asyncio.run(script_agent(base_state))
 
-    call_kwargs = instance.messages.create.call_args.kwargs
+    call_kwargs = instance.messages.stream.call_args.kwargs
     tools = call_kwargs.get("tools", _anthropic.NOT_GIVEN)
     if tools is not _anthropic.NOT_GIVEN:
         assert not any(t.get("name") == "web_search" for t in (tools or []))
