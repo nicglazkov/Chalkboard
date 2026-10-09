@@ -13,7 +13,7 @@ from docker import chalkboard_style as style  # noqa: E402
 def _labels(number_line) -> list[str]:
     """The tick label strings exactly as Manim typesets them."""
     d = number_line.decimal_number_config["num_decimal_places"]
-    return [f"{float(n.number):.{d}f}" for n in number_line.numbers]
+    return [f"{float(n.number) + 0.0:.{d}f}" for n in number_line.numbers]
 
 
 @pytest.mark.parametrize("value,places", [
@@ -41,7 +41,7 @@ def test_patch_is_installed():
 
 def test_raw_axes_with_explicit_zero_decimals_on_half_steps_reads_correctly():
     """The 3253240e bug shape: num_decimal_places=0 on a 0.5 step."""
-    ax = Axes(x_range=[0, 6, 1], y_range=[0, 2.5, 0.5],
+    ax = Axes(x_range=[0, 6, 1], y_range=[0, 2.5, 0.5], tips=False,
               axis_config={"include_numbers": True,
                            "decimal_number_config": {"num_decimal_places": 0}})
     assert _labels(ax.y_axis) == ["0.5", "1.0", "1.5", "2.0", "2.5"]

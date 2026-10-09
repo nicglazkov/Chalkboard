@@ -801,7 +801,7 @@ def test_callout_wraps_long_text_and_stays_on_canvas():
 
 def _tick_labels(number_line) -> list[str]:
     d = number_line.decimal_number_config["num_decimal_places"]
-    return [f"{float(n.number):.{d}f}" for n in number_line.numbers]
+    return [f"{float(n.number) + 0.0:.{d}f}" for n in number_line.numbers]
 
 
 def test_chalkaxes_half_step_ticks_show_one_decimal():
