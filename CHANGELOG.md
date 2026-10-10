@@ -7,6 +7,10 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.7.1] - 2026-10-10
+
+- Fix: runs that start together on a fresh checkpoint DB no longer fail with "database is locked". SQLite skips its busy timeout when several new connections race to switch the DB to WAL, so the one-time checkpoint setup now retries with backoff (up to the 30 s lock wait). Fixes the intermittent failure of `test_concurrent_runs_share_the_checkpoint_db` on main.
+
 ## [0.7.0] - 2026-10-09
 
 - Cost: a lecture-length video now costs about $3 of Claude spend end to end, including the script, fact check, scene code, review, layout fixes, render-time visual QA and its fixes (measured on the inputs of the two lectures that cost $15.69 and $11.21 in 0.5/0.6: $3.10 for a 5:54 video and $2.76 for a 4:15 one, both passing visual QA, with fewer layout violations and exact cue sync), in a third to a half of the wall time. A 1:20 topic costs $0.40 (0.6.0: $0.99). The defaults are the cheap path; every lever has a setting that restores 0.6.0 (README, Models and effort).
