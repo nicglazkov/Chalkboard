@@ -38,6 +38,8 @@ def totals(events: list[dict]) -> dict:
     """
     usage = [e["updates"] for e in events if e.get("node") == "usage"]
     inp = sum((u.get("input_tokens") or 0) for u in usage)
+    cache_read = sum((u.get("cache_read_tokens") or 0) for u in usage)
+    cache_write = sum((u.get("cache_write_tokens") or 0) for u in usage)
     out = sum((u.get("output_tokens") or 0) for u in usage)
     searches = sum((u.get("web_searches") or 0) for u in usage)
     costs = [u.get("cost_usd") for u in usage]
@@ -50,6 +52,8 @@ def totals(events: list[dict]) -> dict:
     return {
         "calls": len(usage),
         "input_tokens": inp if complete else None,
+        "cache_read_tokens": cache_read,
+        "cache_write_tokens": cache_write,
         "output_tokens": out if complete else None,
         "web_searches": searches,
         "cost_usd": cost,
@@ -65,16 +69,30 @@ def by_agent(events: list[dict]) -> dict[str, dict]:
         if e.get("node") != "usage":
             continue
         u = e.get("updates") or {}
-        a = out.setdefault(u.get("agent") or "?", {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+        a = out.setdefault(u.get("agent") or "?", {"calls": 0, "input_tokens": 0, "cache_read_tokens": 0,
+                                                   "cache_write_tokens": 0, "output_tokens": 0,
                                                    "cost_usd": 0.0, "out_of_room": 0})
         a["calls"] += 1
         a["input_tokens"] += u.get("input_tokens") or 0
+        a["cache_read_tokens"] += u.get("cache_read_tokens") or 0
+        a["cache_write_tokens"] += u.get("cache_write_tokens") or 0
         a["output_tokens"] += u.get("output_tokens") or 0
         if a["cost_usd"] is not None:
             a["cost_usd"] = None if u.get("cost_usd") is None else round(a["cost_usd"] + u["cost_usd"], 6)
         if u.get("stop_reason") == "max_tokens":
             a["out_of_room"] += 1
     return out
+
+
+CALL_FIELDS = ("agent", "role", "label", "model", "effort", "input_tokens", "cache_read_tokens",
+               "cache_write_tokens", "output_tokens", "web_searches", "cost_usd", "stop_reason")
+
+
+def calls(events: list[dict]) -> list[dict]:
+    """Every Claude call in order: agent, label (which part, plan, revision...),
+    model, effort, tokens (uncached input, cache read/write, output) and cost."""
+    return [{k: u.get(k) for k in CALL_FIELDS if k in u}
+            for u in (e.get("updates") or {} for e in events if e.get("node") == "usage")]
 
 
 def _updates(events: list[dict], node: str) -> list[dict]:
@@ -123,7 +141,10 @@ def build(events: list[dict], *, started_at: str, finished_at: str, settings: di
         "web_searches": t["web_searches"],
         "cost_usd": t["cost_usd"],
         "tts_chars": t["tts_chars"],
+        "cache_read_tokens": t["cache_read_tokens"],
+        "cache_write_tokens": t["cache_write_tokens"],
         "by_agent": by_agent(events),
+        "calls": calls(events),
         # Output-budget escalations (pipeline/llm.call_json_budgeted) and scenes
         # written in parts (manim_agent), as they happened.
         "budget_retries": _updates(events, "budget"),

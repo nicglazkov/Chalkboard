@@ -5,6 +5,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 from pipeline.agents.manim_agent import manim_agent, TEMPLATE_SPECS
+from pipeline.llm import content_text
 
 
 DUMMY_CODE = "from manim import *\nclass ChalkboardScene(Scene):\n    def construct(self): pass"
@@ -29,7 +30,7 @@ def _run_agent(state):
         cm.__enter__.return_value.get_final_message.return_value = _mock_response()
         cm.__exit__.return_value = False
         asyncio.run(manim_agent(state))
-    return instance.messages.stream.call_args.kwargs["messages"][0]["content"]
+    return content_text(instance.messages.stream.call_args.kwargs["messages"][0]["content"])
 
 
 # ── TEMPLATE_SPECS structure ─────────────────────────────────────────────────

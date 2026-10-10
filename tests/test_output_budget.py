@@ -117,7 +117,8 @@ def test_big_budgets_always_stream():
     assert client.calls[1]["max_tokens"] == 16000
 
 
-def test_out_of_room_escalates_instead_of_repeating(capsys):
+def test_out_of_room_escalates_instead_of_repeating(capsys, monkeypatch):
+    monkeypatch.setenv("CLAUDE_EFFORT_MANIM", "high")
     def reply(kw):
         if kw["max_tokens"] < 128000:
             return _thinking_only(kw["max_tokens"])
@@ -347,16 +348,20 @@ PLAN = {"title": "Lecture 9", "style": "dopants accent_cool, holes accent_warm",
 
 def _manim_reply(single_shot=None):
     def reply(kw):
-        system = kw.get("system", "")
         props = kw["output_config"]["format"]["schema"]["properties"]
         if "manim_code" in props:
             return single_shot(kw)
         if "style" in props:
             return _resp(json.dumps(PLAN))
-        k = int(system.split("def part_")[1].split("(")[0])
+        k = _part_no(kw)
         a, b = scene_parts.part_ranges(8)[k]
-        return _resp(json.dumps({"imports": [], "code": _part_code(k, a, b)}))
+        return _resp(json.dumps({"imports": [], "code": _part_code(k, a, b), "edits": []}))
     return reply
+
+
+def _part_no(kw):
+    """The part a part call asks for (named in the last content block)."""
+    return int(llm.content_text(kw["messages"][0]["content"]).split("Write part ")[1].split(":")[0])
 
 
 def _wide_state(base_state, n=8, template=None):
@@ -421,7 +426,7 @@ def test_revision_rewrites_only_the_part_the_feedback_is_about(base_state, monke
     out = asyncio.run(manim_agent(state, client=client))
     assert len(client.calls) == 1
     msg = json.dumps(client.calls[0]["messages"])
-    assert "def part_1" in client.calls[0]["system"] and "Segment 4" in msg and "Current code of part 1" in msg
+    assert _part_no(client.calls[0]) == 1 and "Segment 4" in msg and "Current code of part 1" in msg
     assert out["scene_parts"][0] == first["scene_parts"][0] and out["scene_parts"][2] == first["scene_parts"][2]
 
 
@@ -452,7 +457,8 @@ def test_run_stats_record_budget_retries_and_per_agent_usage():
     ]
     stats = run_stats.build(events, started_at="2026-10-09T10:00:00+00:00",
                             finished_at="2026-10-09T10:00:06+00:00", settings={}, result="done")
-    assert stats["by_agent"]["manim"] == {"calls": 2, "input_tokens": 20, "output_tokens": 64005,
+    assert stats["by_agent"]["manim"] == {"calls": 2, "input_tokens": 20, "cache_read_tokens": 0,
+                                          "cache_write_tokens": 0, "output_tokens": 64005,
                                           "cost_usd": 1.29, "out_of_room": 1}
     assert stats["budget_retries"][0]["to_max_tokens"] == 128000
     assert stats["warnings"][0]["stage"] == "fact_check"
@@ -482,7 +488,7 @@ def test_qa_revision_from_scene_file_revises_parts(base_state, monkeypatch):
     state.pop("scene_parts", None)
     client = FakeClient(_manim_reply())
     out = asyncio.run(manim_agent(state, client=client))
-    assert len(client.calls) == 1 and "def part_2" in client.calls[0]["system"]
+    assert len(client.calls) == 1 and _part_no(client.calls[0]) == 2
     assert "No visual plan" in json.dumps(client.calls[0]["messages"])
     assert out["scene_parts"][0]["code"] == _parts()[0]["code"]
 

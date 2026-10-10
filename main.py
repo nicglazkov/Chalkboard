@@ -604,8 +604,10 @@ def _run_visual_qa(
     final_mp4: Path,
     density: str = "normal",
     use_layout_report: bool = False,
+    only_segments: set[int] | None = None,
 ) -> dict | None:
-    """Run visual QA. Returns result dict, or None if skipped or errored."""
+    """Run visual QA. Returns result dict, or None if skipped or errored.
+    ``only_segments``: re-check just these segments (the rest did not change)."""
     if density == "zero":
         print("\n  [qa] skipped (--qa-density zero)")
         return None
@@ -635,6 +637,7 @@ def _run_visual_qa(
             density=density,
             segments=segments,
             layout_report_path=layout_report_path,
+            **({"only_segments": only_segments} if only_segments else {}),
         )
     except Exception as e:
         print(f"  [qa] skipped — {e}")
@@ -652,10 +655,11 @@ async def _qa_regenerate_scene(
     run_id: str, qa_issues: str,
     theme: str, audience: str, tone: str, effort_level: str,
     context_blocks=None,
-) -> bool:
+) -> bool | set[int]:
     """Re-invoke manim_agent with QA feedback, overwrite scene.py in place.
     Returns False (scene.py left as it was) when the new code fails the AST
-    guards or crashes in the headless dry-run.
+    guards or crashes in the headless dry-run; otherwise the set of segments
+    whose part was rewritten, or True when that is unknown.
 
     Skips code_validator's Claude review for speed; the QA loop cap
     (max_qa_attempts=2) bounds the blast radius. Scene settings (theme,
@@ -701,6 +705,14 @@ async def _qa_regenerate_scene(
         "needs_web_search": False, "user_approved_search": False,
         "status": "validating", "context_file_paths": [],
     }
+    plan_path = run_dir / "scene_plan.json"
+    if plan_path.exists():
+        try:
+            state["scene_plan"] = json.loads(plan_path.read_text())
+        except (OSError, ValueError):
+            pass
+    # The frames QA just judged, so the fix sees what it is fixing.
+    state["qa_frames"] = _qa_frames(run_dir / "qa_frames")
 
     if context_blocks:
         result = await manim_agent(state, context_blocks=context_blocks)
@@ -728,7 +740,30 @@ async def _qa_regenerate_scene(
         (run_dir / "segments.json").write_text(json.dumps(raw_segments, indent=2))
         return False
     (run_dir / "segments.json").write_text(json.dumps(raw_segments, indent=2))
-    return True
+    return _changed_segments(current_code, result, len(segments), state["theme"]) or True
+
+
+def _qa_frames(qa_dir: Path) -> list[dict]:
+    """[{path, segment, t}] of the frames the last QA pass looked at (frames.json)."""
+    try:
+        frames = json.loads((qa_dir / "frames.json").read_text())
+    except (OSError, ValueError):
+        return []
+    return [{"path": str(qa_dir / f["file"]), "segment": f.get("segment"), "t": f.get("t")}
+            for f in frames if isinstance(f, dict) and (qa_dir / str(f.get("file"))).exists()]
+
+
+def _changed_segments(old_code: str, result: dict, n_segments: int, theme: str) -> set[int] | None:
+    """Segments whose part a QA fix rewrote (the others render exactly as
+    before), or None when that cannot be told (not a scene written in parts)."""
+    from pipeline import scene_parts
+    old = scene_parts.split_assembled(old_code, n_segments, theme)
+    new = result.get("scene_parts")
+    if not old or not new or len(old) != len(new):
+        return None
+    changed = {s for o, p in zip(old, new) if o["code"] != p["code"]
+               for s in range(p["segments"][0], p["segments"][1] + 1)}
+    return changed or None
 
 
 def _render_preview_once(run_id: str, output_dir: Path, preview_mp4: Path) -> Path:
@@ -905,6 +940,7 @@ def _save_qa_report(run_dir: Path, result: dict, attempt: int, density: str) -> 
         print(f"  [qa] could not write {path}: {e}")
 
 
+
 def _run_qa_loop(
     run_id: str, final_mp4: Path,
     theme: str, audience: str, tone: str, effort_level: str,
@@ -918,13 +954,17 @@ def _run_qa_loop(
     regenerates (the qa_attempt >= max_qa_attempts guard exits after logging).
     """
     output_dir = Path(OUTPUT_DIR).resolve()
+    only_segments = None   # after a fix: the segments whose part was rewritten
 
     for qa_attempt in range(max_qa_attempts + 1):
         # Use layout_report cross-reference on first pass only (stale after regen)
+        if only_segments:
+            print(f"  [qa] re-checking the rewritten segments: {sorted(only_segments)}")
         result = _run_visual_qa(
             run_id, final_mp4,
             density=qa_density,
             use_layout_report=(qa_attempt == 0),
+            **({"only_segments": only_segments} if only_segments else {}),
         )
         if result is not None:
             _save_qa_report(output_dir / run_id, result, qa_attempt, qa_density)
@@ -935,15 +975,19 @@ def _run_qa_loop(
         if not errors or qa_attempt >= max_qa_attempts:
             return  # warnings only, or out of attempts
 
+        # Every issue, warnings included: a warning in one pass is often an error
+        # in the next (0.7.0 runs that fixed only the errors kept failing QA).
         issues_text = "\n".join(f"[{i['severity']}] {i['description']}" for i in result["issues"])
         print(f"\n  [qa] regenerating scene to fix errors (attempt {qa_attempt + 1}/{max_qa_attempts})...")
         run_dir = output_dir / run_id
         prev_scene = (run_dir / "scene.py").read_text()
-        if not asyncio.run(_qa_regenerate_scene(
+        regen = asyncio.run(_qa_regenerate_scene(
             run_id, issues_text, theme, audience, tone, effort_level,
             context_blocks=context_blocks,
-        )):
+        ))
+        if not regen:
             return
+        only_segments = regen if isinstance(regen, (set, frozenset)) else None
         # Re-render the new scene.py, but keep the previous video until the new one exists.
         backup = run_dir / "final.prev.mp4"
         final_mp4.replace(backup)

@@ -2,6 +2,8 @@
 import asyncio
 import base64
 import json
+import os
+import re
 import subprocess
 from pathlib import Path
 from pipeline.llm import call_json
@@ -27,6 +29,25 @@ SCHEMA = {
     "required": ["passed", "issues"],
     "additionalProperties": False,
 }
+
+
+# Frames are scaled to this width before they are sent (QA_FRAME_WIDTH; 0 =
+# the render size). Image input is billed by pixel area: a 1920x1080 frame is
+# ~2.8k tokens, a 1280x720 one ~1.2k, and chalkboard text (body size and up)
+# stays legible at 1280 px. Measured 2026-10-09: see CHANGELOG 0.7.0.
+DEFAULT_FRAME_WIDTH = 1280
+
+
+def frame_width() -> int:
+    try:
+        return max(0, int(os.getenv("QA_FRAME_WIDTH", "") or DEFAULT_FRAME_WIDTH))
+    except ValueError:
+        return DEFAULT_FRAME_WIDTH
+
+
+def _scale_args() -> list[str]:
+    w = frame_width()
+    return ["-vf", f"scale='min({w},iw)':-2"] if w else []
 
 
 # seconds-per-frame and max-frames per density level
@@ -64,7 +85,7 @@ def _extract_frames(
         frame_path = qa_dir / f"frame_{i:02d}.png"
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(t), "-i", str(video_path),
-             "-frames:v", "1", str(frame_path)],
+             "-frames:v", "1", *_scale_args(), str(frame_path)],
             capture_output=True, check=True, timeout=30,
         )
         frame_paths.append(frame_path)
@@ -150,7 +171,7 @@ def _extract_frames_at_timestamps(
         frame_path.unlink(missing_ok=True)
         subprocess.run(
             ["ffmpeg", "-y", "-ss", str(t), "-i", str(video_path),
-             "-frames:v", "1", str(frame_path)],
+             "-frames:v", "1", *_scale_args(), str(frame_path)],
             capture_output=True, check=True, timeout=30,
         )
         if frame_path.exists():          # ffmpeg exits 0 but writes nothing past EOF
@@ -166,6 +187,7 @@ def visual_qa(
     density: str = "normal",
     segments: list[dict] | None = None,
     layout_report_path: Path | None = None,
+    only_segments: set[int] | None = None,
 ) -> dict:
     """
     Run visual QA on a rendered video.
@@ -174,6 +196,9 @@ def visual_qa(
               context included in the prompt. Falls back to even spacing if None.
     layout_report_path: if provided (first QA only), violated segments from the
                         dry-run get extra frame samples.
+    only_segments: re-check only these segments (a QA fix rewrote just their
+                   part; the other segments render exactly as before). Their
+                   frames are sampled at the same density as a full pass.
     Returns {"passed": bool, "issues": [{"severity": "warning"|"error", "description": str}]}
     """
     spf, max_f = _QA_DENSITY.get(density, _QA_DENSITY["normal"])
@@ -191,12 +216,27 @@ def visual_qa(
                 pass
 
         effective_max = min(max_f + len(extra_segments), max_f * 2)
-        ts_list = _segment_boundary_timestamps(segments, max_frames=effective_max)
+        if only_segments:
+            # The frames a full pass would look at, for the changed segments only:
+            # denser sampling would judge the fixed segments more strictly than
+            # the rest (each extra frame is another chance to flag something).
+            full = _segment_boundary_timestamps(segments, max_frames=effective_max)
+            ts_list = [x for x in full if x[1] in only_segments] or full
+        else:
+            ts_list = _segment_boundary_timestamps(segments, max_frames=effective_max)
         frame_tuples = _extract_frames_at_timestamps(video_path, qa_dir, ts_list)
     else:
         # Fallback: even spacing (legacy behaviour, used when segments.json unavailable)
         frame_paths = _extract_frames(video_path, qa_dir, seconds_per_frame=spf, max_frames=max_f)
         frame_tuples = [(fp, 0.0, None, None) for fp in frame_paths]
+
+    # Which segment each frame shows, for the fix that follows (main._qa_regenerate_scene
+    # shows the fixer the frames of the segments it is fixing).
+    try:
+        (qa_dir / "frames.json").write_text(json.dumps(
+            [{"file": Path(fp).name, "t": t, "segment": s} for fp, t, s, _ in frame_tuples]))
+    except (OSError, TypeError):
+        pass
 
     content = [
         {
@@ -239,7 +279,8 @@ def visual_qa(
         })
 
     def _call():
-        return call_json("visual_qa", content=content, schema=SCHEMA, max_tokens=8000, client=client)
+        return call_json("visual_qa", content=content, schema=SCHEMA, max_tokens=8000, client=client,
+                         label="visual_qa")
 
     data, _ = asyncio.run(
         api_call_with_retry(_call, timeout=TIMEOUT_VISUAL_QA, label="visual_qa")
