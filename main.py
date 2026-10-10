@@ -152,7 +152,33 @@ async def _open_checkpointer(path: str | None = None):
 
     async with aiosqlite.connect(path or CHECKPOINT_DB, timeout=CHECKPOINT_BUSY_TIMEOUT_S) as conn:
         await conn.execute(f"PRAGMA busy_timeout = {int(CHECKPOINT_BUSY_TIMEOUT_S * 1000)}")
-        yield AsyncSqliteSaver(conn)
+        saver = AsyncSqliteSaver(conn)
+        await _setup_checkpointer(saver, conn)
+        yield saver
+
+
+async def _setup_checkpointer(saver, conn, deadline_s: float = CHECKPOINT_BUSY_TIMEOUT_S) -> None:
+    """Run the saver's one-time setup (switch to WAL, create tables), retrying
+    on "database is locked". SQLite skips the busy handler when several fresh
+    connections race to change the journal mode, so runs that start together
+    on a new DB could fail here even with busy_timeout set."""
+    import sqlite3
+
+    delay, waited = 0.05, 0.0
+    while True:
+        try:
+            await saver.setup()
+            return
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e) or waited >= deadline_s:
+                raise
+            try:
+                await conn.rollback()
+            except sqlite3.Error:
+                pass
+            await asyncio.sleep(delay)
+            waited += delay
+            delay = min(delay * 2, 1.0)
 
 
 def _github_to_raw_url(repo: str) -> str:
