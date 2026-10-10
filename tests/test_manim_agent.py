@@ -4,6 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 from pipeline.agents.manim_agent import manim_agent
+from pipeline.llm import content_text
 
 
 def _mock_response(code: str) -> MagicMock:
@@ -56,7 +57,7 @@ def test_manim_agent_includes_durations_in_prompt(base_state):
 
     call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
-    content = messages[0]["content"]
+    content = content_text(messages[0]["content"])
     from pipeline.pacing import estimate_segment, resolve_pace
     for seg in base_state["script_segments"]:
         est = estimate_segment(seg, resolve_pace())["actual_duration_sec"]
@@ -76,7 +77,7 @@ def test_manim_agent_includes_feedback_on_revision(base_state):
 
     call_args = client_instance.messages.stream.call_args
     messages = call_args.kwargs["messages"]
-    assert "Missing import for MathTex" in messages[0]["content"]
+    assert "Missing import for MathTex" in content_text(messages[0]["content"])
 
 
 def test_manim_agent_includes_theme_colors_in_prompt(base_state):
@@ -90,7 +91,7 @@ def test_manim_agent_includes_theme_colors_in_prompt(base_state):
         client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
+    content = content_text(client_instance.messages.stream.call_args.kwargs["messages"][0]["content"])
     assert "#FAFAFA" in content  # light theme background
 
 
@@ -105,7 +106,7 @@ def test_manim_agent_colorful_theme_in_prompt(base_state):
         client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
+    content = content_text(client_instance.messages.stream.call_args.kwargs["messages"][0]["content"])
     assert "#FBBF24" in content  # colorful focus_primary token, unique to that theme
 
 
@@ -120,11 +121,12 @@ def test_manim_agent_defaults_to_chalkboard_theme(base_state):
         client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_resp
         asyncio.run(manim_agent(base_state))
 
-    content = client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
+    content = content_text(client_instance.messages.stream.call_args.kwargs["messages"][0]["content"])
     assert "#1C1C1C" in content  # chalkboard theme background
 
 
-def test_manim_agent_with_context_blocks_sends_list_content(base_state):
+def test_manim_agent_with_context_blocks_sends_list_content(base_state, monkeypatch):
+    monkeypatch.setenv("MANIM_CONTEXT", "plan")   # the 0.6.0 behaviour; off by default
     base_state["script"] = "Script about trees."
     base_state["script_segments"] = [{"text": "Trees.", "estimated_duration_sec": 2.0}]
     context_blocks = [
@@ -147,7 +149,7 @@ def test_manim_agent_with_context_blocks_sends_list_content(base_state):
     assert any("class Tree" in b.get("text", "") for b in content)
 
 
-def test_manim_agent_without_context_blocks_sends_string_content(base_state):
+def test_manim_agent_without_context_blocks_sends_no_source_material(base_state):
     base_state["script"] = "Script."
     base_state["script_segments"] = [{"text": "S.", "estimated_duration_sec": 1.0}]
     mock_response = MagicMock()
@@ -161,7 +163,22 @@ def test_manim_agent_without_context_blocks_sends_string_content(base_state):
 
     call_args = client_instance.messages.stream.call_args
     content = call_args.kwargs["messages"][0]["content"]
-    assert isinstance(content, str)
+    assert "source material" not in content_text(content)
+
+
+def test_manim_agent_ignores_context_files_by_default(base_state, monkeypatch):
+    """MANIM_CONTEXT=off (default): the scene works from the fact-checked script."""
+    monkeypatch.delenv("MANIM_CONTEXT", raising=False)
+    base_state["script"] = "Script about trees."
+    base_state["script_segments"] = [{"text": "Trees.", "estimated_duration_sec": 2.0}]
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(type="text", text='{"manim_code": "from manim import *"}')]
+    with patch("pipeline.llm.anthropic.Anthropic") as MockClient:
+        client_instance = MockClient.return_value
+        client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = mock_response
+        asyncio.run(manim_agent(base_state, context_blocks=[{"type": "text", "text": "class Tree: pass"}]))
+    content = content_text(client_instance.messages.stream.call_args.kwargs["messages"][0]["content"])
+    assert "class Tree" not in content and "Script about trees." in content
 
 
 def test_manim_agent_output_includes_chalkboard_base_import(base_state):
@@ -206,7 +223,7 @@ def _capture_user_msg(base_state):
         client_instance = MockClient.return_value
         client_instance.messages.stream.return_value.__enter__.return_value.get_final_message.return_value = _mock_response(VALID_SCENE)
         asyncio.run(manim_agent(base_state))
-    return client_instance.messages.stream.call_args.kwargs["messages"][0]["content"]
+    return content_text(client_instance.messages.stream.call_args.kwargs["messages"][0]["content"])
 
 
 def test_manim_agent_uses_surgical_edit_when_prior_code_present(base_state):

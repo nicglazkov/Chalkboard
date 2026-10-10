@@ -70,7 +70,7 @@ def test_call_json_streams_peeks_with_growing_text(monkeypatch):
     assert all(not p["done"] for p in peeks[:-1])
     usage = [e["updates"] for e in events if e["node"] == "usage"]
     assert usage == [{"agent": "script", "model": "claude-opus-5-5", "input_tokens": 120,
-                      "output_tokens": 80, "web_searches": 0,
+                      "output_tokens": 80, "cache_read_tokens": 0, "cache_write_tokens": 0, "web_searches": 0,
                       "cost_usd": pytest.approx(120 * 4 / 1e6 + 80 * 20 / 1e6),
                       "max_tokens": 16000, "effort": "high", "stop_reason": "end_turn"}]
     assert all("ts" in e for e in events)

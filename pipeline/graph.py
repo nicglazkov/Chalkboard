@@ -98,6 +98,7 @@ def _init_state(state: PipelineState, config: RunnableConfig | None = None) -> d
         "quality": state.get("quality"),
         "narrator": state.get("narrator"),
         "claude_review_failures": state.get("claude_review_failures", 0),
+        "claude_reviews": state.get("claude_reviews", 0),
         "code_feedback_advisory": state.get("code_feedback_advisory", False),
         "scene_parts": state.get("scene_parts"),
         "scene_plan": state.get("scene_plan"),

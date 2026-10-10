@@ -26,6 +26,13 @@ async def layout_checker(state: PipelineState) -> dict:
     # render_trigger hasn't run yet, so we use estimated durations as placeholders.
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "scene.py").write_text(state["manim_code"])
+    # The visual plan of a scene written in parts, so a visual-QA fix (which
+    # starts from scene.py) keeps following it.
+    plan_path = run_dir / "scene_plan.json"
+    if state.get("scene_plan"):
+        plan_path.write_text(json.dumps(state["scene_plan"], indent=1))
+    elif state.get("scene_parts") is None and "scene_plan" in state:
+        plan_path.unlink(missing_ok=True)
     pace = pacing.resolve_pace(state.get("pace"))
     stub_segments = [_stub_segment(s, pace, state.get("speed", 1.0))
                      for s in state.get("script_segments", [])]

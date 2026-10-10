@@ -19,7 +19,7 @@ def test_unknown_inputs_give_none():
     assert pricing.call_cost(None, 10, 10) is None
     assert pricing.call_cost("claude-opus-5-5", None, 10) is None
     assert pricing.call_cost("claude-opus-5-5", 10, 10, web_searches=None) is None
-    assert pricing.call_cost("claude-opus-5-5", 10, 10, cache_tokens=5) is None
+    assert pricing.call_cost("claude-opus-5-5", 10, 10, cache_read=None) is None
     assert pricing.price_for("claude-opus-5-5-beta") is None
 
 
@@ -46,6 +46,7 @@ def test_totals_and_stage_seconds():
     events = sorted(EVENTS, key=lambda e: e["ts"])
     t = run_stats.totals(events)
     assert t == {"calls": 1, "input_tokens": 1000, "output_tokens": 500, "web_searches": 0,
+                 "cache_read_tokens": 0, "cache_write_tokens": 0,
                  "cost_usd": 0.014, "tts_chars": 420}
     st = run_stats.stage_seconds(events, "2026-10-02T10:00:00+00:00")
     assert st == {"init": 1.0, "script_agent": 9.0, "fact_validator": 5.0,

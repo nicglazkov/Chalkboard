@@ -1,6 +1,6 @@
 # pipeline/agents/script_agent.py
 from pipeline.cues import clean_segments, strip_cues
-from pipeline.llm import call_json_budgeted, get_client, has_pdf, web_search_tool
+from pipeline.llm import call_json_budgeted, get_client, has_pdf, mark_cached, web_search_tool
 from pipeline.retry import TIMEOUT_SCRIPT_AGENT
 from pipeline.state import PipelineState
 
@@ -188,7 +188,12 @@ async def script_agent(state: PipelineState, client=None, context_blocks=None) -
                 "text": "The following files are provided as source material. Use them to inform the script content, facts, and framing:",
             }
         ]
-        content.extend(context_blocks)
+        # The context files are the same for every attempt: a script the fact check
+        # sends back is rewritten minutes later and reads them from the cache
+        # (the first attempt pays a 1.25x write; 4 of 4 lecture runs measured in
+        # 0.7.0 rewrote the script at least once, each re-sending ~45k tokens).
+        content.extend(context_blocks[:-1])
+        content.append(mark_cached(context_blocks[-1], ttl="5m"))
         content.append({"type": "text", "text": _build_user_message(state)})
     else:
         content = _build_user_message(state)

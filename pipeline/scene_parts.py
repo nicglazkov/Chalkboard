@@ -227,3 +227,25 @@ def split_assembled(code: str, n_segments: int, theme: str) -> list[dict] | None
     except Exception:
         return None
     return parts if rebuilt == code else None
+
+
+def apply_edits(code: str, edits) -> str:
+    """Apply search/replace edits [{"find", "replace"}] to a part's code, in order.
+
+    Each `find` must occur exactly once in the code as it stands when that edit
+    is applied (an exact substring, whitespace included). Raises PartError, with
+    a message meant for the model, when an edit cannot be applied unambiguously.
+    """
+    out = code
+    for i, e in enumerate(edits or []):
+        find = (e or {}).get("find") or ""
+        replace = (e or {}).get("replace")
+        if not find or not isinstance(replace, str):
+            raise PartError(f"edit {i + 1} needs a non-empty `find` and a `replace` string")
+        n = out.count(find)
+        if n != 1:
+            what = "does not occur" if n == 0 else f"occurs {n} times"
+            raise PartError(f"edit {i + 1}: the `find` text {what} in the current code "
+                            f"(it must match exactly once, whitespace included): {find[:120]!r}")
+        out = out.replace(find, replace, 1)
+    return out

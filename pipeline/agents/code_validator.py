@@ -1,5 +1,7 @@
 # pipeline/agents/code_validator.py
 import ast
+import os
+
 from pipeline.ast_guards import run_guards
 from pipeline.llm import call_json_budgeted
 from pipeline.retry import TimeoutExhausted, TIMEOUT_CODE_VALIDATOR
@@ -100,6 +102,19 @@ def _scan_invalid_mobject_arithmetic(tree: ast.AST) -> str | None:
     return None
 
 
+def review_rounds() -> int:
+    """How many times per run Claude reviews the scene (CODE_REVIEW_ROUNDS,
+    default 1). The review is advisory: the AST guards and the layout dry-run
+    are the gates, and every rejection costs a scene revision. One review
+    still catches a scene that does not show the script; later rounds mostly
+    re-litigated style (0.6.0 ran up to three reviews and two revisions on
+    the af68f322 lecture). 0 skips the review."""
+    try:
+        return max(0, int(os.getenv("CODE_REVIEW_ROUNDS", "") or 1))
+    except ValueError:
+        return 1
+
+
 async def code_validator(state: PipelineState, client=None) -> dict:
     code = state["manim_code"]
     attempts = state["code_attempts"]
@@ -137,7 +152,12 @@ async def code_validator(state: PipelineState, client=None) -> dict:
             "code_feedback_advisory": False,
         }
 
-    # Step 2: semantic review via Claude. The structural rules (scene base,
+    # Step 2: semantic review via Claude, at most review_rounds() times per run.
+    reviews = state.get("claude_reviews", 0)
+    if reviews >= review_rounds():
+        return {"code_feedback": None, "code_attempts": attempts, "code_feedback_advisory": False}
+
+    # The structural rules (scene base,
     # begin_segment, end_layout_check, wait literals, colors, imports) are
     # already enforced above, so the review focuses on meaning and APIs.
     user_msg = (
@@ -203,6 +223,7 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         return {"code_feedback": None, "code_attempts": attempts, "code_feedback_advisory": False}
 
     result = ValidationResult.model_validate(data)
+    reviewed = {"claude_reviews": reviews + 1}
     if result.verdict == "needs_revision":
         # Claude's review is advisory: the AST guards above and the headless
         # layout dry-run are the deterministic gates. Count its rejections
@@ -212,6 +233,7 @@ async def code_validator(state: PipelineState, client=None) -> dict:
             "code_feedback": result.feedback,
             "claude_review_failures": state.get("claude_review_failures", 0) + 1,
             "code_feedback_advisory": True,
+            **reviewed,
         }
     else:
         # Clear code_feedback on approval so _after_code_validator routes to render_trigger
@@ -219,4 +241,5 @@ async def code_validator(state: PipelineState, client=None) -> dict:
             "code_feedback": None,
             "code_attempts": attempts,
             "code_feedback_advisory": False,
+            **reviewed,
         }

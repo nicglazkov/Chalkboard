@@ -12,6 +12,7 @@ Why this exists:
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 
@@ -69,6 +70,51 @@ def get_client(pdf: bool = False) -> anthropic.Anthropic:
 
 def has_pdf(context_blocks) -> bool:
     return bool(context_blocks) and any(b.get("type") == "document" for b in context_blocks)
+
+
+# ── Prompt caching ────────────────────────────────────────────────────────────
+# The scene calls share long prefixes: a 13k-token system prompt, the ~7k-token
+# timed script and the visual plan are identical across the part calls, their
+# revisions and the visual-QA fixes. Marked blocks are written once and read
+# back at the cache-read rate (Opus 5.5: $0.20/MTok, vs $4 uncached). The
+# 1-hour TTL is the default because the calls that share a prefix are minutes
+# apart (a part call streams for several minutes, then review, dry-run and a
+# full render run before the next revision). PROMPT_CACHE=off disables it,
+# PROMPT_CACHE_TTL=5m picks the cheaper write for short runs.
+# Measured 2026-10-09 on Opus 5.5: the structured-output schema is part of the
+# cached system prefix (another schema = another entry), effort is not.
+
+
+def prompt_cache_enabled() -> bool:
+    return (os.getenv("PROMPT_CACHE", "") or "on").strip().lower() not in ("off", "0", "false", "no")
+
+
+def cache_control(ttl: str | None = None) -> dict:
+    ttl = (ttl or os.getenv("PROMPT_CACHE_TTL", "") or "1h").strip().lower()
+    return {"type": "ephemeral", "ttl": "5m" if ttl == "5m" else "1h"}
+
+
+def cached_text(text: str) -> dict:
+    """A text content block that ends a cacheable prefix (when caching is on)."""
+    block = {"type": "text", "text": text}
+    if prompt_cache_enabled():
+        block["cache_control"] = cache_control()
+    return block
+
+
+def mark_cached(block: dict, ttl: str | None = None) -> dict:
+    """A copy of a content block (text, image, document) that ends a cacheable
+    prefix, when caching is on."""
+    if not prompt_cache_enabled():
+        return block
+    return {**block, "cache_control": cache_control(ttl)}
+
+
+def content_text(content) -> str:
+    """All the text of a message content (a string or a list of blocks)."""
+    if isinstance(content, str):
+        return content
+    return "\n\n".join(b.get("text", "") for b in content or [] if isinstance(b, dict))
 
 
 def model_params(agent: str, effort: str | None = None) -> dict:
@@ -180,36 +226,56 @@ def call_json(
     client=None,
     stream: bool = False,
     effort: str | None = None,
+    label: str | None = None,
+    cache_system: bool = False,
+    on_start=None,
+    role: str | None = None,
 ):
     """Blocking structured-output call. Returns (parsed_dict, response).
 
     Run it via ``api_call_with_retry`` (it is sync; agents call it in a thread),
     or via ``call_json_budgeted``, which also handles running out of room.
     Budgets above NON_STREAMING_MAX always stream.
+
+    ``cache_system`` marks the system prompt as a cached prefix (when prompt
+    caching is on); content blocks carry their own marks (``cached_text``).
+    ``on_start()`` is called once the response starts streaming, which is when
+    a cache entry this request writes becomes readable by others.
+    ``role`` picks the model and effort from another config key than ``agent``
+    (e.g. "manim_plan"); usage is still reported under ``agent``.
     """
     if client is None:
         client = get_client()
     if max_tokens > NON_STREAMING_MAX:
         stream = True
-    kwargs = model_params(agent, effort)
+    kwargs = model_params(role or agent, effort)
     kwargs["output_config"] = {
         **kwargs.get("output_config", {}),
         "format": {"type": "json_schema", "schema": schema},
     }
     kwargs.update(max_tokens=max_tokens, messages=[{"role": "user", "content": content}])
     if system:
-        kwargs["system"] = system
+        if cache_system and prompt_cache_enabled():
+            kwargs["system"] = [{"type": "text", "text": system, "cache_control": cache_control()}]
+        else:
+            kwargs["system"] = system
     if tools:
         kwargs["tools"] = tools
     peek = PEEK_FIELDS.get(agent) if telemetry.wants_peek() else None
     if peek is not None:
-        response = _stream_with_peek(client, kwargs, *peek)
+        response = _stream_with_peek(client, kwargs, *peek, on_start=on_start)
     elif stream:
         with client.messages.stream(**kwargs) as s:
+            if on_start is not None:
+                for _ in s:
+                    on_start()
+                    break
             response = s.get_final_message()
     else:
         response = client.messages.create(**kwargs)
-    report_usage(agent, response, requested_model=kwargs.get("model"),
+        if on_start is not None:
+            on_start()
+    report_usage(agent, response, requested_model=kwargs.get("model"), label=label, role=role,
                  max_tokens=max_tokens, effort=kwargs.get("output_config", {}).get("effort"))
     data = json.loads(response_text(response))
     if peek is not None:
@@ -228,7 +294,7 @@ PEEK_FIELDS = {
 PEEK_INTERVAL = 0.25  # seconds between peek events (at most ~4/s)
 
 
-def _stream_with_peek(client, kwargs: dict, stage: str, field: str):
+def _stream_with_peek(client, kwargs: dict, stage: str, field: str, on_start=None):
     """Stream the call and publish the field's text as Claude writes it.
 
     The text comes from the live stream (the SDK's per-block text snapshot),
@@ -238,6 +304,9 @@ def _stream_with_peek(client, kwargs: dict, stage: str, field: str):
     last_t = 0.0
     with client.messages.stream(**kwargs) as s:
         for event in s:
+            if on_start is not None:
+                on_start()
+                on_start = None
             if getattr(event, "type", None) != "text":
                 continue
             now = time.monotonic()
@@ -255,12 +324,32 @@ def _int_or_none(v):
     return v if isinstance(v, int) and not isinstance(v, bool) else None
 
 
+def cache_usage(usage) -> tuple[int, int, int]:
+    """(cache read, 5-minute write, 1-hour write) tokens from response.usage.
+
+    A write without the per-TTL breakdown is counted as a 1-hour write (the
+    dearer rate), so a cost is never understated."""
+    read = _int_or_none(getattr(usage, "cache_read_input_tokens", None)) or 0
+    write = _int_or_none(getattr(usage, "cache_creation_input_tokens", None)) or 0
+    detail = getattr(usage, "cache_creation", None)
+    w5 = _int_or_none(getattr(detail, "ephemeral_5m_input_tokens", None)) if detail is not None else None
+    w1 = _int_or_none(getattr(detail, "ephemeral_1h_input_tokens", None)) if detail is not None else None
+    if w5 is None and w1 is None:
+        return read, 0, write
+    w5, w1 = w5 or 0, w1 or 0
+    return read, w5, w1 + max(0, write - w5 - w1)
+
+
 def report_usage(agent: str, response, requested_model: str | None = None, *,
+                 label: str | None = None, role: str | None = None,
                  max_tokens: int | None = None, effort: str | None = None) -> dict | None:
     """Emit a `usage` event from response.usage (no-op without a sink).
 
     With ``max_tokens`` the event also carries the budget, the effort and the
     stop reason, so a run that ran out of room shows it in its usage record.
+    ``input_tokens`` is the uncached input; cache reads and writes are reported
+    separately (``cache_read_tokens``, ``cache_write_tokens``) and priced at
+    their own rates.
     """
     if telemetry.current() is None:
         return None
@@ -272,16 +361,19 @@ def report_usage(agent: str, response, requested_model: str | None = None, *,
     out = _int_or_none(getattr(usage, "output_tokens", None))
     stu = getattr(usage, "server_tool_use", None)
     searches = _int_or_none(getattr(stu, "web_search_requests", None)) if stu is not None else 0
-    cache = sum(_int_or_none(getattr(usage, k, None)) or 0
-                for k in ("cache_creation_input_tokens", "cache_read_input_tokens"))
+    read, w5, w1 = cache_usage(usage)
     updates = {
         "agent": agent, "model": model,
         "input_tokens": inp, "output_tokens": out,
+        "cache_read_tokens": read, "cache_write_tokens": w5 + w1,
         "web_searches": searches,
-        "cost_usd": call_cost(model, inp, out, searches, cache),
+        "cost_usd": call_cost(model, inp, out, searches, cache_read=read,
+                              cache_write_5m=w5, cache_write_1h=w1),
     }
-    if cache:
-        updates["cache_tokens"] = cache
+    if label:
+        updates["label"] = label
+    if role and role != agent:
+        updates["role"] = role
     if max_tokens is not None:
         stop = getattr(response, "stop_reason", None)
         updates["max_tokens"] = max_tokens
@@ -304,7 +396,7 @@ def budget_timeout(base: float, max_tokens: int) -> float:
 
 async def call_json_budgeted(agent: str, *, label: str, timeout: float, max_tokens: int,
                              client=None, max_attempts: int = 3, on_last_step=None,
-                             max_steps: int = 3, **kwargs):
+                             max_steps: int = 3, role: str | None = None, **kwargs):
     """``call_json`` under ``api_call_with_retry``, with output-budget escalation.
 
     A response that runs out of output room (stop_reason max_tokens, including
@@ -319,8 +411,9 @@ async def call_json_budgeted(agent: str, *, label: str, timeout: float, max_toke
     Raises ``ClaudeOutOfRoom`` when every step ran out of room; other failures
     raise ``TimeoutExhausted`` as before.
     """
-    ceiling = model_max_output(agent_model(agent), client)
-    effort = None if agent_model(agent).startswith("claude-haiku") else agent_effort(agent)
+    key = role or agent
+    ceiling = model_max_output(agent_model(key), client)
+    effort = None if agent_model(key).startswith("claude-haiku") else agent_effort(key)
     steps = budget_steps(max_tokens, ceiling, effort)[:max(1, max_steps)]
     tried: list[dict] = []
     for i, step in enumerate(steps):
@@ -330,7 +423,7 @@ async def call_json_budgeted(agent: str, *, label: str, timeout: float, max_toke
 
         def _call(step=step, call_kwargs=call_kwargs):
             return call_json(agent, max_tokens=step["max_tokens"], effort=step["effort"],
-                             client=client, **call_kwargs)
+                             client=client, label=label, role=role, **call_kwargs)
 
         try:
             return await api_call_with_retry(

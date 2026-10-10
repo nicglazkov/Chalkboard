@@ -345,9 +345,14 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | required | Claude API key |
-| `CLAUDE_MODEL` | `claude-opus-5-5` | Model for every agent |
-| `CLAUDE_MODEL_<AGENT>` | `CLAUDE_MODEL` | Per-agent model override |
-| `CLAUDE_EFFORT_<AGENT>` | per agent | Per-agent effort: `low`, `medium`, `high` |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | Model for every agent without its own default (visual QA uses `claude-sonnet-5-5`) |
+| `CLAUDE_MODEL_<AGENT>` | per agent | Per-agent model override |
+| `CLAUDE_EFFORT_<AGENT>` | per agent | Per-agent effort: `low`, `medium`, `high`, `xhigh`, `max` |
+| `MANIM_CONTEXT` | `off` | Whether the scene calls see the context files: `off` (they work from the fact-checked script) or `plan` (the visual plan and a single-response scene see them, as before 0.7.0) |
+| `CODE_REVIEW_ROUNDS` | `1` | Claude code reviews per run (each rejection costs a scene revision); `0` skips the review |
+| `QA_FRAME_WIDTH` | `1280` | Width the visual-QA frames are scaled to before they are sent; `0` sends the render size |
+| `PROMPT_CACHE` | `on` | Prompt caching of the scene calls' shared prefix; `off` disables it |
+| `PROMPT_CACHE_TTL` | `1h` | Cache lifetime: `1h` or `5m` (cheaper writes, for runs whose calls are minutes apart at most) |
 | `SCENE_CHUNKING` | `auto` | Write the scene code in parts: `auto` (wide scripts, and any scene too long for one response), `always`, `off` |
 | `RENDER_BACKEND` | `auto` | `auto`, `local`, `docker` |
 | `MANIM_QUALITY` | `medium` | `low`, `medium`, `high`, `4k` |
@@ -385,26 +390,48 @@ Everything can be set in `.env` or the environment; `.env.example` lists them wi
 
 <br>
 
-Every Claude call goes through `pipeline/llm.py`. By default every agent uses `claude-opus-5-5` with adaptive thinking. Change the model for all agents with `CLAUDE_MODEL`, or per agent with `CLAUDE_MODEL_<AGENT>`; tune effort with `CLAUDE_EFFORT_<AGENT>`. A call that runs out of output room (thinking counts against it) is retried with the model's full output budget and then with less thinking, never repeated unchanged; a scene too long for one response is written in parts and assembled (`SCENE_CHUNKING`). Retries and token use per agent are recorded in `run_stats.json`.
+Every Claude call goes through `pipeline/llm.py`, with adaptive thinking. Every agent uses `claude-opus-5-5` except visual QA, which uses `claude-sonnet-5-5` (it found the same errors as Opus on the same frames, at about half the price). Change the model for all agents with `CLAUDE_MODEL`, or per agent with `CLAUDE_MODEL_<AGENT>`; tune effort with `CLAUDE_EFFORT_<AGENT>`. The defaults are the cheap path measured in 0.7.0: a 4 to 6 minute lecture recap costs about $3 of Claude spend end to end (it was $11 to $16), see Cost per video below. A call that runs out of output room (thinking counts against it) is retried with the model's full output budget and then with less thinking, never repeated unchanged; a scene too long for one response is written in parts and assembled (`SCENE_CHUNKING`). Retries and token use per agent are recorded in `run_stats.json`.
 
 | `<AGENT>` | Default effort | Role |
 | --- | --- | --- |
 | `RESEARCH` | `medium` | Web research brief (`--effort high`) |
 | `SCRIPT` | `high` | Narration script |
 | `FACT` | `medium` | Fact check |
-| `MANIM` | `high` | Scene code generation |
-| `CODE_VALIDATOR` | `medium` | Code review |
-| `VISUAL_QA` | `high` | Review of frames from the render |
+| `MANIM` | `low` | Scene code: a single-response scene, or each part of a wide scene |
+| `MANIM_PLAN` | `medium` | The visual plan a wide scene's parts follow |
+| `MANIM_FIX` | `high` | Every scene revision: code review, layout and visual-QA fixes (a QA fix also sees the frames QA judged) |
+| `CODE_VALIDATOR` | `medium` | Code review (once per run, `CODE_REVIEW_ROUNDS`) |
+| `VISUAL_QA` | `high` | Review of frames from the render (model `claude-sonnet-5-5`) |
 | `QUIZ` | `low` | `--quiz` questions |
 
-For example, keep the default model for the script and scene code and use a cheaper one for the validators:
+`MANIM_PLAN` and `MANIM_FIX` fall back to the `MANIM` settings, so `CLAUDE_EFFORT_MANIM=high` sets all three. The 0.6.0 behaviour (about five times the cost) is:
 
 ```
-CLAUDE_MODEL_FACT=claude-sonnet-5-5
-CLAUDE_MODEL_CODE_VALIDATOR=claude-sonnet-5-5
+CLAUDE_EFFORT_MANIM=high
+CLAUDE_MODEL_VISUAL_QA=claude-opus-5-5
+QA_FRAME_WIDTH=0
+CODE_REVIEW_ROUNDS=99
+MANIM_CONTEXT=plan
 ```
 
 Haiku models are called without thinking or effort settings, which they do not support.
+
+</details>
+
+<details>
+<summary><a id="cost"></a><b>Cost per video</b> &nbsp;<sub>Measured Claude spend, and where it goes</sub></summary>
+
+<br>
+
+`run_stats.json` records every Claude call of a run (`calls`: agent, label, model, effort, tokens including cache reads and writes, cost) and the totals per agent. Measured on 0.7.0 defaults, full runs including visual QA and its fixes (Kokoro narrator, so no TTS cost):
+
+| Video | Length | Claude cost | Wall time | Visual QA |
+| --- | --- | --- | --- | --- |
+| Lecture 9 recap, 8 segments, 44k-token PDF | 5:54 | $3.10 | 25 min | errors 2, 3, 0: pass |
+| Lecture 9 recap (other wording), same PDF | 4:15 | $2.76 | 21 min | errors 3, 2, 0: pass |
+| Why a triangle's angles add up to 180 degrees | 1:19 | $0.40 | 2 min | pass |
+
+The same two lectures cost $15.69 and $11.21 in 0.5/0.6 (without the script, which those runs did not record). About two thirds of a lecture's cost is the scene agent (plan, parts and fixes), a fifth is the script (Opus at effort high, with the context files).
 
 </details>
 
