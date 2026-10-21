@@ -147,6 +147,79 @@ COMPONENTS (chalkboard_components) — semantic wrappers around Manim primitives
     Line as annotation connector            →  Callout (it owns the connector)
     Circle used as a graph node             →  NetworkNode
     Stacked MathTex lines (derivation)      →  EquationGroup
+    ChalkBox / NetworkNode as a circuit part →  Resistor, Capacitor, VSource, NMOS, ... (CIRCUITS)
+
+CIRCUITS (chalkboard_circuits) — real schematic symbols. A CIRCUIT IS NEVER A BOX:
+
+  When the narration names a circuit (a divider, an RC charging loop, a MOSFET, a
+  pass transistor, an inverter, a buffer chain), draw it as a schematic with these
+  symbols, the way a textbook draws it. NEVER draw a resistor, capacitor, source,
+  transistor or gate as ChalkBox / NetworkNode / ChalkBadge / Rectangle with its
+  name inside (ChalkBox("R_1"), ChalkBox("NMOS"), NetworkNode("M_1")): the code
+  check rejects that. The schematic must match the narration EXACTLY: the same
+  elements, the same values in the labels, the same topology (what is in series,
+  what is in parallel, which node a capacitor sits across, where V_out is tapped,
+  which transistor connects to VDD). Build it once, place it in a zone, keep it on
+  screen while the narration works on it, and animate the steps ON the schematic
+  (highlight the conducting path, close the switch, move a CurrentArrow, mute the
+  transistor that is off) instead of replacing it with boxes or text.
+
+  Points are canvas coordinates ([x, y] lists or vectors). Two-terminal symbols are
+  built FROM point a TO point b, leads included, and expose .terminal("a") / ("b");
+  wire symbols terminal to terminal so nothing floats:
+  Wire(*points, route="hv"|"vh", dots=[pts]) — square-cornered wire; route="hv" goes
+                                       horizontal then vertical; dots = junction dots on it.
+                                       .path is the drawn line (MoveAlongPath / ShowPassingFlash).
+  Junction(p, label=None, direction=RIGHT, open=False) — node dot (3+ wires meet) or
+                                       open=True hollow input/output terminal, label beside it.
+  Resistor(a, b, label=r"R_1 = 2\,\mathrm{k\Omega}") — zigzag between a and b, any direction.
+  Capacitor(a, b, label=r"C_L")        — two plates across the a->b axis.
+  VSource(neg, pos, label=r"V_S = 5\,\mathrm{V}") — circle with + toward pos; terminals "a" (-), "b" (+).
+  Switch(a, b, label=None, closed=False) — sw.animate.set_closed(True) animates it closing.
+  Ground(p) / Supply(p, label=r"V_{DD}")  — ground symbol hanging below p / VDD rail above p.
+  CurrentArrow(a, b, label=r"I", side=None) — current-direction arrow beside the wire a->b.
+  NMOS(center, label=None, body=False, flip=False, mirror=False, angle=0, terminal_labels=False)
+  PMOS(center, ...)                    — MOSFET symbols, vertical, gate lead from the left
+                                       (mirror=True: from the right; angle=-90: horizontal,
+                                       gate on top). Terminals "g", "d", "s" ("b" with body=True).
+                                       NMOS: drain on top; PMOS: source on top (toward VDD), gate
+                                       bubble. terminal_labels=True writes g/d/s beside the leads.
+                                       .channel, .gate_plate, .drain, .source for emphasis.
+  CmosInverter(center, load=False, in_label=, out_label=, vdd_label=, load_label=r"C_L")
+                                       — PMOS VDD->Out over NMOS Out->GND, gates tied to In,
+                                       load=True adds C_L Out->ground. ~4 x 4.4 units. Terminals
+                                       "in", "out", "vdd", "gnd"; parts .pmos, .nmos, .cap,
+                                       .pull_up / .pull_down (highlight the charge / discharge path).
+  ResistorLoadInverter(center, load=False, r_label=r"R_L", ...) — load resistor VDD->Out over
+                                       an NMOS Out->GND; .resistor, .nmos, .cap.
+  PassTransistor(center, kind="n"|"p", in_label=, out_label=, gate_label=r"V_G", load_label=r"C")
+                                       — input left, horizontal MOSFET with its gate on top, output
+                                       node right with the load capacitor to ground (load_label=None:
+                                       no capacitor). Terminals "in", "out", "gate"; .fet, .cap, .out_dot.
+  InverterGate(center, label="4")      — NOT-gate triangle + bubble, label (size) above;
+                                       terminals "in", "out".
+  InverterChain(sizes=["1", "4", "16"], center=, spacing=1.7, load_label=r"C_L")
+                                       — buffer chain of InverterGates, load cap on the output;
+                                       .gates[i]; terminals "in", "out", "n0", "n1", ... (stage nodes).
+  CircuitGroup(*parts)                 — several parts highlighted / muted together (a current
+                                       path, a KVL loop): self.play(CircuitGroup(r1, w, r2).animate.highlight("focus_primary")).
+
+  Every symbol has .highlight(role) / .mute() (also through .animate) and takes theme=.
+  Labels sit beside the body (label_dir=UP/RIGHT/... to choose the side); keep other
+  text at least t.space("sm") away from the wires. Scale a whole schematic with
+  .scale() after building it if needed: terminals follow. Keep a schematic about
+  4 to 6 units wide, inside its zone and clear of the title and equations. A
+  voltage divider:
+      src = VSource([-5.5, -1.5], [-5.5, 1.5], r"V_S = 5\,\mathrm{V}")
+      r1 = Resistor([-5.5, 1.5], [-2.5, 1.5], r"R_1 = 2\,\mathrm{k\Omega}")
+      r2 = Resistor([-2.5, 1.5], [-2.5, -1.5], r"R_2 = 3\,\mathrm{k\Omega}")
+      ret = Wire(r2.terminal("b"), src.terminal("a"))
+      gnd = Ground([-4.0, -1.5])
+      vout = Junction(r2.terminal("a"), r"V_{\mathrm{out}}", direction=UR)
+      divider = VGroup(src, r1, r2, ret, gnd, vout)
+      seg_items.append(divider)
+      self.cue(1)
+      self.play(Create(divider), **resolve_motion(t.motion("settle")))
 
 MOVES (chalkboard_moves) — named pedagogical animation patterns:
 
@@ -486,6 +559,11 @@ from chalkboard_templates import (
     DerivationTemplate, HowtoTemplate, TimelineTemplate,
 )
 from manim import *
+from chalkboard_circuits import (
+    Wire, Junction, CurrentArrow, Resistor, Capacitor, VSource, Switch,
+    Ground, Supply, Mosfet, NMOS, PMOS, CmosInverter, ResistorLoadInverter,
+    InverterGate, InverterChain, PassTransistor, CircuitGroup,
+)
 import json
 from pathlib import Path
 
@@ -952,7 +1030,9 @@ async def _plan_scene(state: PipelineState, ranges, client, context_blocks) -> d
           f"- title: the persistent on-screen title (plain words; $...$ for math).\n"
           f"- style: the shared visual language, concretely: which role (focus_primary, "
           f"accent_cool, ...) each recurring concept gets, recurring components and where they "
-          f"sit (zones), naming of recurring symbols, motion habits.\n"
+          f"sit (zones), naming of recurring symbols, motion habits. Every circuit the script "
+          f"names is a chalkboard_circuits schematic: list its elements, values and connections "
+          f"exactly as the script states them, and the part that draws it.\n"
           f"- segments: for every segment index, what is shown at each cue (component + zone), "
           f"using numbers and facts from the script{' and the source material' if context_blocks else ''}, "
           f"and end_state: "

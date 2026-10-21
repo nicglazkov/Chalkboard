@@ -46,6 +46,11 @@ from chalkboard_templates import (
     DerivationTemplate, HowtoTemplate, TimelineTemplate,
 )
 from manim import *
+from chalkboard_circuits import (
+    Wire, Junction, CurrentArrow, Resistor, Capacitor, VSource, Switch,
+    Ground, Supply, Mosfet, NMOS, PMOS, CmosInverter, ResistorLoadInverter,
+    InverterGate, InverterChain, PassTransistor, CircuitGroup,
+)
 import json
 from pathlib import Path"""
 

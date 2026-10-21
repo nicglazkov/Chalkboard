@@ -107,6 +107,9 @@ def _flatten_plain_groups(mobjects: list) -> list:
     mobjects would never compare those boxes with each other, so two cards
     that collide inside the same group went unreported. Subclasses (design
     components, MathTex, Code, Axes) stay whole: their parts overlap on purpose.
+    Circuit schematics (`_cb_flatten`) are flattened too: their box is mostly
+    empty space between wires, so their labels are checked on their own and
+    the wires count as connectors.
     """
     try:
         from manim import Group, VGroup
@@ -114,7 +117,8 @@ def _flatten_plain_groups(mobjects: list) -> list:
         return mobjects
     out: list = []
     for m in mobjects:
-        if type(m) in (VGroup, Group) and len(m.submobjects) > 0:
+        flat = type(m) in (VGroup, Group) or getattr(m, "_cb_flatten", False)
+        if flat and len(m.submobjects) > 0:
             out.extend(_flatten_plain_groups(list(m.submobjects)))
         else:
             out.append(m)

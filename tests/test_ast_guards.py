@@ -1080,6 +1080,7 @@ class ChalkboardScene(ChalkboardSceneBase, Scene):
 # ── Math typesetting guard ───────────────────────────────────────────────────
 
 from pipeline.ast_guards import (  # noqa: E402
+    _check_no_boxed_circuit_elements,
     _check_no_math_in_text,
     _check_no_raw_primitive_construction,
 )
@@ -1126,3 +1127,36 @@ def test_axes_and_matrix_require_components():
 def test_square_allowed_for_geometry():
     """Squares on a right triangle's sides are geometry, not array cells."""
     assert _g(_check_no_raw_primitive_construction, "s = Square(side_length=2)") is None
+
+
+@pytest.mark.parametrize("src", [
+    'ChalkBox("NMOS")',
+    'ChalkBox("PMOS", role="focus_primary")',
+    'ChalkBox(r"R_1", math=True)',
+    'ChalkBox(r"C_L")',
+    'ChalkBox(r"R_{eq}")',
+    'ChalkBox(r"R_L = 20\\,\\text{k}\\Omega", math=True)',
+    'ChalkBox("R2")',
+    'ChalkBox("Resistor R1")',
+    'ChalkBox("capacitor")',
+    'NetworkNode(r"M_1", math=True)',
+])
+def test_boxed_circuit_element_flagged(src):
+    out = _g(_check_no_boxed_circuit_elements, src)
+    assert out is not None and "chalkboard_circuits" in out
+
+
+@pytest.mark.parametrize("src", [
+    'ChalkBox("NMOS: electrons")',
+    'ChalkBox(r"P = \\alpha f C_L V_{DD}^2", math=True)',
+    'ChalkBox(r"V_{DD}", math=True)',
+    'ChalkBox("C")',
+    'ChalkBox("Cost")',
+    'ChalkBox("Q1")',
+    'ChalkBox("L1")',
+    'ChalkBox(r"R_0 = 2.5", math=True)',
+    'ChalkBox("nMOS: on when gate is high")',
+    'Resistor([0, 0], [2, 0], r"R_1")',
+])
+def test_boxed_circuit_element_not_flagged(src):
+    assert _g(_check_no_boxed_circuit_elements, src) is None

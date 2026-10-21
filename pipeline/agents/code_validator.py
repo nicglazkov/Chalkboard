@@ -48,6 +48,10 @@ _MOBJECT_CONSTRUCTORS = frozenset({
     "ChalkBox", "ChalkArrow", "ChalkCode", "Callout", "StepCounter", "ChalkAxis",
     "ChalkAxes", "ChalkPanel", "ChalkBadge", "EquationGroup", "ChalkMatrix",
     "NetworkNode", "math_tex", "tex",
+    # Circuit schematics
+    "Wire", "Junction", "CurrentArrow", "Resistor", "Capacitor", "VSource", "Switch",
+    "Ground", "Supply", "Mosfet", "NMOS", "PMOS", "CmosInverter", "ResistorLoadInverter",
+    "InverterGate", "InverterChain", "PassTransistor", "CircuitGroup",
 })
 
 
@@ -175,6 +179,19 @@ async def code_validator(state: PipelineState, client=None) -> dict:
         f"ChalkPanel (.body_center/.body_top/.body_bottom), ChalkBadge, EquationGroup "
         f"(.lines/.focus(i)), ChalkMatrix, NetworkNode, math_tex(...), tex(...), resolve_motion(...); "
         f"every component has .highlight(role) and .mute()\n"
+        f"- chalkboard_circuits (schematic symbols; points are canvas coordinates): Wire(*pts, "
+        f"route=, dots=) (.path), Junction(p, label, direction=, open=), Resistor(a, b, label), "
+        f"Capacitor(a, b, label), VSource(neg, pos, label), Switch(a, b, label, closed=) "
+        f"(.set_closed(bool)), Ground(p), Supply(p, label), CurrentArrow(a, b, label, side=), "
+        f"Mosfet/NMOS/PMOS(center, label=, body=, flip=, mirror=, angle=, terminal_labels=) "
+        f"(.channel/.gate_plate/.drain/.source), CmosInverter(center, load=, ...) "
+        f"(.pmos/.nmos/.cap/.pull_up/.pull_down), ResistorLoadInverter(center, load=, r_label=, ...), "
+        f"PassTransistor(center, kind, in_label=, out_label=, gate_label=, load_label=) "
+        f"(.fet/.cap/.out_dot), InverterGate(center, label), InverterChain(sizes, center=, "
+        f"spacing=, load_label=) (.gates), CircuitGroup(*parts); every symbol has "
+        f".terminal(name) / .terminals, .highlight(role), .mute(). Check that each schematic "
+        f"matches the circuit the script describes (elements, values, series/parallel "
+        f"connections, where the output is taken); a mismatch is a needs_revision issue.\n"
         f"- chalkboard_moves: reveal_with_emphasis, compare_split, focus_zoom, "
         f"morph_show_equivalence, cascade_reveal, progressive_step, annotate_and_pause, "
         f"chapter_transition, derivation_step, transform_equation, emphasize_term "

@@ -1097,6 +1097,53 @@ def _check_no_math_in_text(tree: ast.AST, source: str = "") -> str | None:
 
 # Registry of all guards in execution order. Populated as guards land in
 # subsequent tasks; keep alphabetic-by-tier ordering for readability.
+# Circuit elements drawn as labelled boxes. A label that is ONLY an element
+# designator (R_1, C_L, M_2, R_{eq}, optionally "= value") or an element name
+# (NMOS, resistor, ...) inside a ChalkBox / NetworkNode is a schematic part
+# drawn as a box; chalkboard_circuits has the real symbol. Tiles that state a
+# fact about a part ("NMOS: electrons", r"P = \alpha f C_L V_{DD}^2") pass.
+_BOXED_CIRCUIT_CTORS = frozenset({"ChalkBox", "NetworkNode"})
+_SUB = r"(?:\{[^{}]{1,10}\}|[0-9A-Za-z]{1,3})"
+_DESIGNATOR_RE = re.compile(  # R_1, R1, C_L, M_2; not R_0 (reproduction number), "Cost", "Q1"
+    rf"^(?!R_?0\b)(?:[RC](?:_{_SUB}|[0-9]{{1,2}})|M_{_SUB})(?:\s*=\s*.+)?$")
+_ELEMENT_NAME_RE = re.compile(
+    r"^(?:[nNpP]MOS(?:FET)?|MOSFET|CMOS\s+inverter|inverter|transistor|pass\s+transistor|"
+    r"resistor|capacitor|load\s+capacitor|battery|voltage\s+source|switch|ground)"
+    r"(?:\s+[A-Za-z]_?\{?[0-9A-Za-z]{0,3}\}?)?$", re.IGNORECASE)
+
+
+def _strip_tex_wrappers(label: str) -> str:
+    s = label.strip().strip("$").strip()
+    s = re.sub(r"\\(?:mathrm|text|textrm|mathit)\{([^{}]*)\}", r"\1", s)
+    return s.strip()
+
+
+def _check_no_boxed_circuit_elements(tree: ast.AST, source: str = "") -> str | None:
+    """Forbid a circuit element drawn as a box: ChalkBox("R_1"),
+    ChalkBox("NMOS"), NetworkNode("M_1"). Schematics use the
+    chalkboard_circuits symbols (Resistor, NMOS, ...)."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or _call_func_name(node) not in _BOXED_CIRCUIT_CTORS:
+            continue
+        if not node.args or not isinstance(node.args[0], ast.Constant):
+            continue
+        value = node.args[0].value
+        if not isinstance(value, str):
+            continue
+        label = _strip_tex_wrappers(value)
+        if _DESIGNATOR_RE.match(label) or _ELEMENT_NAME_RE.match(label):
+            return (
+                f"line {getattr(node, 'lineno', '?')}: `{_call_func_name(node)}({value!r})` draws a "
+                f"circuit element as a labelled box. Circuits are drawn as real schematics: use "
+                f"the chalkboard_circuits symbols (Resistor(a, b, label), Capacitor, VSource, "
+                f"Ground, Switch, NMOS / PMOS, CmosInverter, PassTransistor, InverterChain) wired "
+                f"terminal to terminal with Wire, with the topology and values the narration "
+                f"states. Put the value in the symbol's label (Resistor(a, b, r\"R_1 = 2\\,"
+                f"\\mathrm{{k\\Omega}}\")), never in a box."
+            )
+    return None
+
+
 _ALL_GUARDS: list = [
     # Tier A
     _check_wait_literals,
@@ -1120,6 +1167,8 @@ _ALL_GUARDS: list = [
     _check_no_growarrow,
     # Tier B4 — math typesetting
     _check_no_math_in_text,
+    # Tier B5 — circuits are schematics
+    _check_no_boxed_circuit_elements,
     # Tier C — heuristic geometric checks
     _check_horizontal_array_zone_overflow,
 ]

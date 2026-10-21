@@ -444,6 +444,7 @@ Generated scenes are composed from a design system that ships with the renderer 
 
 - **Tokens** (`chalkboard_tokens.py`): every color, font size, spacing, stroke width and motion timing, named by meaning (`focus_primary`, `context_muted`, `motion_snap`, ...). Themes only swap colors.
 - **Components** (`chalkboard_components.py`): `ChalkBox`, `ChalkArrow`, `ChalkCode`, `Callout`, `StepCounter`, `ChalkAxis`, `ChalkAxes`, `ChalkPanel`, `ChalkBadge`, `EquationGroup`, `ChalkMatrix`, `NetworkNode`, plus `math_tex()` / `tex()`.
+- **Circuits** (`chalkboard_circuits.py`): schematic symbols wired terminal to terminal: `Wire`, `Junction`, `CurrentArrow`, `Resistor`, `Capacitor`, `VSource`, `Switch`, `Ground`, `Supply`, `NMOS` / `PMOS`, and `CmosInverter`, `ResistorLoadInverter`, `PassTransistor`, `InverterGate`, `InverterChain`. Circuits in a video are drawn as real schematics, never as labelled boxes.
 - **Moves** (`chalkboard_moves.py`): named animation patterns such as `reveal_with_emphasis`, `compare_split`, `progressive_step`, `derivation_step`, `emphasize_term`.
 - **Templates** (`chalkboard_templates/`): whole-scene choreographies the agent fills with data.
 - **House style** (`chalkboard_style.py`): one LaTeX preamble for all math (amsmath, mathtools, siunitx, cancel, ..., and macros such as `\R`, `\E`, `\dd`, `\Var`, `\argmax`), CMU Serif for text, a ligature-free monospace for code.

@@ -7,6 +7,12 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.8.0] - 2026-10-20
+
+- Circuit schematics: a new design-system module, `chalkboard_circuits`, with real schematic symbols: `Wire` (square corners, junction dots), `Junction` (node dot or open terminal), `CurrentArrow`, `Resistor` (zigzag), `Capacitor`, `VSource`, `Switch` (open / closed, animatable), `Ground`, `Supply`, `NMOS` / `PMOS` (gate bubble, optional body terminal, g/d/s labels, any orientation), and the standard arrangements `CmosInverter` (optional load capacitor, highlightable pull-up / pull-down paths), `ResistorLoadInverter`, `PassTransistor` (with its load capacitor), `InverterGate` and `InverterChain` (buffer chain with stage sizes), plus `CircuitGroup` for highlighting a current path. Every symbol uses theme tokens, places its label beside the body (off the wires) and exposes named terminals that follow moves and scaling, so schematics are wired terminal to terminal.
+- Scenes draw circuits as schematics: the scene prompt imports and documents the symbols and requires every circuit the narration names to be drawn with them, with the same elements, values and topology, never as labelled boxes. A new AST guard rejects a circuit element drawn as a box (`ChalkBox("R_1")`, `ChalkBox("NMOS")`, `NetworkNode("M_1")`), the code review checks that each schematic matches the script, and visual QA reports circuits drawn as boxes or not matching the narration.
+- Layout check: schematics are measured part by part (wires are connectors, labels are checked as text), so a schematic's mostly empty bounding box does not produce false overlaps.
+
 ## [0.7.1] - 2026-10-10
 
 - Fix: runs that start together on a fresh checkpoint DB no longer fail with "database is locked". SQLite skips its busy timeout when several new connections race to switch the DB to WAL, so the one-time checkpoint setup now retries with backoff (up to the 30 s lock wait). Fixes the intermittent failure of `test_concurrent_runs_share_the_checkpoint_db` on main.
@@ -66,6 +72,7 @@ reports its version at `/version`.
 
 - Self-hosted revival: local Manim rendering (Docker optional), Claude Opus 5.5 by default with per-agent overrides, a design system with six scene templates, word-level narration sync, Aria and Milo on ElevenLabs plus Kokoro and OpenAI, working layout checks, a new web UI built only on live data, `run_stats.json` run records, and CI on every push. See the [release notes](https://github.com/nicglazkov/Chalkboard/releases/tag/v0.3.0).
 
+[0.8.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.8.0
 [0.6.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.6.0
 [0.5.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.1
 [0.5.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.0

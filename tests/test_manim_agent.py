@@ -277,6 +277,18 @@ def test_system_prompt_lists_all_components():
         assert name in SYSTEM_PROMPT, f"component {name!r} missing from SYSTEM_PROMPT"
 
 
+def test_system_prompt_lists_circuit_symbols():
+    for name in (
+        "Wire(", "Junction(", "CurrentArrow(", "Resistor(", "Capacitor(", "VSource(",
+        "Switch(", "Ground(", "Supply(", "NMOS(", "PMOS(", "CmosInverter(",
+        "ResistorLoadInverter(", "PassTransistor(", "InverterGate(", "InverterChain(",
+        "CircuitGroup(",
+    ):
+        assert name in SYSTEM_PROMPT, f"circuit symbol {name!r} missing from SYSTEM_PROMPT"
+    assert "A CIRCUIT IS NEVER A BOX" in SYSTEM_PROMPT
+    assert "from chalkboard_circuits import" in SYSTEM_PROMPT.split("REQUIRED SCAFFOLD —")[1]
+
+
 def test_system_prompt_lists_all_moves():
     for name in (
         "reveal_with_emphasis", "compare_split", "focus_zoom",

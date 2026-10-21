@@ -246,6 +246,11 @@ def visual_qa(
                 "Check each frame for: overlapping text or shapes, text extending off-screen, "
                 "unreadably small text, poor color contrast, and visual clutter. "
                 "A frame passes if all elements are clearly readable and none extend beyond the frame boundary. "
+                "Circuits must be real schematics: when the narration describes a circuit, a resistor "
+                "is a zigzag, a capacitor two parallel plates, a source a circle with + and -, a "
+                "transistor a MOSFET symbol, all joined by wires. A circuit element drawn as a box or "
+                "node with its name inside (a rounded box reading R_1, C_L or NMOS), or a schematic "
+                "whose elements, values or connections differ from the narration, is an error. "
                 "When reporting issues, include the segment number if shown in the frame label."
             ),
         }
