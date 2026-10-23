@@ -655,7 +655,8 @@ pipeline/
   ast_guards.py      deterministic checks on generated scene code
   visual_qa.py       post-render frame review
   telemetry.py       live events (streamed output, usage, render and TTS progress)
-docker/              scene runtime and design system (tokens, components, moves, templates, style), Dockerfile
+docker/              scene runtime and design system (tokens, components, moves, templates, style), render-only Dockerfile
+Dockerfile, compose.yaml  the whole app in one image (docker compose up)
 server/              FastAPI app, jobs, library, status probes, voices, static web UI
 sdk/python/          typed Python client
 tests/               one test file per module
@@ -669,7 +670,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, design decisions and contribution g
 
 ## Hosted version
 
-Rather not run it yourself? [chalkboard.studio](https://chalkboard.studio) is a hosted, invite-only beta of Chalkboard. Join the waitlist there and you will get an email when the next batch of invites opens.
+Rather not run it yourself? [chalkboard.studio](https://chalkboard.studio) is the hosted version. It is paused for now; join the waitlist there to get an email when it opens.
 
 ## License and acknowledgements
 
