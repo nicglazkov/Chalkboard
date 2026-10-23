@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.formparsers import MultiPartParser
 MultiPartParser.max_part_size = 21 * 1024 * 1024
 
-from config import OUTPUT_DIR
+from config import LIBRARY_DB, OUTPUT_DIR
 from server.jobs import JobStore
 from server.library import SQLiteLibraryStore, LibraryStore, VideoMeta
 from server.routes import make_router
@@ -100,7 +100,7 @@ def create_app(
     if store is None:
         store = JobStore()
     if library_store is None:
-        library_store = SQLiteLibraryStore("library.db")
+        library_store = SQLiteLibraryStore(LIBRARY_DB)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
