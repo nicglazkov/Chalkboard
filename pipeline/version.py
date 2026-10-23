@@ -9,6 +9,7 @@ not available, never a guess.
 from __future__ import annotations
 
 import functools
+import os
 import re
 import shutil
 import subprocess
@@ -62,6 +63,10 @@ def git_info(root: Path = ROOT) -> dict:
     info = {"commit": None, "short": None, "date": None, "branch": None, "dirty": None}
     top = _git(root, "rev-parse", "--show-toplevel")
     if not top or not _same_path(top, root):
+        # No .git (the Docker image): use the commit stamped in at build time.
+        built = os.getenv("CHALKBOARD_GIT_COMMIT", "").strip()
+        if built and built != "unknown":
+            info["commit"], info["short"] = built, built[:7]
         return info
     commit = _git(root, "rev-parse", "HEAD")
     if not commit:

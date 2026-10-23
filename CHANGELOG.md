@@ -7,6 +7,14 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.9.0] - 2026-10-23
+
+- Docker in one command: `docker compose up --build -d` runs the web UI, the pipeline and Manim in one container (root `Dockerfile` and `compose.yaml`), rendering inside it. Videos land in `./output`; the library index, checkpoints and the Kokoro model cache live in the `chalkboard-data` volume. Tested end to end on an M1 Max: build, `/version`, a run from `docker compose exec`, the video in the library.
+- Fixes found by that test, in both images: the Manim 0.21.0 base image has no `perl` or `curl`, so `tlmgr` installed nothing while exiting 0, and every LaTeX render failed (`mathtools.sty` not found). The images now install both, run `tlmgr update --self`, and check the packages with `kpsewhich`. The app image runs on its own Python 3.12, since the base image's 3.14 is too new for Kokoro.
+- `LIBRARY_DB` sets where the library index lives (default `library.db`). In the image, `/version` reports the commit passed at build time (`GIT_COMMIT`).
+- README: copy-pasteable quick starts for Docker, macOS (Apple Silicon, tested) and Linux. Python is 3.10 to 3.12 (Kokoro does not install on 3.13+), BasicTeX needs `dvisvgm` and `tlmgr update --self`, CMU Serif comes from `font-computer-modern`.
+- `.env.example` no longer selects OpenAI by default; with no narrator set, Kokoro is used, as the README says.
+
 ## [0.8.0] - 2026-10-20
 
 - Circuit schematics: a new design-system module, `chalkboard_circuits`, with real schematic symbols: `Wire` (square corners, junction dots), `Junction` (node dot or open terminal), `CurrentArrow`, `Resistor` (zigzag), `Capacitor`, `VSource`, `Switch` (open / closed, animatable), `Ground`, `Supply`, `NMOS` / `PMOS` (gate bubble, optional body terminal, g/d/s labels, any orientation), and the standard arrangements `CmosInverter` (optional load capacitor, highlightable pull-up / pull-down paths), `ResistorLoadInverter`, `PassTransistor` (with its load capacitor), `InverterGate` and `InverterChain` (buffer chain with stage sizes), plus `CircuitGroup` for highlighting a current path. Every symbol uses theme tokens, places its label beside the body (off the wires) and exposes named terminals that follow moves and scaling, so schematics are wired terminal to terminal.
@@ -72,6 +80,7 @@ reports its version at `/version`.
 
 - Self-hosted revival: local Manim rendering (Docker optional), Claude Opus 5.5 by default with per-agent overrides, a design system with six scene templates, word-level narration sync, Aria and Milo on ElevenLabs plus Kokoro and OpenAI, working layout checks, a new web UI built only on live data, `run_stats.json` run records, and CI on every push. See the [release notes](https://github.com/nicglazkov/Chalkboard/releases/tag/v0.3.0).
 
+[0.9.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.9.0
 [0.8.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.8.0
 [0.6.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.6.0
 [0.5.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.5.1

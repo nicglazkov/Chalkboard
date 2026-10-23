@@ -5,13 +5,16 @@ FROM manimcommunity/manim:v0.21.0
 USER root
 # House typography (docker/chalkboard_style.py): CMU Serif text, DejaVu Sans Mono code.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-cmu fonts-inter fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends perl curl ca-certificates ffmpeg fontconfig fonts-cmu fonts-inter fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 # LaTeX packages used by the shared preamble in chalkboard_style.PREAMBLE.
-RUN tlmgr install amsmath amsfonts mathtools tools jknapltx rsfs doublestroke cancel \
+# perl + curl above: tlmgr needs both. It exits 0 even when downloads fail, so check the files.
+RUN tlmgr update --self \
+    && tlmgr install amsmath amsfonts mathtools tools jknapltx rsfs doublestroke cancel \
         siunitx lm microtype babel-english xcolor standalone preview \
-    && mktexlsr
+    && mktexlsr \
+    && kpsewhich mathtools.sty siunitx.sty cancel.sty dsfont.sty mathrsfs.sty microtype.sty standalone.cls preview.sty
 USER manimuser
 WORKDIR /render
 # /render holds the scene runtime: chalkboard_base (layout checks), chalkboard_style

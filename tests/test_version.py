@@ -41,14 +41,25 @@ def test_read_version(tmp_path):
     assert ver.read_version(f) is None
 
 
-def test_git_fields_null_outside_a_repo(tmp_path):
+def test_git_fields_null_outside_a_repo(tmp_path, monkeypatch):
+    monkeypatch.delenv("CHALKBOARD_GIT_COMMIT", raising=False)
     info = ver.git_info(tmp_path)
     assert info == {"commit": None, "short": None, "date": None, "branch": None, "dirty": None}
 
 
 def test_git_fields_null_without_git(tmp_path, monkeypatch):
+    monkeypatch.delenv("CHALKBOARD_GIT_COMMIT", raising=False)
     monkeypatch.setattr(ver.shutil, "which", lambda _: None)
     assert all(v is None for v in ver.git_info(ROOT).values())
+
+
+def test_git_commit_from_build_stamp_outside_a_repo(tmp_path, monkeypatch):
+    # The Docker image has no .git; the build passes the commit in.
+    monkeypatch.setenv("CHALKBOARD_GIT_COMMIT", "8d2b6ceb7bbef8bd9eadff388ee9ad9cd8836f0a")
+    info = ver.git_info(tmp_path)
+    assert info["commit"] == "8d2b6ceb7bbef8bd9eadff388ee9ad9cd8836f0a"
+    assert info["short"] == "8d2b6ce"
+    assert info["branch"] is None and info["dirty"] is None
 
 
 def test_git_fields_from_a_real_repo(tmp_path):
