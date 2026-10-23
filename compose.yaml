@@ -1,0 +1,30 @@
+# One command: `docker compose up --build`, then open http://localhost:8000
+# Keys come from .env (copy .env.example). Videos land in ./output on the host;
+# the run checkpoints, library index and voice model cache live in the chalkboard-data volume.
+services:
+  chalkboard:
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: chalkboard
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Fixed inside the container, whatever .env says.
+      RENDER_BACKEND: local
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8000"
+      OUTPUT_DIR: /app/output
+      CHECKPOINT_DB: /data/pipeline_state.db
+      LIBRARY_DB: /data/library.db
+    volumes:
+      - ./output:/app/output
+      - chalkboard-data:/data
+    restart: unless-stopped
+
+volumes:
+  chalkboard-data:

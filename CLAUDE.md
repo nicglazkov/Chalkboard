@@ -78,6 +78,10 @@ docker/                 Scene runtime (imported by every generated scene) + rend
   examples/design_system_demo.py  Demo scenes that exercise the whole design system
   Dockerfile                manimcommunity/manim:v0.21.0 + fonts + TeX packages; PYTHONPATH=/render
   render.sh                 Render entrypoint in the image; --check mode for the layout dry-run
+Dockerfile, compose.yaml  The whole app in one image (`docker compose up`): manim base + its own Python 3.12 venv
+                      (/opt/app-venv; the base's 3.14 in /opt/venv is too new for Kokoro), RENDER_BACKEND=local,
+                      state in /data (CHECKPOINT_DB, LIBRARY_DB, HF_HOME). tlmgr in the manim base exits 0 when
+                      downloads fail, so both images install perl + curl and check .sty files with kpsewhich.
 tests/                One test file per module
 config.py             Env var loading, CLAUDE_MODEL, agent_model(), agent_effort(), RENDER_BACKEND
 main.py               CLI entry point, async graph runner, render + QA + quiz

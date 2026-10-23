@@ -16,6 +16,7 @@ DEFAULT_THEME   = os.getenv("DEFAULT_THEME", "chalkboard")
 PACE           = (os.getenv("PACE", "") or "relaxed").strip().lower()
 OUTPUT_DIR     = os.getenv("OUTPUT_DIR", "./output")
 CHECKPOINT_DB  = os.getenv("CHECKPOINT_DB", "pipeline_state.db")
+LIBRARY_DB     = os.getenv("LIBRARY_DB", "library.db")
 SERVER_HOST    = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT    = int(os.getenv("SERVER_PORT", "8000"))
 

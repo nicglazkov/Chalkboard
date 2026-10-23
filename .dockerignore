@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.env
+.worktrees
+.claude
+output
+media
+bench
+**/__pycache__
+**/*.pyc
+.pytest_cache
+pipeline_state.db*
+library.db*

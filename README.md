@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/nicglazkov/Chalkboard/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/nicglazkov/Chalkboard/actions/workflows/tests.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-D4C27A?style=flat-square"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="Python 3.10 to 3.12" src="https://img.shields.io/badge/python-3.10%E2%80%933.12-3776AB?style=flat-square&logo=python&logoColor=white">
   <img alt="Manim CE 0.21" src="https://img.shields.io/badge/Manim%20CE-0.21-2C2C2C?style=flat-square">
   <img alt="Claude Opus 5.5" src="https://img.shields.io/badge/Claude-Opus%205.5-D97757?style=flat-square&logo=anthropic&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-yes-4C7A5A?style=flat-square">
@@ -113,32 +113,72 @@ The steps from research through narration are a LangGraph state machine (`pipeli
 
 ## Quick start
 
-You need Python 3.10+, ffmpeg, an [Anthropic API key](https://console.anthropic.com/), and either a local TeX install (for local rendering) or Docker.
+You need an [Anthropic API key](https://console.anthropic.com/). The default narrator, Kokoro, is free and runs on your machine.
+
+### Docker (any OS, one command)
+
+Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with Compose 2.24+).
 
 ```bash
-git clone https://github.com/nicglazkov/Chalkboard.git
-cd Chalkboard
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-render.txt    # pipeline, server, TTS, and manim 0.21.0
-cp .env.example .env
+git clone https://github.com/nicglazkov/Chalkboard.git && cd Chalkboard
+cp .env.example .env          # then set ANTHROPIC_API_KEY in .env
+docker compose up --build -d
 ```
 
-Edit `.env`: set `ANTHROPIC_API_KEY` and pick a voice. `NARRATOR=kokoro` is free and runs locally (needs `espeak-ng`); `aria` and `milo` need `ELEVENLABS_API_KEY`; `alloy` needs `OPENAI_API_KEY`.
+Open http://localhost:8000. The first build takes a few minutes and the image is about 4 GB. Videos land in `./output`; the library index, run checkpoints and the Kokoro voice model live in the `chalkboard-data` volume. To run the CLI in the container:
 
 ```bash
+docker compose exec chalkboard python main.py --topic "why the sky is blue" --yes
+```
+
+Stop it with `docker compose down`. Rendering runs inside the container, so nothing else needs installing.
+
+### macOS (Apple Silicon), native
+
+Tested on an M1 Max with macOS 15.6. Needs [Homebrew](https://brew.sh). Kokoro needs Python 3.10 to 3.12, so use `python3.12`.
+
+```bash
+brew install python@3.12 ffmpeg cairo pango pkg-config espeak-ng
+brew install --cask font-computer-modern       # CMU Serif, the scene text font
+brew install --cask basictex                   # asks for your password; or use MacTeX
+eval "$(/usr/libexec/path_helper)"             # puts the new TeX on PATH (or open a new terminal)
+sudo tlmgr update --self
+sudo tlmgr install amsmath amsfonts mathtools tools jknapltx rsfs doublestroke cancel   siunitx lm microtype babel-english xcolor standalone preview dvisvgm
+
+git clone https://github.com/nicglazkov/Chalkboard.git && cd Chalkboard
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-render.txt
+cp .env.example .env          # then set ANTHROPIC_API_KEY in .env
 python run_server.py          # web UI at http://127.0.0.1:8000
 ```
 
-or straight from the terminal:
+`brew install` also upgrades any of those packages you already have.
+
+### Linux (Ubuntu / Debian), native
+
+```bash
+sudo apt install python3-venv ffmpeg espeak-ng libcairo2-dev libpango1.0-dev pkg-config fonts-cmu dvisvgm   texlive texlive-latex-extra texlive-fonts-extra texlive-science lmodern cm-super
+git clone https://github.com/nicglazkov/Chalkboard.git && cd Chalkboard
+python3 -m venv .venv && source .venv/bin/activate     # Python 3.10 to 3.12
+pip install -r requirements-render.txt
+cp .env.example .env          # then set ANTHROPIC_API_KEY in .env
+python run_server.py          # web UI at http://127.0.0.1:8000
+```
+
+### Your first video
+
+From the web UI, or from the terminal:
 
 ```bash
 python main.py --topic "why the derivative of e to the x is itself" --template derivation
 ```
 
-The video lands in `output/<run_id>/final.mp4`, next to its captions, chapters, script and scene code. The default render is 720p30; add `--quality high` for 1080p60 or `--quality 4k` for 2160p60.
+The video lands in `output/<run_id>/final.mp4`, next to its captions, chapters, script and scene code. A 1 to 2 minute topic costs about $0.40 to $1 of Claude usage. The default render is 720p30; add `--quality high` for 1080p60 or `--quality 4k` for 2160p60. `--preview` makes a quick 480p draft (`preview.mp4`) that is not added to the library.
+
+Pick a voice in `.env`: `NARRATOR=kokoro` is free and local; `aria` and `milo` need `ELEVENLABS_API_KEY`; `alloy` needs `OPENAI_API_KEY`.
 
 <details>
-<summary><b>Rendering setup: local TeX or Docker</b></summary>
+<summary><b>Rendering backends</b></summary>
 
 <br>
 
@@ -147,23 +187,12 @@ Scenes are rendered by Manim CE **0.21.0**. `RENDER_BACKEND` picks where:
 | Value | What happens |
 | --- | --- |
 | `auto` (default) | `local` if `manim` is importable and `latex`, `dvisvgm` and `ffmpeg` are on `PATH`, else `docker` |
-| `local` | Runs Manim natively. Faster: no container start, no image build |
-| `docker` | Runs Manim in the `chalkboard-render` image (no local TeX needed) |
+| `local` | Runs Manim natively. Faster: no container start, no image build. Always used inside the Docker app image |
+| `docker` | Runs only Manim in the `chalkboard-render` image (`docker/Dockerfile`), for a native install without TeX. The voiceover merge still needs host ffmpeg |
 
-Both backends run the same layout dry-run and the same scene runtime (`docker/*.py`). The voiceover merge always runs with host ffmpeg.
-
-**Local, Ubuntu / Debian:**
-
-```bash
-sudo apt install texlive texlive-latex-extra texlive-fonts-extra texlive-science lmodern cm-super \
-  dvisvgm ffmpeg libcairo2-dev libpango1.0-dev pkg-config fonts-cmu espeak-ng
-```
-
-**Local, macOS** (untested): install [MacTeX](https://tug.org/mactex/), or BasicTeX plus the packages on the `tlmgr install` line in `docker/Dockerfile`. Then `brew install ffmpeg cairo pango pkg-config espeak-ng` and install the CMU Serif font.
+Both backends run the same layout dry-run and the same scene runtime (`docker/*.py`).
 
 Scene text uses CMU Serif when installed (falling back to Inter, then DejaVu Sans); code uses JetBrains Mono NL or DejaVu Sans Mono. Override with `CHALKBOARD_TEXT_FONT` / `CHALKBOARD_CODE_FONT`.
-
-**Docker:** with `RENDER_BACKEND=docker` (or `auto` without TeX), the first render builds `chalkboard-render` from `docker/Dockerfile` (`manimcommunity/manim:v0.21.0` plus fonts and TeX packages). That takes a few minutes once; later runs reuse the image. The image was moved to Manim 0.21.0 along with the design system but has not been re-tested end to end since; local rendering is the tested path.
 
 **Intel Macs:** PyTorch 2.4+ has no x86_64 macOS wheels, so Kokoro is unavailable there. Use an ElevenLabs or OpenAI narrator.
 
@@ -626,7 +655,8 @@ pipeline/
   ast_guards.py      deterministic checks on generated scene code
   visual_qa.py       post-render frame review
   telemetry.py       live events (streamed output, usage, render and TTS progress)
-docker/              scene runtime and design system (tokens, components, moves, templates, style), Dockerfile
+docker/              scene runtime and design system (tokens, components, moves, templates, style), render-only Dockerfile
+Dockerfile, compose.yaml  the whole app in one image (docker compose up)
 server/              FastAPI app, jobs, library, status probes, voices, static web UI
 sdk/python/          typed Python client
 tests/               one test file per module
@@ -640,7 +670,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, design decisions and contribution g
 
 ## Hosted version
 
-Rather not run it yourself? [chalkboard.studio](https://chalkboard.studio) is a hosted, invite-only beta of Chalkboard. Join the waitlist there and you will get an email when the next batch of invites opens.
+Rather not run it yourself? [chalkboard.studio](https://chalkboard.studio) is the hosted version. It is paused for now; join the waitlist there to get an email when it opens.
 
 ## License and acknowledgements
 
