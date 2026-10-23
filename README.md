@@ -39,11 +39,19 @@ Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, a
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/readme/frame-derivative.png" alt="Frame: the derivative of e to the x, a three-line limit derivation typeset in LaTeX"></td>
+    <td width="50%"><img src="docs/readme/frame-derivative-v2.png" alt="Frame: the limit definition of the derivative applied to e to the x, four lines of LaTeX ending in e to the x times the limit of e to the h minus 1 over h"></td>
+    <td width="50%"><img src="docs/readme/frame-cmos.png" alt="Frame: a CMOS inverter schematic with the NMOS path to ground highlighted and V out equal to 0 volts"></td>
+  </tr>
+  <tr>
+    <td><sub><i>Why the Derivative of e to the x Is Itself</i>, 2:35, narrator Aria, $1.08</sub></td>
+    <td><sub><i>How a CMOS Inverter Flips High to Low</i>, 2:16, narrator Milo, $0.39</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/readme/frame-dijkstra.png" alt="Frame: Dijkstra's algorithm on a five-node weighted graph next to a table of distances from A"></td>
     <td width="50%"><img src="docs/readme/frame-pascal.png" alt="Frame: Pascal's triangle next to the binomial theorem and binomial coefficients"></td>
   </tr>
   <tr>
-    <td><sub><i>Why the Derivative of e to the x Is Itself</i>, 720p30, narrator Aria</sub></td>
+    <td><sub><i>Dijkstra's Algorithm, Step by Step</i>, 2:29, narrator Aria, $1.81</sub></td>
     <td><sub><i>Pascal's Triangle and the Binomial Theorem</i>, 720p30, narrator Milo</sub></td>
   </tr>
   <tr>
@@ -56,7 +64,7 @@ Chalkboard is a pipeline of Claude agents built on LangGraph. Give it a topic, a
   </tr>
 </table>
 
-<p align="center"><sub>Frames from four generated videos, resized but otherwise untouched. Every equation is real LaTeX (<code>MathTex</code>) set in Computer Modern.</sub></p>
+<p align="center"><sub>Frames from generated videos, resized but otherwise untouched. Every equation is real LaTeX (<code>MathTex</code>) set in Computer Modern. The top three were made with 0.8.0 at 1080p60 on the defaults; the dollar figure is the Claude usage for the whole run, from <code>run_stats.json</code> (narration is billed by ElevenLabs separately).</sub></p>
 
 ## Why Chalkboard
 

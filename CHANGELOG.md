@@ -7,6 +7,10 @@ truth: every change merged to main bumps it and adds an entry here
 (`python scripts/bump_version.py patch "what changed"`). A running server
 reports its version at `/version`.
 
+## [0.9.1] - 2026-10-23
+
+- README: frames from three new example videos (e^x derivative, CMOS inverter, Dijkstra) with length, narrator and Claude cost
+
 ## [0.9.0] - 2026-10-23
 
 - Docker in one command: `docker compose up --build -d` runs the web UI, the pipeline and Manim in one container (root `Dockerfile` and `compose.yaml`), rendering inside it. Videos land in `./output`; the library index, checkpoints and the Kokoro model cache live in the `chalkboard-data` volume. Tested end to end on an M1 Max: build, `/version`, a run from `docker compose exec`, the video in the library.
@@ -80,6 +84,7 @@ reports its version at `/version`.
 
 - Self-hosted revival: local Manim rendering (Docker optional), Claude Opus 5.5 by default with per-agent overrides, a design system with six scene templates, word-level narration sync, Aria and Milo on ElevenLabs plus Kokoro and OpenAI, working layout checks, a new web UI built only on live data, `run_stats.json` run records, and CI on every push. See the [release notes](https://github.com/nicglazkov/Chalkboard/releases/tag/v0.3.0).
 
+[0.9.1]: https://github.com/nicglazkov/Chalkboard/tree/v0.9.1
 [0.9.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.9.0
 [0.8.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.8.0
 [0.6.0]: https://github.com/nicglazkov/Chalkboard/tree/v0.6.0
